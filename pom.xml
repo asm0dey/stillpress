@@ -33,6 +33,12 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Flyway's newest verified H2; the BOM's 2.4.x triggers a startup warning. -->
+            <dependency>
+                <groupId>com.h2database</groupId>
+                <artifactId>h2</artifactId>
+                <version>2.3.232</version>
+            </dependency>
             <dependency>
                 <groupId>${quarkus.platform.group-id}</groupId>
                 <artifactId>${quarkus.platform.artifact-id}</artifactId>

@@ -5,12 +5,12 @@ import io.quarkus.runtime.Quarkus;
 import picocli.CommandLine.Command;
 
 @TopCommand
-@Command(name = "stillpress", mixinStandardHelpOptions = true, subcommands = {})
+@Command(name = "stillpress", mixinStandardHelpOptions = true, subcommands = StillpressCommand.ServeCommand.class)
 public class StillpressCommand implements Runnable {
 
     @Override
     public void run() {
-        new ServeCommand().run();
+        new ServeCommand().run(); // no args behaves like `serve`
     }
 
     @Command(name = "serve", description = "Run the admin and preview server (default)")
