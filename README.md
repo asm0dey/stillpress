@@ -4,7 +4,7 @@ A self-hostable CMS on Quarkus that replaces WordPress for blogs. Authors write 
 
 One install runs one site. Several sites means several installs.
 
-> **Status: early development.** Plan 1 of 5 (the core pipeline: import → store → render → publish → serve) is in place. There is no admin UI, editor or theme engine yet. See [the design](docs/superpowers/specs/2026-11-03-wordpress-static-cms-design.md) and [plan 1](docs/superpowers/plans/2026-11-03-stillpress-01-core-pipeline.md).
+> **Status: early development.** Plan 1 of 5 (the core pipeline: import → store → render → publish → serve) is done and has been run against a real blog: every post, page, archive, pagination page and feed URL matches the live WordPress site ([results](docs/superpowers/plans/2026-11-03-stillpress-01-results.md)). There is no admin UI, editor or theme yet; pages use a minimal built-in "plain" layout. What comes next is in the [roadmap](docs/superpowers/plans/ROADMAP.md).
 
 ## What works today
 
@@ -18,6 +18,8 @@ One install runs one site. Several sites means several installs.
 - The publisher: every published post and page, home, category, tag, author and date archives (paginated), and RSS feeds, rendered into a fresh release that goes live atomically.
 - Serving the live release with WordPress-compatible redirects as the fallback.
 - A URL parity checker that crawls the live site's sitemaps and feeds and compares every URL against Stillpress.
+
+Not yet: attachment pages redirect to their parent post instead of rendering (WordPress renders them), and gallery plugins, shortcodes such as `[gallery]`, search and sitemaps are later plans.
 
 ## Requirements
 
@@ -60,6 +62,10 @@ stillpress verify-urls --source https://old-blog.example --target http://localho
 
 Only `serve` binds the HTTP port, and the H2 database runs in auto-server mode. `publish` and `verify-urls` therefore run while `serve` is up; a new release is picked up without a restart. Pass `-Dquarkus.http.port=…` to serve elsewhere.
 
+### Serving in production
+
+The intended default is **nginx serving `data/output/current` directly**, falling back to Stillpress only for files that don't exist (redirects, legacy `?p=` URLs, the 404 page) and, later, the admin ([ADR 0004](docs/adr/0004-nginx-serves-static-by-default.md)). Stillpress will generate that nginx include in plan 02; until then, run `serve` behind any TLS-terminating reverse proxy. Publishing swaps the `current` symlink atomically, so neither setup needs a reload.
+
 Data lives in `./data`, or wherever `STILLPRESS_DATA_DIR` points: the H2 database, `media/` and `output/`.
 
 ### Database
@@ -82,6 +88,8 @@ QUARKUS_DATASOURCE_USERNAME=stillpress QUARKUS_DATASOURCE_PASSWORD=… \
 ## Documentation
 
 - [Design](docs/superpowers/specs/2026-11-03-wordpress-static-cms-design.md)
+- [Roadmap: plans 02–05](docs/superpowers/plans/ROADMAP.md)
+- [Plan 01 results on a real blog](docs/superpowers/plans/2026-11-03-stillpress-01-results.md)
 - [Glossary](CONTEXT.md)
 - [Architecture decisions](docs/adr/)
 
