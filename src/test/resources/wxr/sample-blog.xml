@@ -60,7 +60,7 @@ https://www.youtube.com/watch?v=dQw4w9WgXcQ
     <wp:comment><wp:comment_id>3</wp:comment_id><wp:comment_author><![CDATA[Spammer]]></wp:comment_author><wp:comment_author_email><![CDATA[spam@example.com]]></wp:comment_author_email><wp:comment_author_url>http://spam.example.com</wp:comment_author_url><wp:comment_date_gmt><![CDATA[2023-01-14 14:00:00]]></wp:comment_date_gmt><wp:comment_content><![CDATA[Buy now]]></wp:comment_content><wp:comment_approved><![CDATA[spam]]></wp:comment_approved><wp:comment_parent>0</wp:comment_parent></wp:comment>
   </item>
   <item>
-    <title>Q&amp;A</title>
+    <title><![CDATA[Q&amp;A]]></title>
     <link>https://blog.example.ru/2020/05/10/qa/</link>
     <dc:creator><![CDATA[papa]]></dc:creator>
     <guid isPermaLink="false">https://blog.example.ru/?p=100</guid>

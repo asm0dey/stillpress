@@ -2,6 +2,7 @@ package site.asm0dey.stillpress.wxr;
 
 import module java.base;
 import module java.xml;
+import org.jsoup.parser.Parser;
 
 /** Streaming StAX reader for WXR 1.x exports. {@code nav_menu_item} entries are skipped. */
 public final class WxrReader {
@@ -24,15 +25,15 @@ public final class WxrReader {
         if (r.next() != XMLStreamConstants.START_ELEMENT) continue;
         switch (r.getLocalName()) {
           case "author" -> { var m = flat(r); authors.add(new WxrAuthor(num(m.get("author_id")), m.get("author_login"), m.get("author_email"), m.get("author_display_name"))); }
-          case "category" -> { var m = flat(r); terms.add(new WxrTerm(num(m.get("term_id")), "category", m.get("category_nicename"), m.get("cat_name"), blankToNull(m.get("category_parent")), m.get("category_description"))); }
-          case "tag" -> { var m = flat(r); terms.add(new WxrTerm(num(m.get("term_id")), "post_tag", m.get("tag_slug"), m.get("tag_name"), null, m.get("tag_description"))); }
-          case "term" -> { var m = flat(r); terms.add(new WxrTerm(num(m.get("term_id")), m.get("term_taxonomy"), m.get("term_slug"), m.get("term_name"), blankToNull(m.get("term_parent")), m.get("term_description"))); }
+          case "category" -> { var m = flat(r); terms.add(new WxrTerm(num(m.get("term_id")), "category", m.get("category_nicename"), unescape(m.get("cat_name")), blankToNull(m.get("category_parent")), m.get("category_description"))); }
+          case "tag" -> { var m = flat(r); terms.add(new WxrTerm(num(m.get("term_id")), "post_tag", m.get("tag_slug"), unescape(m.get("tag_name")), null, m.get("tag_description"))); }
+          case "term" -> { var m = flat(r); terms.add(new WxrTerm(num(m.get("term_id")), m.get("term_taxonomy"), m.get("term_slug"), unescape(m.get("term_name")), blankToNull(m.get("term_parent")), m.get("term_description"))); }
           case "item" -> { var it = item(r); if (!"nav_menu_item".equals(it.postType())) items.add(it); }
           case "title", "link", "description", "language", "base_site_url", "base_blog_url" -> ch.put(r.getLocalName(), text(r));
           default -> { }
         }
       }
-      return new WxrDocument(new WxrSite(ch.get("title"), ch.get("link"), ch.get("description"), ch.get("language"),
+      return new WxrDocument(new WxrSite(unescape(ch.get("title")), ch.get("link"), unescape(ch.get("description")), ch.get("language"),
         ch.get("base_site_url"), ch.get("base_blog_url")), authors, terms, items);
     } catch (XMLStreamException e) {
       throw new UncheckedIOException(new IOException("Invalid WXR: " + e.getMessage(), e));
@@ -57,7 +58,7 @@ public final class WxrReader {
         default -> m.put(r.getLocalName(), text(r));
       }
     }
-    return new WxrItem(num(m.get("post_id")), m.get("post_type"), m.get("status"), m.get("title"), m.get("link"), m.get("guid"),
+    return new WxrItem(num(m.get("post_id")), m.get("post_type"), m.get("status"), unescape(m.get("title")), m.get("link"), m.get("guid"),
       m.get("post_name"), m.get("content"), m.get("excerpt"), instant(m.get("post_date_gmt")), instant(m.get("post_modified_gmt")),
       m.get("creator"), num(m.get("post_parent")), (int) num(m.get("menu_order")), blankToNull(m.get("post_password")),
       m.get("comment_status"), m.get("attachment_url"), terms, meta, comments);
@@ -89,6 +90,9 @@ public final class WxrReader {
     }
     return sb.toString();
   }
+
+  // WP stores titles raw or entity-escaped depending on unfiltered_html; XML parsing already ran once, so this is the single HTML decode.
+  private static String unescape(String s) { return s == null ? null : Parser.unescapeEntities(s, false); }
 
   private static long num(String s) {
     try { return s == null || s.isBlank() ? 0 : Long.parseLong(s.trim()); } catch (NumberFormatException e) { return 0; }
