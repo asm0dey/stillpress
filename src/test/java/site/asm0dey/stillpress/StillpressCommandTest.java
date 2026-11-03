@@ -7,6 +7,9 @@ import picocli.CommandLine;
 class StillpressCommandTest {
     @Test
     void serveIsRegistered() {
-        assertThat(new CommandLine(new StillpressCommand()).getSubcommands()).containsKey("serve").containsKey("import");
+        assertThat(new CommandLine(new StillpressCommand()).getSubcommands())
+            .containsKey("serve")
+            .containsKey("import")
+            .containsKey("publish");
     }
 }

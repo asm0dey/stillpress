@@ -27,4 +27,18 @@ public class TermRepository {
     public Optional<TermRecord> findById(long id) {
         return db.selectFrom(TERM).where(TERM.ID.eq(id)).fetchOptional();
     }
+
+    public List<TermRecord> all() {
+        return db.selectFrom(TERM).fetch();
+    }
+
+    /**
+     * Term ids of every item, keyed by item id.
+     */
+    public Map<Long, List<Long>> termIdsByItem() {
+        return db
+            .select(ITEM_TERM.ITEM_ID, ITEM_TERM.TERM_ID)
+            .from(ITEM_TERM)
+            .fetchGroups(ITEM_TERM.ITEM_ID, ITEM_TERM.TERM_ID);
+    }
 }

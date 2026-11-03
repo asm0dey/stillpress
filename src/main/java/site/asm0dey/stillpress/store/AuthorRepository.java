@@ -15,4 +15,8 @@ public class AuthorRepository {
     public Optional<AuthorRecord> findById(long id) {
         return db.selectFrom(AUTHOR).where(AUTHOR.ID.eq(id)).fetchOptional();
     }
+
+    public List<AuthorRecord> all() {
+        return db.selectFrom(AUTHOR).fetch();
+    }
 }

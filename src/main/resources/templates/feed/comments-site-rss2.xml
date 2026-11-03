@@ -1,0 +1,26 @@
+{@site.asm0dey.stillpress.publish.views.SiteView site}
+{@java.util.List<site.asm0dey.stillpress.publish.views.SiteComment> entries}
+{@java.lang.String selfUrl}
+{@java.lang.String lastBuildDate}
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+<title>Comments for {site.title}</title>
+<atom:link href="{selfUrl}" rel="self" type="application/rss+xml"/>
+<link>{site.homeUrl}</link>
+<description>{site.description}</description>
+<lastBuildDate>{lastBuildDate}</lastBuildDate>
+<language>{site.language}</language>
+{#for e in entries}
+<item>
+<title>Comment on {e.item.title} by {e.comment.authorName}</title>
+<link>{e.item.absoluteUrl}#comment-{e.comment.id}</link>
+<dc:creator>{e.comment.authorName}</dc:creator>
+<pubDate>{e.comment.pubDate}</pubDate>
+<guid isPermaLink="false">{e.item.guid}#comment-{e.comment.id}</guid>
+<description><![CDATA[{e.comment.contentCdata.raw}]]></description>
+<content:encoded><![CDATA[{e.comment.contentCdata.raw}]]></content:encoded>
+</item>
+{/for}
+</channel>
+</rss>
