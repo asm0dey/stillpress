@@ -46,6 +46,8 @@ java -jar target/quarkus-app/quarkus-run.jar import --wxr export.xml   # one-sho
 java -jar target/quarkus-app/quarkus-run.jar                          # serve (default command)
 ```
 
+`--media-limit N` on `import` downloads at most N media files; it is for test imports, and a full import (no flag) downloads everything.
+
 Data lives in `./data`, or wherever `STILLPRESS_DATA_DIR` points: the H2 database, `media/` and `output/`.
 
 ### Database

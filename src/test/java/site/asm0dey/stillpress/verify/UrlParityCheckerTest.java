@@ -329,4 +329,26 @@ class UrlParityCheckerTest {
         assertThat(checker.check(uri(source), uri(target), 100).mismatches())
             .anyMatch(m -> m.cause() == Cause.SOURCE_FETCH_FAILURE);
     }
+
+    @Test
+    void skipsUploadsInSitemapAndCrawl() {
+        source.stubFor(get("/wp-sitemap.xml")
+            .willReturn(xml(urlset(source, "/a/", "/wp-content/uploads/2020/x%20y.jpg")))
+        );
+        source.stubFor(get("/")
+            .willReturn(
+                    okForContentType(
+                            "text/html",
+                            "<a href='/wp-content/uploads/2020/p.pdf'>f</a><a href='/%77p-content/uploads/z.jpg'>g</a>"
+                    )
+            )
+        );
+        source.stubFor(get("/a/").willReturn(ok("x")));
+        target.stubFor(get("/a/").willReturn(ok("x")));
+        target.stubFor(get("/").willReturn(ok("x")));
+        var r = checker.check(uri(source), uri(target), 100);
+        assertThat(r.mismatches()).isEmpty();
+        assertThat(r.checked()).isEqualTo(4);
+        source.verify(0, getRequestedFor(urlPathMatching("/wp-content/.*")));
+    }
 }

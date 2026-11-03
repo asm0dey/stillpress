@@ -11,9 +11,17 @@ public record ImportReport(
         List<String> unknownShortcodes,
         List<String> missingMedia,
         List<String> passwordProtected,
-        List<String> skippedPostTypes
+        List<String> skippedPostTypes,
+        List<String> skippedMedia
 ) {
     public String toText() {
+        return toText(null);
+    }
+
+    /**
+     * @param mediaLimit the {@code --media-limit} in force, named in the skipped-media heading
+     */
+    public String toText(Integer mediaLimit) {
         var sb = new StringBuilder();
         sb
             .append("Imported ")
@@ -30,6 +38,21 @@ public record ImportReport(
         section(sb, "Missing media", missingMedia);
         section(sb, "Password-protected", passwordProtected);
         section(sb, "Skipped post types", skippedPostTypes);
+        if (!skippedMedia.isEmpty()) {
+            sb
+                .append("Skipped media")
+                .append(mediaLimit == null ? "" : " (limit " + mediaLimit + ")")
+                .append(": ")
+                .append(skippedMedia.size())
+                .append('\n');
+            skippedMedia
+                .stream()
+                .limit(20)
+                .forEach(v -> sb.append("  ").append(v).append('\n'));
+            if (skippedMedia.size() > 20) {
+                sb.append("  …and ").append(skippedMedia.size() - 20).append(" more\n");
+            }
+        }
         return sb.toString();
     }
 

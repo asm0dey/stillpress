@@ -44,13 +44,20 @@ public class WordPressImporter {
     SettingRepository settings;
 
     // a multi-GB export with downloads runs far past Narayana's 60 s default
+    public ImportReport importWxr(InputStream in) throws AlreadyImportedException {
+        return importWxr(in, Integer.MAX_VALUE);
+    }
+
+    /**
+     * @param mediaLimit download at most this many distinct originals; later ones stay at the source and get no row
+     */
     @Transactional
     @TransactionConfiguration(timeout = 24 * 60 * 60)
-    public ImportReport importWxr(InputStream in) throws AlreadyImportedException {
+    public ImportReport importWxr(InputStream in, int mediaLimit) throws AlreadyImportedException {
         if (items.count() > 0) {
             throw new AlreadyImportedException();
         }
-        var run = new Run();
+        var run = new Run(mediaLimit);
         WxrReader.read(in, run);
         run.finish();
         return run.report();
@@ -61,6 +68,13 @@ public class WordPressImporter {
     private record PendingItem(long id, long sourceId, String type, String permalink, long parentSourceId) {}
 
     private final class Run implements WxrHandler {
+        private final int mediaLimit;
+        private final Set<String> skippedMedia = new LinkedHashSet<>();
+
+        Run(int mediaLimit) {
+            this.mediaLimit = mediaLimit;
+        }
+
         private String homeScheme = "https", homeAuth = "", siteAuth = "";
         private Pattern uploadUrl;
         private final Set<String> authorSlugs = new HashSet<>();
@@ -176,7 +190,7 @@ public class WordPressImporter {
             }
             var attachment =
                     i.attachmentUrl() == null || i.attachmentUrl().isBlank() ? null : sourceKey(i.attachmentUrl());
-            if (attachment != null && ensureMedia(attachment) == null) {
+            if (attachment != null && ensureMedia(attachment) == null && !skippedMedia.contains(attachment)) {
                 missingMedia.add(attachment);
             }
             var rewriter = localize(content, i.excerpt());
@@ -309,7 +323,7 @@ public class WordPressImporter {
                         var raw = m.group().replaceFirst("[.,;:!]+$", "");
                         var key = SIZE_VARIANT.matcher(raw).replaceFirst("");
                         var local = ensureMedia(sourceKey(key));
-                        if (local == null && !key.equals(raw)) {
+                        if (local == null && !key.equals(raw) && !skippedMedia.contains(sourceKey(key))) {
                             // a real original named like a size variant (screenshot-1920x1080.png)
                             key = raw;
                             local = ensureMedia(sourceKey(raw));
@@ -331,7 +345,11 @@ public class WordPressImporter {
                 if (text != null) {
                     var m = ANY_UPLOAD.matcher(text);
                     while (m.find()) {
-                        missingMedia.add(m.group().replaceFirst("[.,;:!]+$", ""));
+                        var url = m.group().replaceFirst("[.,;:!]+$", "");
+                        if (!skippedMedia.contains(sourceKey(url))
+                                && !skippedMedia.contains(sourceKey(SIZE_VARIANT.matcher(url).replaceFirst("")))) {
+                            missingMedia.add(url);
+                        }
                     }
                 }
             }
@@ -358,6 +376,10 @@ public class WordPressImporter {
             var existing = media.findBySource(original);
             if (existing.isPresent()) {
                 return existing.get().getPath() == null ? null : Permalinks.encode(existing.get().getPath());
+            }
+            if (mediaCount >= mediaLimit) {
+                skippedMedia.add(original);
+                return null;
             }
             URI uri;
             try {
@@ -449,7 +471,8 @@ public class WordPressImporter {
                     List.copyOf(unknownShortcodes),
                     List.copyOf(missingMedia),
                     List.copyOf(passwordProtected),
-                    List.copyOf(skippedPostTypes)
+                    List.copyOf(skippedPostTypes),
+                    List.copyOf(skippedMedia)
             );
         }
     }

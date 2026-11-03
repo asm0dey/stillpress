@@ -8,6 +8,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import org.jsoup.Jsoup;
+import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.verify.ParityReport.Cause;
 import site.asm0dey.stillpress.verify.ParityReport.Mismatch;
 
@@ -69,6 +70,14 @@ public class UrlParityChecker {
     }
 
     // ---- redirect and URI helpers ----
+    /**
+     * Uploads are assets: Stillpress serves them under /media/, so their URLs may change (spec section 1).
+     */
+    static boolean isUpload(String pathQuery) {
+        var q = pathQuery.indexOf('?');
+        return Permalinks.decode(q < 0 ? pathQuery : pathQuery.substring(0, q)).startsWith("/wp-content/uploads/");
+    }
+
     static boolean sameSite(URI a, URI b) {
         return a.getHost() != null
                 && b.getHost() != null
@@ -290,6 +299,9 @@ public class UrlParityChecker {
         }
 
         boolean add(String pq) {
+            if (isUpload(pq)) {
+                return true;
+            }
             if (paths.size() >= max) {
                 return false;
             }
@@ -419,6 +431,9 @@ public class UrlParityChecker {
                 return null;
             }
             var pq = pathQuery(link);
+            if (isUpload(pq)) {
+                return null;
+            }
             return SKIP.stream().anyMatch(pq::contains) ? null : pq;
         }
     }

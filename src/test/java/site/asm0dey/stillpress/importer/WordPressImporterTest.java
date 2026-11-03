@@ -119,6 +119,42 @@ class WordPressImporterTest {
     }
 
     @Test
+    void mediaLimitStopsDownloadsAndKeepsSourceUrls() throws Exception {
+        var report = importer.importWxr(sample(), 1);
+        assertThat(report.media()).isEqualTo(1);
+        assertThat(fetcher.fetched()).hasSize(1);
+        assertThat(db.fetchCount(MEDIA)).isEqualTo(1);
+        assertThat(report.skippedMedia())
+            .isNotEmpty()
+            .anyMatch(u -> u.endsWith("/2020/05/c.jpg"));
+        assertThat(report.missingMedia()).doesNotContainAnyElementsOf(report.skippedMedia());
+        assertThat(report.missingMedia()).noneMatch(u -> u.endsWith("/2020/05/c.jpg"));
+        assertThat(items.findByPermalink("/2020/05/10/qa/").orElseThrow().getBody()).contains("/2020/05/c.jpg");
+        assertThat(report.toText(1)).contains("Skipped media (limit 1)");
+    }
+
+    @Test
+    void noLimitLeavesSkippedMediaEmpty() throws Exception {
+        var report = importer.importWxr(sample());
+        assertThat(report.skippedMedia()).isEmpty();
+        assertThat(report.toText()).doesNotContain("Skipped media");
+    }
+
+    @Test
+    void skippedMediaTextListsTwentyThenCount() {
+        var urls = IntStream
+            .range(0, 25)
+            .mapToObj(n -> "https://x/wp-content/uploads/" + n + ".jpg")
+            .toList();
+        var text = new ImportReport(0, 0, 0, 0, List.of(), List.of(), List.of(), List.of(), List.of(), urls).toText(7);
+        assertThat(text)
+            .contains("Skipped media (limit 7): 25")
+            .contains("/19.jpg")
+            .doesNotContain("/20.jpg")
+            .contains("…and 5 more");
+    }
+
+    @Test
     void failureRollsEverythingBack() {
         fetcher.failOn("/2023/01/a.jpg");
         assertThatThrownBy(() -> importer.importWxr(sample())).hasMessageContaining("boom");
