@@ -16,6 +16,12 @@ Migration order from the spec (§10): the blog site goes first (plans 01-04), th
 
 ## Plan 02: Admin & editing
 
+Split into three plans (agreed 2026-11-04):
+
+- **02a admin foundation** (`2026-11-04-stillpress-02a-admin-foundation.md`): Mode 2 nginx include, setup wizard with token and WXR upload, admin shell (Quinoa + Bun), `/wp-admin` redirects, password login with rate limiting, users and roles, CLI password reset, server-side import-once guard.
+- **02b editing and publishing**: editor, WP REST slice, classic block, reusable blocks, media library, statuses and scheduling, incremental and background republish, preview, revisions, admin i18n.
+- **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications.
+
 - Serving Mode 2, the default: one-time generated nginx include (static root at `output/current`, `try_files $uri $uri/ @stillpress` fallback, proxied `/admin`, login, API, preview and legacy query URLs) plus an example nginx setup; the acceptance run goes through nginx (§6.2 item 9, ADR 0004). Mode 1 (Stillpress serves everything) ships in plan 01 and stays supported.
 - Setup wizard at `/admin` with one-time setup token; wizard screens for Start empty and WXR upload (§6.4).
 - Admin on each site's own domain at `/admin`; `/wp-admin` and `/wp-login.php` redirect there (§6.2 item 10).
