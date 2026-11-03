@@ -5,12 +5,18 @@ import io.quarkus.runtime.Quarkus;
 import picocli.CommandLine.Command;
 import site.asm0dey.stillpress.importer.ImportCommand;
 import site.asm0dey.stillpress.publish.PublishCommand;
+import site.asm0dey.stillpress.verify.VerifyUrlsCommand;
 
 @TopCommand
 @Command(
         name = "stillpress",
         mixinStandardHelpOptions = true,
-        subcommands = {StillpressCommand.ServeCommand.class, ImportCommand.class, PublishCommand.class}
+        subcommands = {
+        StillpressCommand.ServeCommand.class,
+        ImportCommand.class,
+        PublishCommand.class,
+        VerifyUrlsCommand.class
+        }
 )
 public class StillpressCommand implements Runnable {
     @Override
