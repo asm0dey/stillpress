@@ -1,0 +1,54 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Pin container images to digests.",
+      "matchCategories": [
+        "docker"
+      ],
+      "pinDigests": true
+    },
+    {
+      "description": "One PR for everything that is not a major bump. Majors stay on their own, and a security update still opens its own PR regardless of this rule.",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "bump"
+      ],
+      "groupName": "all non-major dependencies"
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Liberica JDK pinned in mise.toml as liberica-<version>. mise's Liberica ids are BellSoft's release versions with that prefix, so BellSoft's own release list only proposes ids mise can install.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^mise\\.toml$/"
+      ],
+      "matchStrings": [
+        "java\\s*=\\s*\"liberica-(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "liberica-jdk",
+      "datasourceTemplate": "custom.liberica",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+)(?:\\.(?<revision>\\d+))?)?\\+\\d+$"
+    }
+  ],
+  "customDatasources": {
+    "liberica": {
+      "description": "BellSoft's GA Liberica JDK releases for linux x64; one release per version string.",
+      "defaultRegistryUrlTemplate": "https://api.bell-sw.com/v1/liberica/releases?bundle-type=jdk&os=linux&arch=x86&bitness=64&package-type=tar.gz&release-type=all",
+      "format": "json",
+      "transformTemplates": [
+        "{ \"releases\": $map($[GA = true], function($r) { { \"version\": $r.version } }) }"
+      ]
+    }
+  }
+}
