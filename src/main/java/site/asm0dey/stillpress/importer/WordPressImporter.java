@@ -27,6 +27,7 @@ public class WordPressImporter {
     private static final Pattern SIZE_VARIANT = Pattern.compile("-\\d+x\\d+(?=\\.[^./]+$)");
     private static final Pattern DATED = Pattern.compile("^(\\d{4})/(\\d{2})/");
     private static final String UPLOADS = "/wp-content/uploads/";
+    private static final Pattern PHOTON_PREFIX = Pattern.compile("//" + MediaRewriter.PHOTON);
     // no '&': WordPress strips it from upload names, and it would swallow a following &quot;
     private static final String URL_CHARS = "[^\\s\"'<>()\\[\\]\\\\?#&]+";
     private static final Pattern ANY_UPLOAD = Pattern.compile("(?:https?:)?//" + URL_CHARS + UPLOADS + URL_CHARS);
@@ -105,15 +106,17 @@ public class WordPressImporter {
             siteAuth = Objects.requireNonNullElse(siteUri.getRawAuthority(), homeAuth);
             var sitePath = Objects.requireNonNullElse(siteUri.getRawPath(), "");
             // any scheme or none, optional www., home or site host, optional WP-in-subdirectory path
-            uploadUrl = Pattern.compile(
-                    "(?:https?:)?//(?:www\\.)?(?:"
+            var hostPath = "(?:www\\.)?(?:"
                     + Pattern.quote(noWww(homeAuth))
                     + "|"
                     + Pattern.quote(noWww(siteAuth))
                     + ")"
                     + (sitePath.isEmpty() ? "" : "(?:" + Pattern.quote(sitePath) + ")?")
                     + Pattern.quote(UPLOADS)
-                    + URL_CHARS
+                    + URL_CHARS;
+            // a Jetpack Photon URL (i0.wp.com/<home host>/...) is the same upload, its query only resizes
+            uploadUrl = Pattern.compile(
+                    "(?:https?:)?//(?:" + MediaRewriter.PHOTON + hostPath + MediaRewriter.PHOTON_QUERY + "|" + hostPath + ")"
             );
             settings.put("title", site.title());
             settings.put("description", site.description());
@@ -336,7 +339,8 @@ public class WordPressImporter {
                     }
                     var m = uploadUrl.matcher(text);
                     while (m.find()) {
-                        var raw = m.group().replaceFirst("[.,;:!]+$", "");
+                        // the Photon query goes; MediaRewriter matches it again when rewriting
+                        var raw = m.group().replaceFirst("[.,;:!]+$", "").replaceFirst("\\?.*$", "");
                         var key = SIZE_VARIANT.matcher(raw).replaceFirst("");
                         var local = ensureMedia(sourceKey(key));
                         if (local == null && !key.equals(raw) && !skippedMedia.contains(sourceKey(key))) {
@@ -379,6 +383,7 @@ public class WordPressImporter {
             if (uploadUrl == null || !uploadUrl.matcher(url).matches()) {
                 return url;
             }
+            url = PHOTON_PREFIX.matcher(url.replaceFirst("\\?.*$", "")).replaceFirst("//");
             int start = url.indexOf("//") + 2;
             int slash = url.indexOf('/', start);
             var auth = noWww(url.substring(start, slash)).equals(noWww(homeAuth)) ? homeAuth : siteAuth;

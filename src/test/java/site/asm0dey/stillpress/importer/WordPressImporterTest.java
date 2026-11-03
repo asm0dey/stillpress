@@ -348,4 +348,66 @@ class WordPressImporterTest {
                     db.fetchValue(ITEM.ID, ITEM.SOURCE_ID.eq(100L))
             );
     }
+
+    static final String PHOTON = "https://i0.wp.com/blog.example.ru/wp-content/uploads/2021/05/";
+
+    @Test
+    void photonSrcSrcsetHrefAndBlockJsonAreLocalisedFromTheHomeOrigin() throws Exception {
+        var body = importedBody(importer.importWxr(
+                wxr(
+                        HOME,
+                        HOME,
+                        "<!-- wp:image {\"url\":\""
+                        + PHOTON
+                        + "p.jpg?ssl=1\"} -->"
+                        + "<a href=\"https://i1.wp.com/blog.example.ru/wp-content/uploads/2021/05/p.jpg?ssl=1\">"
+                        + "<img src=\""
+                        + PHOTON
+                        + "p.jpg?resize=1024%2C768&amp;ssl=1\" srcset=\""
+                        + "https://i2.wp.com/blog.example.ru/wp-content/uploads/2021/05/p-300x225.jpg?w=300&amp;ssl=1 300w, "
+                        + "https://i3.wp.com/www.blog.example.ru/wp-content/uploads/2021/05/p.jpg?fit=1024%2C768&amp;quality=80 1024w"
+                        + "\"></a><!-- /wp:image -->"
+                        + "<img src=\"//i0.wp.com/blog.example.ru/wp-content/uploads/2021/05/p.jpg?quality=90\">"
+                )
+        ));
+        assertThat(body).doesNotContain("wp.com", "wp-content", "ssl=", "resize=", "fit=", "quality=", "w=300");
+        assertThat(fetcher.fetched()).containsExactly(HOME + "/wp-content/uploads/2021/05/p.jpg");
+        assertThat(db.fetchCount(MEDIA)).isEqualTo(1);
+        var local = db.fetchValue(MEDIA.PATH);
+        assertThat(body)
+            .contains("{\"url\":\"" + local + "\"}")
+            .contains("href=\"" + local + "\"")
+            .contains("src=\"" + local + "\"")
+            .contains("srcset=\"" + local + " 300w, " + local + " 1024w\"");
+    }
+
+    @Test
+    void photonAndDirectUrlsForOneFileShareOneRowAndOneFetch() throws Exception {
+        var body = importedBody(importer.importWxr(
+                wxr(
+                        HOME,
+                        HOME,
+                        "<img src=\"" + HOME + "/wp-content/uploads/2021/05/d.jpg\"> <img src=\"" + PHOTON + "d.jpg?w=640\">"
+                )
+        ));
+        assertThat(fetcher.fetched()).containsExactly(HOME + "/wp-content/uploads/2021/05/d.jpg");
+        assertThat(db.fetchCount(MEDIA)).isEqualTo(1);
+        assertThat(body).doesNotContain("wp.com", "w=640");
+    }
+
+    @Test
+    void photonUrlForAnotherHostIsLeftAlone() throws Exception {
+        var other = "https://i2.wp.com/other.example.com/wp-content/uploads/2021/05/o.jpg?ssl=1";
+        importer.importWxr(wxr(HOME, HOME, "<img src=\"" + other + "\">"));
+        assertThat(fetcher.fetched()).isEmpty();
+        assertThat(db.fetchValue(ITEM.BODY, ITEM.SOURCE_ID.eq(1L))).contains(other);
+    }
+
+    @Test
+    void photonUrlSkippedByMediaLimitIsSkippedNotMissing() throws Exception {
+        var report =
+                importer.importWxr(wxr(HOME, HOME, "<img src=\"" + PHOTON + "s.jpg?resize=10%2C10&amp;ssl=1\">"), 0);
+        assertThat(report.skippedMedia()).containsExactly(HOME + "/wp-content/uploads/2021/05/s.jpg");
+        assertThat(report.missingMedia()).isEmpty();
+    }
 }
