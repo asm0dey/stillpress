@@ -84,6 +84,26 @@ class SitePublisherTest {
     }
 
     @Test
+    void dateArchivesUseTheSiteLocalDateAndFeedsKeepGmt() {
+        var rel = publisher.publishAll().release();
+        assertThat(rel.resolve("2023/02/01/night-post/index.html")).exists();
+        assertThat(rel.resolve("2023/02/01/index.html")).content().contains("Ночной пост");
+        assertThat(rel.resolve("2023/02/index.html")).content().contains("Ночной пост");
+        assertThat(rel.resolve("2023/01/31/index.html")).doesNotExist();
+        assertThat(rel.resolve("2023/01/index.html")).content().doesNotContain("Ночной пост");
+        assertThat(rel.resolve("feed/index.html")).content().contains(
+                "<pubDate>Tue, 31 Jan 2023 22:30:00 +0000</pubDate>"
+        );
+    }
+
+    @Test
+    void localDateFallsBackToGmtWhenMissing() {
+        db.update(ITEM).setNull(ITEM.PUBLISHED_LOCAL).where(ITEM.SLUG.eq("night-post")).execute();
+        var rel = publisher.publishAll().release();
+        assertThat(rel.resolve("2023/01/31/index.html")).content().contains("Ночной пост");
+    }
+
+    @Test
     void staticFiles() {
         var rel = publisher.publishAll().release();
         assertThat(rel.resolve("robots.txt")).hasContent("User-agent: *\nDisallow: /admin/\n");
@@ -186,7 +206,7 @@ class SitePublisherTest {
 
     @Test
     void undatedPostsStayOutOfFeedsAndDateArchives() throws Exception {
-        db.update(ITEM).setNull(ITEM.PUBLISHED_AT).where(ITEM.SLUG.eq("qa")).execute();
+        db.update(ITEM).setNull(ITEM.PUBLISHED_AT).setNull(ITEM.PUBLISHED_LOCAL).where(ITEM.SLUG.eq("qa")).execute();
         var rel = publisher.publishAll().release();
         assertThat(rel.resolve("feed/index.html")).content().doesNotContain("?p=100");
         assertThat(rel.resolve("index.html")).content().contains("Q&amp;A");

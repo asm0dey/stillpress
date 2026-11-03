@@ -54,8 +54,8 @@ class WordPressImporterTest {
     @Test
     void importsSampleBlog() throws Exception {
         var report = importer.importWxr(sample());
-        // 5994,100,2,101,102,7
-        assertThat(report.items()).isEqualTo(6);
+        // 5994,103,100,2,101,102,7
+        assertThat(report.items()).isEqualTo(7);
         assertThat(report.comments()).isEqualTo(3);
         assertThat(report.reusableBlocks()).isEqualTo(1);
         assertThat(report.passwordProtected()).containsExactly("/2021/03/01/secret-post/");
@@ -78,7 +78,7 @@ class WordPressImporterTest {
     @Test
     void storesRowsFaithfully() throws Exception {
         importer.importWxr(sample());
-        assertThat(items.count()).isEqualTo(6);
+        assertThat(items.count()).isEqualTo(7);
         assertThat(settings.get("home_url")).contains("https://blog.example.ru");
         assertThat(settings.get("title")).contains("Блог");
         assertThat(settings.get("posts_per_page")).contains("10");
@@ -102,7 +102,21 @@ class WordPressImporterTest {
         assertThat(db.fetchValue(COMMENT.STATUS, COMMENT.SOURCE_ID.eq(3L))).isEqualTo("spam");
         assertThat(items.findPublished())
             .extracting(r -> r.getSourceId())
-            .containsExactlyInAnyOrder(5994L, 100L, 2L);
+            .containsExactlyInAnyOrder(5994L, 103L, 100L, 2L);
+        assertThat(db.fetchValue(ITEM.PUBLISHED_LOCAL, ITEM.SOURCE_ID.eq(103L))).isEqualTo(LocalDateTime.of(
+                2023,
+                2,
+                1,
+                1,
+                30
+        ));
+        assertThat(db.fetchValue(ITEM.PUBLISHED_AT, ITEM.SOURCE_ID.eq(103L))).isEqualTo(LocalDateTime.of(
+                2023,
+                1,
+                31,
+                22,
+                30
+        ));
     }
 
     @Test

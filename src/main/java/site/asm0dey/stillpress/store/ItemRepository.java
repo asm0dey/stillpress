@@ -33,15 +33,24 @@ public class ItemRepository {
 
     /**
      * An item without its body: enough to place it in archives and feeds without holding content in memory.
+     * {@code publishedAt} is UTC (feeds); {@code publishedLocal} is the site-local time (date archives), UTC when the
+     * export had no {@code wp:post_date}.
      */
-    public record Summary(long id, String type, String permalink, LocalDateTime publishedAt, Long authorId) {}
+    public record Summary(
+            long id,
+            String type,
+            String permalink,
+            LocalDateTime publishedAt,
+            LocalDateTime publishedLocal,
+            Long authorId
+    ) {}
 
     /**
      * Published, non-password-protected posts and pages, newest first (undated last).
      */
     public List<Summary> findPublishedSummaries() {
         return db
-            .select(ITEM.ID, ITEM.TYPE, ITEM.PERMALINK, ITEM.PUBLISHED_AT, ITEM.AUTHOR_ID)
+            .select(ITEM.ID, ITEM.TYPE, ITEM.PERMALINK, ITEM.PUBLISHED_AT, ITEM.PUBLISHED_LOCAL, ITEM.AUTHOR_ID)
             .from(ITEM)
             .where(ITEM.STATUS.eq("publish"), ITEM.TYPE.in("post", "page"), ITEM.PASSWORD_PROTECTED.isFalse())
             .orderBy(ITEM.PUBLISHED_AT.desc().nullsLast(), ITEM.ID.desc())
@@ -50,7 +59,8 @@ public class ItemRepository {
                     r.value2(),
                     Objects.requireNonNullElse(r.value3(), "/"),
                     r.value4(),
-                    r.value5()
+                    r.value5() != null ? r.value5() : r.value4(),
+                    r.value6()
             ));
     }
 

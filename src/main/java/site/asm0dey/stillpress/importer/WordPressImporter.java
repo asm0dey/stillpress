@@ -210,6 +210,7 @@ public class WordPressImporter {
             reportLeftovers(r.getBody(), r.getExcerpt());
             r.setAuthorId(authorIds.get(i.creator()));
             r.setPublishedAt(utc(i.postDateGmt()));
+            r.setPublishedLocal(i.postDate());
             r.setModifiedAt(utc(i.modifiedGmt()));
             r.setGuid(i.guid());
             r.setCommentStatus(i.commentStatus());

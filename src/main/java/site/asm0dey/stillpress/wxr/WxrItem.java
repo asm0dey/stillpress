@@ -13,6 +13,8 @@ public record WxrItem(
         String content,
         String excerpt,
         Instant postDateGmt,
+        // wp:post_date, the site-local wall-clock time WordPress groups date archives by
+        LocalDateTime postDate,
         Instant modifiedGmt,
         String creator,
         long parentId,

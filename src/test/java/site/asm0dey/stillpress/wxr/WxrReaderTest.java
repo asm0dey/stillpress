@@ -72,7 +72,7 @@ class WxrReaderTest {
         assertThat(events.getFirst()).isEqualTo("site");
         assertThat(events.indexOf("author")).isLessThan(events.indexOf("term"));
         assertThat(events.indexOf("term")).isLessThan(events.indexOf("item"));
-        assertThat(events.stream().filter("item"::equals).count()).isEqualTo(8);
+        assertThat(events.stream().filter("item"::equals).count()).isEqualTo(9);
     }
 
     @Test
@@ -132,5 +132,12 @@ class WxrReaderTest {
                 + "<rss><channel><title>&x;</title></channel></rss>";
         assertThatThrownBy(() -> WxrReader.read(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8))))
             .isInstanceOf(UncheckedIOException.class);
+    }
+
+    @Test
+    void postDateIsTheSiteLocalTimeAndMissingMeansNull() {
+        assertThat(item(103).postDate()).isEqualTo(LocalDateTime.of(2023, 2, 1, 1, 30));
+        assertThat(item(103).postDateGmt()).isEqualTo(Instant.parse("2023-01-31T22:30:00Z"));
+        assertThat(item(100).postDate()).isNull();
     }
 }

@@ -240,6 +240,7 @@ public final class WxrReader {
                 m.get("content"),
                 m.get("excerpt"),
                 instant(m.get("post_date_gmt")),
+                local(m.get("post_date")),
                 instant(m.get("post_modified_gmt")),
                 m.get("creator"),
                 num(m.get("post_parent")),
@@ -305,6 +306,11 @@ public final class WxrReader {
 
     private static String blankToNull(String s) {
         return s == null || s.isEmpty() ? null : s;
+    }
+
+    private static LocalDateTime local(String s) {
+        var i = instant(s);
+        return i == null ? null : LocalDateTime.ofInstant(i, ZoneOffset.UTC);
     }
 
     private static Instant instant(String s) {

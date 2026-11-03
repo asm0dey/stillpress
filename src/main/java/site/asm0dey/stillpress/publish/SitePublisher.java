@@ -248,8 +248,9 @@ public class SitePublisher {
     private void dateArchives(Out out, SiteView site, List<ItemRepository.Summary> posts) throws IOException {
         var groups = new LinkedHashMap<String, List<ItemRepository.Summary>>();
         for (var p : posts) {
-            if (p.publishedAt() != null) {
-                var d = p.publishedAt();
+            // WordPress groups by the site-local date, so a post at 01:30 Moscow time is in that day's archive
+            if (p.publishedLocal() != null) {
+                var d = p.publishedLocal();
                 for (var key :
                         List.of(
                                 String.format("/%04d/", d.getYear()),
