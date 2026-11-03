@@ -18,7 +18,8 @@ public class CsrfFilter {
     void register(@Observes Filters filters) {
         filters.register(ctx -> {
             var req = ctx.request();
-            var path = req.path();
+            // the decoded, dot-segment-free path the router matches, so /admin//api or /admin/%61pi cannot bypass
+            var path = ctx.normalizedPath();
             if (path != null
                     && path.startsWith("/admin/api/")
                     && STATE_CHANGING.contains(req.method())

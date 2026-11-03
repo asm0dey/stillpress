@@ -89,6 +89,13 @@ class SessionAuthTest {
     }
 
     @Test
+    void csrfGuardSeesThePathTheRouterSees() {
+        for (var path : List.of("/admin//api/logout", "/admin/%61pi/logout", "/admin/x/../api/logout")) {
+            given().urlEncodingEnabled(false).post(path).then().statusCode(403);
+        }
+    }
+
+    @Test
     void csrfHeaderPassesTheFilter() {
         given()
             .header("X-Requested-With", "stillpress")
