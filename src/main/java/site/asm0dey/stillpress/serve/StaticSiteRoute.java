@@ -84,7 +84,9 @@ public class StaticSiteRoute {
                 }
             }
         }
-        storedRedirect(ctx, root, path);
+        // WordPress answers /post/attachment and /post/attachment/ alike
+        var key = !path.endsWith("/") && redirects.find(path).isEmpty() ? path + "/" : path;
+        storedRedirect(ctx, root, key);
     }
 
     private void storedRedirect(RoutingContext ctx, Path root, String key) {

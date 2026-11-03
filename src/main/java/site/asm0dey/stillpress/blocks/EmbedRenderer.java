@@ -31,11 +31,7 @@ public class EmbedRenderer implements DynamicBlockRenderer {
                     + id
                     + "/hqdefault.jpg)\" aria-label=\"Play video\"></button></div></figure>";
         }
-        var u = esc(url);
+        var u = ClassicContent.attr(url);
         return "<figure class=\"wp-block-embed\"><a href=\"" + u + "\">" + u + "</a></figure>";
-    }
-
-    private static String esc(String s) {
-        return s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

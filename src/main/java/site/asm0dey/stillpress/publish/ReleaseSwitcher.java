@@ -14,7 +14,6 @@ public class ReleaseSwitcher {
     static final int KEEP = 3;
     private static final DateTimeFormatter NAME =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
-    private static final DateTimeFormatter NAME_PARSER = NAME;
     private static final Logger LOG = Logger.getLogger(ReleaseSwitcher.class);
     private final DataDir dataDir;
     private final Deleter deleter;
@@ -71,7 +70,7 @@ public class ReleaseSwitcher {
                 .map(p -> p.getFileName().toString())
                 .map(n -> {
                     try {
-                        return NAME_PARSER.parse(n, Instant::from);
+                        return NAME.parse(n, Instant::from);
                     } catch (DateTimeParseException e) {
                         return Instant.EPOCH;
                     }

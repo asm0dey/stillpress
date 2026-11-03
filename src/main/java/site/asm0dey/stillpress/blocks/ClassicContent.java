@@ -44,7 +44,7 @@ public final class ClassicContent {
         return s.replaceAll("[^A-Za-z0-9_-]", "");
     }
 
-    private static String attr(String s) {
+    static String attr(String s) {
         return s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;");
     }
 

@@ -25,7 +25,7 @@ public class StillpressCommand implements Runnable {
         new ServeCommand().run();
     }
 
-    @Command(name = "serve", description = "Run the admin and preview server (default)")
+    @Command(name = "serve", description = "Serve the published site (Mode 1) and the redirect fallback (default)")
     public static class ServeCommand implements Runnable {
         @Override
         public void run() {

@@ -146,6 +146,17 @@ class StaticSiteRouteTest {
     }
 
     @Test
+    void storedRedirectAlsoMatchesWithoutTrailingSlash() {
+        given()
+            .redirects()
+            .follow(false)
+            .get("/2020/05/10/qa/c")
+            .then()
+            .statusCode(301)
+            .header("Location", endsWith("/2020/05/10/qa/"));
+    }
+
+    @Test
     void feedContentType() {
         given()
             .get("/feed/")
