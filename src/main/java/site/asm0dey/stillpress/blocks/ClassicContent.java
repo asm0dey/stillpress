@@ -41,7 +41,7 @@ public final class ClassicContent {
       if (width < 1 || text.isEmpty()) return Matcher.quoteReplacement(body);
       var id = htmlClass(attrs.getOrDefault("id", ""));
       var captionId = htmlClass(attrs.getOrDefault("caption_id", ""));
-      if (captionId.isEmpty() && !id.isEmpty()) captionId = "caption-" + id;
+      if (captionId.isEmpty() && !id.isEmpty()) captionId = "caption-" + id.replace('_', '-'); // shortcut: WP's wp_unique_prefixed_id suffixes repeated ids (-2, -3); not tracked per page, add a per-document counter if duplicate caption ids occur
       var cls = (("wp-caption " + attrs.getOrDefault("align", "alignnone") + " " + attrs.getOrDefault("class", "")).trim()).replaceAll("\\s+", " ");
       return Matcher.quoteReplacement("<figure " + (id.isEmpty() ? "" : "id=\"" + attr(id) + "\" ")
         + (captionId.isEmpty() ? "" : "aria-describedby=\"" + attr(captionId) + "\" ")
