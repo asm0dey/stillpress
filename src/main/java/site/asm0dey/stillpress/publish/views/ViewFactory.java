@@ -110,18 +110,32 @@ public class ViewFactory {
         return String.join("/", parts);
     }
 
-    private List<CommentView> threaded(List<CommentRecord> flat) {
+    static List<CommentView> threaded(List<CommentRecord> flat) {
+        var byId = new HashMap<Long, CommentRecord>();
+        flat.forEach(c -> byId.put(c.getId(), c));
         var byParent = new HashMap<Long, List<CommentRecord>>();
-        var ids = new HashSet<Long>();
-        flat.forEach(c -> ids.add(c.getId()));
-        // a reply whose parent is not approved is promoted to top level (key 0)
+        // orphans and members of parent cycles are promoted to top level (key 0)
         flat.forEach(c -> byParent
-            .computeIfAbsent(c.getParentId() != null && ids.contains(c.getParentId()) ? c.getParentId() : 0L, k -> new ArrayList<>())
+            .computeIfAbsent(c.getParentId() != null && byId.containsKey(c.getParentId()) && !inCycle(c, byId)
+                    ? c.getParentId()
+                    : 0L, k -> new ArrayList<>())
             .add(c));
         return build(byParent, 0L);
     }
 
-    private List<CommentView> build(Map<Long, List<CommentRecord>> byParent, long parent) {
+    private static boolean inCycle(CommentRecord c, Map<Long, CommentRecord> byId) {
+        var seen = new HashSet<Long>();
+        for (var p = c.getParentId(); p != null && seen.add(p); p = byId.containsKey(p)
+                ? byId.get(p).getParentId()
+                : null) {
+            if (p.equals(c.getId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<CommentView> build(Map<Long, List<CommentRecord>> byParent, long parent) {
         return byParent
             .getOrDefault(parent, List.of())
             .stream()
@@ -130,7 +144,7 @@ public class ViewFactory {
                     Objects.requireNonNullElse(c.getAuthorName(), ""),
                     c.getAuthorUrl() == null || c.getAuthorUrl().isBlank() ? null : c.getAuthorUrl(),
                     instant(c.getCreatedAt()),
-                    ClassicContent.toHtml(c.getContent()),
+                    CommentSanitizer.clean(ClassicContent.toHtml(c.getContent())),
                     build(byParent, c.getId())
             ))
             .toList();

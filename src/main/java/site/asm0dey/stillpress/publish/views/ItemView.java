@@ -1,6 +1,7 @@
 package site.asm0dey.stillpress.publish.views;
 
 import module java.base;
+import org.jsoup.Jsoup;
 
 public record ItemView(
         long id,
@@ -17,6 +18,9 @@ public record ItemView(
         List<CommentView> comments,
         String guid
 ) {
+    private static final DateTimeFormatter RSS_DATE =
+            DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss '+0000'", Locale.ENGLISH);
+
     public ItemView withGuid(String newGuid) {
         return new ItemView(
                 id,
@@ -36,16 +40,14 @@ public record ItemView(
     }
 
     /**
-     * RFC 1123 in GMT with {@code +0000}, as WordPress writes pubDate.
+     * WordPress's {@code D, d M Y H:i:s +0000}.
      */
     public String pubDate() {
         return rfc1123(publishedAt);
     }
 
     public static String rfc1123(Instant t) {
-        return t == null
-                ? ""
-                : DateTimeFormatter.RFC_1123_DATE_TIME.format(t.atOffset(ZoneOffset.UTC)).replace("GMT", "+0000");
+        return t == null ? "" : RSS_DATE.format(t.atOffset(ZoneOffset.UTC));
     }
 
     /**
@@ -66,5 +68,38 @@ public record ItemView(
         var out = new ArrayList<CommentView>();
         comments.forEach(c -> c.flattenInto(out));
         return out;
+    }
+
+    public String feedExcerptCdata() {
+        return cdata(feedExcerpt());
+    }
+
+    /**
+     * WordPress's the_excerpt_rss: the excerpt, else the content stripped to 55 words plus {@code [&hellip;]}.
+     */
+    public String feedExcerpt() {
+        if (excerptHtml != null && !excerptHtml.isBlank()) {
+            return excerptHtml;
+        }
+        var words = Jsoup.parse(contentHtml == null ? "" : contentHtml).text().trim().split("\\s+");
+        if (words.length == 1 && words[0].isEmpty()) {
+            return "";
+        }
+        var text = String.join(" ", Arrays.copyOf(words, Math.min(words.length, 55)));
+        text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        return words.length > 55 ? text + " [&hellip;]" : text;
+    }
+
+    /**
+     * Date of the newest comment, else of the post, for the comments feed.
+     */
+    public String lastCommentDate() {
+        return rfc1123(allComments()
+            .stream()
+            .map(CommentView::createdAt)
+            .filter(Objects::nonNull)
+            .max(Comparator.naturalOrder())
+            .orElse(publishedAt)
+        );
     }
 }

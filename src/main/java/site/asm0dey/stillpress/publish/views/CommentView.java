@@ -10,6 +10,10 @@ public record CommentView(
         String contentHtml,
         List<CommentView> replies
 ) {
+    public CommentView {
+        authorUrl = CommentSanitizer.safeUrl(authorUrl);
+    }
+
     public String pubDate() {
         return ItemView.rfc1123(createdAt);
     }

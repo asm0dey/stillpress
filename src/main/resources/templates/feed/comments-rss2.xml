@@ -8,6 +8,7 @@
 <atom:link href="{selfUrl}" rel="self" type="application/rss+xml"/>
 <link>{item.absoluteUrl}</link>
 <description>{site.description}</description>
+<lastBuildDate>{item.lastCommentDate}</lastBuildDate>
 <language>{site.language}</language>
 {#for c in item.allComments}
 <item>
@@ -16,6 +17,7 @@
 <dc:creator>{c.authorName}</dc:creator>
 <pubDate>{c.pubDate}</pubDate>
 <guid isPermaLink="false">{item.guid}#comment-{c.id}</guid>
+<description><![CDATA[{c.contentCdata.raw}]]></description>
 <content:encoded><![CDATA[{c.contentCdata.raw}]]></content:encoded>
 </item>
 {/for}

@@ -19,7 +19,7 @@
 {#for t in item.categories}<category>{t.name}</category>{/for}
 {#for t in item.tags}<category>{t.name}</category>{/for}
 <guid isPermaLink="false">{item.guid}</guid>
-<description>{item.excerptHtml}</description>
+<description><![CDATA[{item.feedExcerptCdata.raw}]]></description>
 <content:encoded><![CDATA[{item.contentCdata.raw}]]></content:encoded>
 </item>
 {/for}

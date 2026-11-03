@@ -1,5 +1,5 @@
 document.addEventListener('click', function (e) {
-  var b = e.target.closest('.sp-yt-facade');
+  var b = e.target.closest('button.sp-yt-facade[data-yt-id]');
   if (!b) return;
   var f = document.createElement('iframe');
   f.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(b.dataset.ytId) + '?autoplay=1';
