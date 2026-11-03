@@ -28,9 +28,23 @@ class WxrReaderTest {
     assertThat(p.guid()).isEqualTo("https://blog.example.ru/?p=5994");
     assertThat(p.terms()).extracting(WxrTermRef::nicename).containsExactly("travel", "europe", "kids");
     assertThat(p.postDateGmt()).isEqualTo(Instant.parse("2023-01-14T10:00:00Z"));
-    assertThat(d.items()).extracting(WxrItem::postType).doesNotContain("nav_menu_item");
+    assertThat(d.items()).extracting(WxrItem::postType).contains("nav_menu_item", "wp_block", "attachment");
+    assertThat(d.site().link()).isEqualTo("https://blog.example.ru");
     assertThat(item(101).postName()).isEqualTo("draft-post");
     assertThat(item(101).postDateGmt()).isNull();
+  }
+  @Test void streamsInDocumentOrder() {
+    var events = new ArrayList<String>();
+    WxrReader.read(WxrReaderTest.class.getClassLoader().getResourceAsStream("wxr/sample-blog.xml"), new WxrHandler() {
+      public void site(WxrSite s) { events.add("site"); }
+      public void author(WxrAuthor a) { events.add("author"); }
+      public void term(WxrTerm t) { events.add("term"); }
+      public void item(WxrItem i) { events.add("item"); }
+    });
+    assertThat(events.getFirst()).isEqualTo("site");
+    assertThat(events.indexOf("author")).isLessThan(events.indexOf("term"));
+    assertThat(events.indexOf("term")).isLessThan(events.indexOf("item"));
+    assertThat(events.stream().filter("item"::equals).count()).isEqualTo(8);
   }
   @Test void titleEntitiesDecodedOnce() {
     assertThat(item(100).title()).isEqualTo("Q&A");

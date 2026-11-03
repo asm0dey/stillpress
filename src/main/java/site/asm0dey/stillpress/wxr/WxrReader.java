@@ -4,40 +4,79 @@ import module java.base;
 import module java.xml;
 import org.jsoup.parser.Parser;
 
-/** Streaming StAX reader for WXR 1.x exports. {@code nav_menu_item} entries are skipped. */
+/** Streaming StAX reader for WXR 1.x exports. */
 public final class WxrReader {
   private WxrReader() {}
 
   private static final DateTimeFormatter GMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC);
 
+  /** Collects everything in memory; for tests and small files. Use {@link #read(InputStream, WxrHandler)} for real exports. */
   public static WxrDocument read(InputStream in) {
+    var site = new WxrSite[1];
+    var authors = new ArrayList<WxrAuthor>();
+    var terms = new ArrayList<WxrTerm>();
+    var items = new ArrayList<WxrItem>();
+    read(in, new WxrHandler() {
+      public void site(WxrSite s) { site[0] = s; }
+      public void author(WxrAuthor a) { authors.add(a); }
+      public void term(WxrTerm t) { terms.add(t); }
+      public void item(WxrItem i) { items.add(i); }
+    });
+    return new WxrDocument(site[0], authors, terms, items);
+  }
+
+  /** Streams the export: only the current item is held in memory. Every post type is passed through. */
+  public static void read(InputStream in, WxrHandler h) {
+    XMLStreamReader r = null;
     try {
       var f = XMLInputFactory.newFactory();
       f.setProperty(XMLInputFactory.IS_COALESCING, true);
       f.setProperty(XMLInputFactory.SUPPORT_DTD, false);
       f.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
-      var r = f.createXMLStreamReader(in);
+      r = f.createXMLStreamReader(in);
       var ch = new HashMap<String, String>();
-      var authors = new ArrayList<WxrAuthor>();
-      var terms = new ArrayList<WxrTerm>();
-      var items = new ArrayList<WxrItem>();
+      boolean siteSent = false;
+      int depth = 0, channelDepth = -1;
       while (r.hasNext()) {
-        if (r.next() != XMLStreamConstants.START_ELEMENT) continue;
-        switch (r.getLocalName()) {
-          case "author" -> { var m = flat(r); authors.add(new WxrAuthor(num(m.get("author_id")), m.get("author_login"), m.get("author_email"), m.get("author_display_name"))); }
-          case "category" -> { var m = flat(r); terms.add(new WxrTerm(num(m.get("term_id")), "category", m.get("category_nicename"), unescape(m.get("cat_name")), blankToNull(m.get("category_parent")), m.get("category_description"))); }
-          case "tag" -> { var m = flat(r); terms.add(new WxrTerm(num(m.get("term_id")), "post_tag", m.get("tag_slug"), unescape(m.get("tag_name")), null, m.get("tag_description"))); }
-          case "term" -> { var m = flat(r); terms.add(new WxrTerm(num(m.get("term_id")), m.get("term_taxonomy"), m.get("term_slug"), unescape(m.get("term_name")), blankToNull(m.get("term_parent")), m.get("term_description"))); }
-          case "item" -> { var it = item(r); if (!"nav_menu_item".equals(it.postType())) items.add(it); }
-          case "title", "link", "description", "language", "base_site_url", "base_blog_url" -> ch.put(r.getLocalName(), text(r));
-          default -> { }
+        int ev = r.next();
+        if (ev == XMLStreamConstants.END_ELEMENT) { depth--; continue; }
+        if (ev != XMLStreamConstants.START_ELEMENT) continue;
+        var name = r.getLocalName();
+        // Only direct children of <channel>: <image><title> from rss2_head must not overwrite the site title.
+        if (channelDepth < 0 || depth != channelDepth) {
+          depth++;
+          if (channelDepth < 0 && name.equals("channel")) channelDepth = depth;
+          continue;
+        }
+        boolean header = switch (name) {
+          case "title", "link", "description", "language", "base_site_url", "base_blog_url" -> { ch.put(name, text(r)); yield true; }
+          default -> false;
+        };
+        if (header) continue;
+        if (!siteSent && switch (name) { case "author", "category", "tag", "term", "item" -> true; default -> false; }) {
+          h.site(site(ch));
+          siteSent = true;
+        }
+        switch (name) {
+          case "author" -> { var m = flat(r); h.author(new WxrAuthor(num(m.get("author_id")), m.get("author_login"), m.get("author_email"), m.get("author_display_name"))); }
+          case "category" -> { var m = flat(r); h.term(new WxrTerm(num(m.get("term_id")), "category", m.get("category_nicename"), unescape(m.get("cat_name")), blankToNull(m.get("category_parent")), m.get("category_description"))); }
+          case "tag" -> { var m = flat(r); h.term(new WxrTerm(num(m.get("term_id")), "post_tag", m.get("tag_slug"), unescape(m.get("tag_name")), null, m.get("tag_description"))); }
+          case "term" -> { var m = flat(r); h.term(new WxrTerm(num(m.get("term_id")), m.get("term_taxonomy"), m.get("term_slug"), unescape(m.get("term_name")), blankToNull(m.get("term_parent")), m.get("term_description"))); }
+          case "item" -> h.item(item(r));
+          default -> depth++;
         }
       }
-      return new WxrDocument(new WxrSite(unescape(ch.get("title")), ch.get("link"), unescape(ch.get("description")), ch.get("language"),
-        ch.get("base_site_url"), ch.get("base_blog_url")), authors, terms, items);
+      if (!siteSent) h.site(site(ch));
     } catch (XMLStreamException e) {
       throw new UncheckedIOException(new IOException("Invalid WXR: " + e.getMessage(), e));
+    } finally {
+      if (r != null) try { r.close(); } catch (XMLStreamException e) { /* nothing to recover */ }
     }
+  }
+
+  private static WxrSite site(Map<String, String> ch) {
+    return new WxrSite(unescape(ch.get("title")), ch.get("link"), unescape(ch.get("description")), ch.get("language"),
+      ch.get("base_site_url"), ch.get("base_blog_url"));
   }
 
   private static WxrItem item(XMLStreamReader r) throws XMLStreamException {

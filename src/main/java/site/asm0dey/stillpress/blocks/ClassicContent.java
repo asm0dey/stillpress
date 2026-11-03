@@ -6,7 +6,7 @@ import module java.base;
 public final class ClassicContent {
   private ClassicContent() {}
 
-  private static final String ALL_BLOCKS = "(?:table|thead|tfoot|caption|col|colgroup|tbody|tr|td|th|div|dl|dd|dt|ul|ol|li|pre|form|map|area|blockquote|address|math|style|p|h[1-6]|hr|fieldset|legend|section|article|aside|hgroup|header|footer|nav|figure|figcaption|details|menu|summary)";
+  private static final String ALL_BLOCKS = "(?:table|thead|tfoot|caption|col|colgroup|tbody|tr|td|th|div|dl|dd|dt|ul|ol|li|pre|form|map|area|blockquote|address|style|p|h[1-6]|hr|fieldset|legend|section|article|aside|hgroup|header|footer|nav|figure|figcaption|details|menu|summary)";
   private static final Pattern CAPTION = Pattern.compile("\\[caption((?:\\s[^\\]]*)?)\\](.*?)\\[/caption\\]", Pattern.DOTALL);
   private static final Pattern TAG = Pattern.compile("<[^<>]*>");
   private static final Pattern PRESERVE = Pattern.compile("<(script|style|svg|math).*?</\\1>", Pattern.DOTALL);
@@ -16,7 +16,10 @@ public final class ClassicContent {
     return captions(UNAUTOP.matcher(autop(classicHtml)).replaceAll("$1"));
   }
 
-  private static final Pattern UNAUTOP = Pattern.compile("<p>\\s*(\\[caption(?:\\s[^\\]]*)?\\].*?\\[/caption\\])\\s*(?:<br />)?\\s*</p>", Pattern.DOTALL);
+  // shortcode_unautop() from wp-includes/formatting.php, with the caption tag only.
+  private static final String SP = "(?:[\\r\\n\\t ]|&nbsp;)";
+  private static final Pattern UNAUTOP = Pattern.compile("<p>" + SP + "*+(\\[(caption)(?![\\w-])[^\\]/]*(?:/(?!\\])[^\\]/]*)*?(?:/\\]|\\](?:[^\\[]*+(?:\\[(?!/\\2\\])[^\\[]*+)*+\\[/\\2\\])?))" + SP + "*+</p>");
+  private static final Pattern IMG_SPLIT = Pattern.compile("((?:<a [^>]+>\\s*)?<img [^>]+>(?:\\s*</a>)?)(.*)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
   private static final Pattern ATTR = Pattern.compile("(\\w+)=(?:\"([^\"]*)\"|'([^']*)')");
 
   private static String htmlClass(String s) { return s.replaceAll("[^A-Za-z0-9_-]", ""); }
@@ -32,13 +35,18 @@ public final class ClassicContent {
       var am = ATTR.matcher(r.group(1));
       while (am.find()) attrs.put(am.group(1), am.group(2) != null ? am.group(2) : am.group(3));
       var body = r.group(2);
-      int gt = body.lastIndexOf('>');
-      var media = gt < 0 ? body : body.substring(0, gt + 1);
-      var text = gt < 0 ? "" : body.substring(gt + 1).trim();
-      if (attrs.containsKey("caption") && !attrs.get("caption").isEmpty()) text = attrs.get("caption");
+      var media = body;
+      var text = "";
+      if (!attrs.containsKey("caption")) {
+        var im = IMG_SPLIT.matcher(body);
+        if (im.find()) { media = im.group(1); text = im.group(2).trim(); }
+      } else {
+        // shortcut: WP runs wp_kses(post) on a caption attribute containing '<'; kept verbatim here since the content is the author's own export.
+        text = attrs.get("caption");
+      }
       int width = 0;
       try { width = Integer.parseInt(attrs.getOrDefault("width", "").trim()); } catch (NumberFormatException e) { /* width 0 */ }
-      if (width < 1 || text.isEmpty()) return Matcher.quoteReplacement(body);
+      if (width < 1 || text.isEmpty()) return Matcher.quoteReplacement(media);
       var id = htmlClass(attrs.getOrDefault("id", ""));
       var captionId = htmlClass(attrs.getOrDefault("caption_id", ""));
       if (captionId.isEmpty() && !id.isEmpty()) captionId = "caption-" + id.replace('_', '-'); // shortcut: WP's wp_unique_prefixed_id suffixes repeated ids (-2, -3); not tracked per page, add a per-document counter if duplicate caption ids occur
@@ -71,11 +79,21 @@ public final class ClassicContent {
     text = text.replaceAll("<br\\s*/?>\\s*<br\\s*/?>", "\n\n");
     text = text.replaceAll("(<" + ALL_BLOCKS + "[\\s/>])", "\n\n$1");
     text = text.replaceAll("(</" + ALL_BLOCKS + ">)", "$1\n\n");
+    text = text.replaceAll("(<hr\\s*?/?>)", "$1\n\n");
     text = text.replace("\r\n", "\n").replace("\r", "\n");
     // shortcut: wp_replace_in_html_tags simplified to a <[^<>]*> regex (no special-casing of HTML comments or > inside attributes); port the real tokenizer if such content mis-wraps.
     // shortcut: wpautop's <option> and <object> whitespace special-cases are not ported; port them if select/object markup appears in classic content.
     // newlines inside tags must survive paragraph splitting
     text = TAG.matcher(text).replaceAll(m -> Matcher.quoteReplacement(m.group().replace("\n", " <!-- wpnl --> ")));
+    if (text.contains("<source") || text.contains("<track")) {
+      text = text.replaceAll("([<\\[](?:audio|video)[^>\\]]*[>\\]])\\s*", "$1");
+      text = text.replaceAll("\\s*([<\\[]/(?:audio|video)[>\\]])", "$1");
+      text = text.replaceAll("\\s*(<(?:source|track)[^>]*>)\\s*", "$1");
+    }
+    if (text.contains("<figcaption")) {
+      text = text.replaceAll("\\s*(<figcaption[^>]*>)", "$1");
+      text = text.replaceAll("</figcaption>\\s*", "</figcaption>");
+    }
     text = text.replaceAll("\n\n+", "\n\n");
     var sb = new StringBuilder();
     for (var t : text.split("\n\\s*\n")) {

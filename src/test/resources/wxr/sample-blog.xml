@@ -13,6 +13,7 @@
   <wp:wxr_version>1.2</wp:wxr_version>
   <wp:base_site_url>https://blog.example.ru</wp:base_site_url>
   <wp:base_blog_url>https://blog.example.ru</wp:base_blog_url>
+  <image><url>https://blog.example.ru/icon.png</url><title>Блог &#8211; Tagline</title><link>https://blog.example.ru/icon</link><width>32</width><height>32</height></image>
   <wp:author><wp:author_id>1</wp:author_id><wp:author_login><![CDATA[mama]]></wp:author_login><wp:author_email><![CDATA[mama@example.ru]]></wp:author_email><wp:author_display_name><![CDATA[Мама]]></wp:author_display_name></wp:author>
   <wp:author><wp:author_id>2</wp:author_id><wp:author_login><![CDATA[papa]]></wp:author_login><wp:author_email><![CDATA[papa@example.ru]]></wp:author_email><wp:author_display_name><![CDATA[Папа]]></wp:author_display_name></wp:author>
   <wp:category><wp:term_id>10</wp:term_id><wp:category_nicename><![CDATA[travel]]></wp:category_nicename><wp:category_parent><![CDATA[]]></wp:category_parent><wp:cat_name><![CDATA[Путешествия]]></wp:cat_name></wp:category>
