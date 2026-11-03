@@ -17,6 +17,6 @@ public class VerifyUrlsCommand implements Callable<Integer> {
     public Integer call() {
         var report = new UrlParityChecker().check(source, target, max);
         System.out.print(report.toText());
-        return report.mismatches().isEmpty() ? 0 : 1;
+        return report.ok() ? 0 : 1;
     }
 }
