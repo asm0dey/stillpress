@@ -5,12 +5,21 @@ import static site.asm0dey.stillpress.db.tables.Setting.SETTING;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.jooq.DSLContext;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import site.asm0dey.stillpress.TestStore;
 
 @QuarkusTest
 class SchemaTest {
     @Inject
     DSLContext db;
+    @Inject
+    TestStore store;
+
+    @BeforeEach
+    void clean() {
+        store.reset();
+    }
 
     @Test
     void migrationsCreateCoreTables() {
