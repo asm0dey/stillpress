@@ -22,7 +22,7 @@
 - Passwords: **Argon2id** via password4j, PHC string stored in `author.password_hash`; length **12–1024** characters. Imported users have `password_hash = NULL` and cannot log in until they set one (spec §6.2.2).
 - Roles (exact strings): `administrator`, `editor`, `author`, `contributor`. Imported authors get `author`. Only `administrator` may manage users and import.
 - Login rate limits (in memory, one install = one process): **per account 5 failures / 15 min**, **per client IP 20 failures / 15 min**; over the limit → **429** with `Retry-After` seconds, even for a correct password. Failure message is the same for unknown login and wrong password.
-- Client IP comes from forwarded headers only via Quarkus proxy settings: `quarkus.http.proxy.proxy-address-forwarding=true`, `quarkus.http.proxy.allow-x-forwarded=true`, `quarkus.http.proxy.enable-forwarded-host=true`, `quarkus.http.proxy.trusted-proxies=${STILLPRESS_TRUSTED_PROXIES:127.0.0.1,::1}`.
+- Client IP comes from forwarded headers only via Quarkus proxy settings: `quarkus.http.proxy.proxy-address-forwarding=true`, `quarkus.http.proxy.allow-x-forwarded=true`, `quarkus.http.proxy.enable-forwarded-host=true`, `quarkus.http.proxy.trusted-proxies=${STILLPRESS_TRUSTED_PROXIES:127.0.0.1,[::1]}` (IPv6 bracketed: a bare `::1` is resolved as a host name on every request).
 - Setup token: 24 random bytes base64url, generated at startup **only when the HTTP server is enabled and no administrator with a password exists**, logged at INFO as `Setup token: <token> — open /admin to create the site`; compared in constant time; discarded once setup succeeds.
 - Set-password tokens: 32 random bytes base64url, SHA-256 stored, single use, valid **24 h**; link form `<home_url>/admin/set-password?token=<token>`.
 - Import is at most once (spec §3, §6.2 item 4): one guard used by the wizard and the CLI. Allowed only when `item`, `comment`, `media`, `term`, `reusable_block` are all empty **and** setting `import_state` is absent or `failed`.
@@ -163,6 +163,57 @@ git add pom.xml src
 git commit -m "feat: accounts schema, Argon2id passwords, server-side sessions"
 git push
 ```
+
+---
+
+### Task 1b: PostgreSQL integration tests (Testcontainers)
+
+The default H2 suite never runs our SQL on PostgreSQL, the second supported engine (ADR 0002). Two end-to-end tests run against a real PostgreSQL container. Docker is already required (jOOQ codegen), so these tests do not skip.
+
+**Files:**
+- Create: `src/test/java/site/asm0dey/stillpress/pg/PostgresResource.java`, `pg/PostgresProfile.java`, `pg/PostgresAccountsTest.java`, `pg/PostgresImportPublishTest.java`
+- Modify: `pom.xml` (test deps `org.testcontainers:testcontainers-postgresql:${testcontainers.version}`)
+
+**Interfaces:**
+- Consumes: `AuthorRepository`, `SessionRepository`, `TokenRepository` (Task 1), `TestStore`, `SitePublisher`, `RedirectRepository`, `DataDir`.
+- Produces:
+  - `PostgresResource implements QuarkusTestResourceLifecycleManager`: starts `postgres:18` (the codegen image), returns `quarkus.datasource.jdbc.url`, `quarkus.datasource.username`, `quarkus.datasource.password`.
+  - `PostgresProfile implements QuarkusTestProfile`: `quarkus.datasource.db-kind=postgresql` (so the jOOQ dialect follows), `quarkus.datasource.devservices.enabled=false`, test resource `PostgresResource`. Both tests use `@TestProfile(PostgresProfile.class)`; every later PostgreSQL test reuses it.
+
+- [ ] **Step 1: Write the tests**
+
+```java
+@QuarkusTest @TestProfile(PostgresProfile.class)
+class PostgresAccountsTest {
+  @Test void dialectIsPostgres() { assertThat(db.dialect()).isEqualTo(SQLDialect.POSTGRES); }
+  @Test void accountLifecycle() {
+    // create "mama" (administrator) and "papa" whose email equals "mama": findByLoginOrEmail("mama") → mama
+    // a second create("mama-…")-style collision: create users "a b" and "a-b" → slugs differ ("a-b", "a-b-2")
+    // session: create → find returns the user; a row with expires_at in the past → find empty; delete → find empty
+    // token: create → consume once → user id, second consume → empty; expired token → empty; wrong purpose → empty
+  }
+  @Test void concurrentTokenConsumeHasOneWinner() {
+    // one token, 8 parallel consume() calls → exactly one Optional.of(userId)
+  }
+}
+
+@QuarkusTest @TestProfile(PostgresProfile.class)
+class PostgresImportPublishTest {
+  @Test void sampleImportsAndPublishes() throws Exception {
+    store.reset(); var report = store.importSample();
+    assertThat(report.items()).isEqualTo(6);
+    var rel = publisher.publishAll().release();
+    assertThat(rel.resolve("2023/01/14/месяц-ноябрь-год-2022/index.html")).exists();
+    assertThat(rel.resolve("category/travel/europe/index.html")).exists();
+    assertThat(rel.resolve("feed/index.html")).content().contains("<guid isPermaLink=\"false\">https://blog.example.ru/?p=5994</guid>");
+    assertThat(redirects.find("?p=5994").orElseThrow().getToPath()).isEqualTo("/2023/01/14/месяц-ноябрь-год-2022/");
+  }
+}
+```
+
+- [ ] **Step 2: Run them** — `mise exec -- mvn -q test -Dtest='PostgresAccountsTest,PostgresImportPublishTest'` → PASS. A failure here is a real portability bug: fix the code or migration, never the assertion.
+- [ ] **Step 3: Full suite** — `mise exec -- mvn -q verify` → PASS.
+- [ ] **Step 4: Commit** — `git commit -m "test: PostgreSQL integration tests via Testcontainers"`, push.
 
 ---
 
