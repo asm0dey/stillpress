@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.account;
 
 import com.password4j.Argon2Function;
 import com.password4j.Password;
-import com.password4j.BadParametersException;
 import com.password4j.types.Argon2;
 
 /**
@@ -31,7 +30,8 @@ public final class Passwords {
         }
         try {
             return Password.check(password, hash).with(Argon2Function.getInstanceFromHash(hash));
-        } catch (BadParametersException e) {
+        } catch (RuntimeException e) {
+            // password4j throws several unchecked types (BadParameters, NumberFormat, ...) for a malformed hash
             return false;
         }
     }

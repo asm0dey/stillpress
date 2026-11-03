@@ -2,6 +2,7 @@ package site.asm0dey.stillpress.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class PasswordsTest {
@@ -21,6 +22,16 @@ class PasswordsTest {
         assertThat(Passwords.verify("correct horse battery", "not-a-hash")).isFalse();
         assertThat(Passwords.verify("correct horse battery", "$argon2id$v=19$garbage")).isFalse();
         assertThat(Passwords.verify("correct horse battery", "")).isFalse();
+        for (var bad :
+                List.of(
+                        "$argon2id$v=19$m=x,t=2,p=1$c2FsdHNhbHQ$aGFzaGhhc2g",
+                        "$argon2id$v=19$m=19456,t=2,p=1$!!!$aGFzaGhhc2g",
+                        "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHQ",
+                        "$argon2id$v=x$m=19456,t=2,p=1$c2FsdHNhbHQ$aGFzaGhhc2g",
+                        "$argon2id$"
+        )) {
+            assertThat(Passwords.verify("correct horse battery", bad)).as(bad).isFalse();
+        }
     }
 
     @Test

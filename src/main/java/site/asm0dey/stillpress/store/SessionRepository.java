@@ -50,6 +50,10 @@ public class SessionRepository {
         }
     }
 
+    public void deleteAllFor(long userId) {
+        db.deleteFrom(SESSION).where(SESSION.USER_ID.eq(userId)).execute();
+    }
+
     static LocalDateTime now() {
         return LocalDateTime.now(ZoneOffset.UTC);
     }

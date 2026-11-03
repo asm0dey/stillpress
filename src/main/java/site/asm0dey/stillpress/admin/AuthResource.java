@@ -4,6 +4,7 @@ import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -12,6 +13,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import module java.base;
+import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.account.LoginLimiter;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.SessionAuthMechanism;
@@ -55,25 +57,27 @@ public class AuthResource {
         }
         // the proxy-forwarding layer has already replaced this with the client's address when a trusted proxy sent it
         var ip = request.remoteAddress().hostAddress();
-        var wait = limiter.blocked(c.login(), ip);
+        var wait = limiter.blockedIp(ip);
         if (wait.isPresent()) {
-            // whole seconds, rounded up: retrying at the stated time must not be refused again
-            var seconds = Math.max(1, (wait.get().toMillis() + 999) / 1000);
-            return Response
-                .status(429)
-                .header(HttpHeaders.RETRY_AFTER, seconds)
-                .entity(Map.of("error", "rate_limited"))
-                .build();
+            return rateLimited(wait.get());
         }
         var user = users.findByLoginOrEmail(c.login());
-        var hash = user.map(u -> u.getPasswordHash()).orElse(null);
+        // the account bucket follows the user, so login and email share it; unknown names get their own
+        var account = user
+            .map(u -> "user:" + u.getId())
+            .orElse("login:" + c.login());
+        wait = limiter.blockedAccount(account);
+        if (wait.isPresent()) {
+            return rateLimited(wait.get());
+        }
+        var hash = user.map(AuthorRecord::getPasswordHash).orElse(null);
         // a user without a password (imported) also pays the full hash cost, and never succeeds
         var ok = Passwords.verify(c.password(), hash == null ? DUMMY_HASH : hash) && hash != null;
         if (!ok) {
-            limiter.failure(c.login(), ip);
+            limiter.failure(account, ip);
             return Response.status(401).entity(INVALID_CREDENTIALS).build();
         }
-        limiter.success(c.login());
+        limiter.success(account);
         var raw = sessions.create(user.get().getId());
         return Response
             .noContent()
@@ -102,6 +106,7 @@ public class AuthResource {
 
     @POST
     @Path("set-password")
+    @Transactional
     public Response setPassword(NewPassword p) {
         var password = p == null ? null : p.password();
         try {
@@ -110,12 +115,25 @@ public class AuthResource {
             // checked before the token is spent, so the user can retry with a longer password
             return Response.status(400).entity(Map.of("error", "weak_password")).build();
         }
+        var hash = Passwords.hash(password);
+        // one transaction: the token is spent only if the password is set and every old session is revoked
         var userId = tokens.consume(p.token(), TokenRepository.SET_PASSWORD);
         if (userId.isEmpty()) {
             return Response.status(410).entity(Map.of("error", "invalid_token")).build();
         }
-        users.setPassword(userId.get(), Passwords.hash(password));
+        users.setPassword(userId.get(), hash);
+        sessions.deleteAllFor(userId.get());
         return Response.noContent().build();
+    }
+
+    private static Response rateLimited(Duration wait) {
+        // whole seconds, rounded up: retrying at the stated time must not be refused again
+        var seconds = Math.max(1, (wait.toMillis() + 999) / 1000);
+        return Response
+            .status(429)
+            .header(HttpHeaders.RETRY_AFTER, seconds)
+            .entity(Map.of("error", "rate_limited"))
+            .build();
     }
 
     private boolean secure() {

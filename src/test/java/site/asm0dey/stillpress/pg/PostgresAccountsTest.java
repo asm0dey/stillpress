@@ -57,6 +57,11 @@ class PostgresAccountsTest {
         var raw2 = sessions.create(mama.getId());
         sessions.delete(raw2);
         assertThat(sessions.find(raw2)).isEmpty();
+        var a = sessions.create(mama.getId());
+        var b = sessions.create(mama.getId());
+        sessions.deleteAllFor(mama.getId());
+        assertThat(sessions.find(a)).isEmpty();
+        assertThat(sessions.find(b)).isEmpty();
 
         var token = tokens.create(mama.getId(), "set_password", Duration.ofHours(1));
         assertThat(tokens.consume(token, "other")).isEmpty();

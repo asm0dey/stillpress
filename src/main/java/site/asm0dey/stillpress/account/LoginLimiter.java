@@ -31,30 +31,34 @@ public class LoginLimiter {
     }
 
     /**
-     * Time until the next attempt is allowed, or empty when allowed now.
+     * Time until this client IP may try again, or empty when allowed now.
      */
-    public synchronized Optional<Duration> blocked(String login, String ip) {
+    public synchronized Optional<Duration> blockedIp(String ip) {
         prune();
-        var now = clock.instant();
-        return Stream
-            .of(wait(byLogin.get(key(login)), PER_ACCOUNT, now), wait(byIp.get(ip), PER_IP, now))
-            .flatMap(Optional::stream)
-            .max(Comparator.naturalOrder());
+        return wait(byIp.get(ip), PER_IP, clock.instant());
     }
 
-    public synchronized void failure(String login, String ip) {
+    /**
+     * Time until this account may try again, or empty when allowed now. The key is case-insensitive.
+     */
+    public synchronized Optional<Duration> blockedAccount(String account) {
+        prune();
+        return wait(byLogin.get(key(account)), PER_ACCOUNT, clock.instant());
+    }
+
+    public synchronized void failure(String account, String ip) {
         prune();
         var now = clock.instant();
         byLogin
-            .computeIfAbsent(key(login), _ -> new ArrayDeque<>())
+            .computeIfAbsent(key(account), _ -> new ArrayDeque<>())
             .addLast(now);
         byIp
             .computeIfAbsent(ip, _ -> new ArrayDeque<>())
             .addLast(now);
     }
 
-    public synchronized void success(String login) {
-        byLogin.remove(key(login));
+    public synchronized void success(String account) {
+        byLogin.remove(key(account));
     }
 
     synchronized void reset() {
@@ -88,7 +92,7 @@ public class LoginLimiter {
         }
     }
 
-    private static String key(String login) {
-        return login.toLowerCase(Locale.ROOT);
+    private static String key(String account) {
+        return account.toLowerCase(Locale.ROOT);
     }
 }

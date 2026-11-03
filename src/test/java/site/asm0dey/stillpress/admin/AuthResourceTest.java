@@ -174,6 +174,38 @@ class AuthResourceTest {
     }
 
     @Test
+    void setPasswordRevokesExistingSessions() {
+        var cookie = login("admin", "correct horse battery").cookie("sp_session");
+        var raw = tokens.create(adminId, "set_password", Duration.ofHours(24));
+        setPassword(raw, "a brand new password").then().statusCode(204);
+        given().cookie("sp_session", cookie).get("/admin/api/session").then().statusCode(401);
+    }
+
+    @Test
+    void accountLimitCoversLoginAndEmail() {
+        for (int i = 0; i < 3; i++) {
+            login("admin", "wrong horse battery!").then().statusCode(401);
+        }
+        for (int i = 0; i < 2; i++) {
+            login("A@example.org", "wrong horse battery!").then().statusCode(401);
+        }
+        login("admin", "correct horse battery").then().statusCode(429);
+        login("a@example.org", "correct horse battery").then().statusCode(429);
+    }
+
+    @Test
+    void successClearsTheAccountWhicheverNameWasUsed() {
+        for (int i = 0; i < 4; i++) {
+            login("admin", "wrong horse battery!").then().statusCode(401);
+        }
+        login("a@example.org", "correct horse battery").then().statusCode(204);
+        for (int i = 0; i < 4; i++) {
+            login("admin", "wrong horse battery!").then().statusCode(401);
+        }
+        login("admin", "correct horse battery").then().statusCode(204);
+    }
+
+    @Test
     void weakPasswordKeepsTheToken() {
         var raw = tokens.create(adminId, "set_password", Duration.ofHours(24));
         setPassword(raw, "short").then().statusCode(400).body("error", equalTo("weak_password"));

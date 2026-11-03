@@ -13,9 +13,9 @@ class LoginLimiterTest {
         for (int i = 0; i < 5; i++) {
             l.failure("Admin", "10.0.0." + i);
         }
-        assertThat(l.blocked("admin", "10.9.9.9")).contains(Duration.ofMinutes(15));
+        assertThat(l.blockedAccount("admin")).contains(Duration.ofMinutes(15));
         clock.advance(Duration.ofMinutes(15).plusSeconds(1));
-        assertThat(l.blocked("admin", "10.9.9.9")).isEmpty();
+        assertThat(l.blockedAccount("admin")).isEmpty();
     }
 
     @Test
@@ -23,7 +23,7 @@ class LoginLimiterTest {
         for (int i = 0; i < 4; i++) {
             l.failure("admin", "10.0.0.1");
         }
-        assertThat(l.blocked("admin", "10.0.0.1")).isEmpty();
+        assertThat(l.blockedAccount("admin")).isEmpty();
     }
 
     @Test
@@ -34,9 +34,9 @@ class LoginLimiterTest {
             l.failure("admin", "10.0.0.1");
         }
         // the oldest failure leaves the window 5 minutes from now
-        assertThat(l.blocked("admin", "10.0.0.2")).contains(Duration.ofMinutes(5));
+        assertThat(l.blockedAccount("admin")).contains(Duration.ofMinutes(5));
         clock.advance(Duration.ofMinutes(5));
-        assertThat(l.blocked("admin", "10.0.0.2")).isEmpty();
+        assertThat(l.blockedAccount("admin")).isEmpty();
     }
 
     @Test
@@ -44,8 +44,8 @@ class LoginLimiterTest {
         for (int i = 0; i < 20; i++) {
             l.failure("user" + i, "10.0.0.1");
         }
-        assertThat(l.blocked("someone-else", "10.0.0.1")).isPresent();
-        assertThat(l.blocked("someone-else", "10.0.0.2")).isEmpty();
+        assertThat(l.blockedIp("10.0.0.1")).isPresent();
+        assertThat(l.blockedIp("10.0.0.2")).isEmpty();
     }
 
     @Test
@@ -55,10 +55,10 @@ class LoginLimiterTest {
         }
         l.success("ADMIN");
         l.failure("admin", "10.0.0.1");
-        assertThat(l.blocked("admin", "10.0.0.2")).isEmpty();
+        assertThat(l.blockedAccount("admin")).isEmpty();
         for (int i = 0; i < 15; i++) {
             l.failure("other" + i, "10.0.0.1");
         }
-        assertThat(l.blocked("nobody", "10.0.0.1")).isPresent();
+        assertThat(l.blockedIp("10.0.0.1")).isPresent();
     }
 }
