@@ -12,7 +12,9 @@ public record ImportReport(
         List<String> missingMedia,
         List<String> passwordProtected,
         List<String> skippedPostTypes,
-        List<String> skippedMedia
+        List<String> skippedMedia,
+        // "<post id>: <link>" of items imported without a permalink because their link could not be parsed
+        List<String> unparseableLinks
 ) {
     public String toText() {
         return toText(null);
@@ -38,6 +40,7 @@ public record ImportReport(
         section(sb, "Missing media", missingMedia);
         section(sb, "Password-protected", passwordProtected);
         section(sb, "Skipped post types", skippedPostTypes);
+        section(sb, "Unparseable links", unparseableLinks);
         if (!skippedMedia.isEmpty()) {
             sb
                 .append("Skipped media")

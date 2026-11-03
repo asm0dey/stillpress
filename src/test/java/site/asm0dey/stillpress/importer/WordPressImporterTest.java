@@ -160,7 +160,8 @@ class WordPressImporterTest {
             .range(0, 25)
             .mapToObj(n -> "https://x/wp-content/uploads/" + n + ".jpg")
             .toList();
-        var text = new ImportReport(0, 0, 0, 0, List.of(), List.of(), List.of(), List.of(), List.of(), urls).toText(7);
+        var text = new ImportReport(0, 0, 0, 0, List.of(), List.of(), List.of(), List.of(), List.of(), urls, List.of())
+            .toText(7);
         assertThat(text)
             .contains("Skipped media (limit 7): 25")
             .contains("/19.jpg")
@@ -312,5 +313,39 @@ class WordPressImporterTest {
         assertThat(terms.forItem(db.fetchValue(ITEM.ID, ITEM.SOURCE_ID.eq(1L)))).hasSize(1);
         assertThat(db.fetchCount(TERM)).isEqualTo(1);
         assertThat(db.fetchValue(AUTHOR.SLUG, AUTHOR.LOGIN.eq("Pavel.Doe"))).isEqualTo("pavel-doe");
+    }
+
+    @Test
+    void unparseableLinksAreReportedAndTheImportCarriesOn() throws Exception {
+        String xml;
+        try (var in = sample()) {
+            xml = new String(in.readAllBytes(), StandardCharsets.UTF_8)
+                .replace(
+                        "<link>https://blog.example.ru/about/</link>",
+                        "<link>https://blog.example.ru/ab%zzout/</link>"
+                )
+                .replace(
+                        "<link>https://blog.example.ru/2020/05/10/qa/</link>",
+                        "<link>https://blog.example.ru/2020/05/10/q%2Fa/</link>"
+                );
+        }
+        var report = importer.importWxr(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
+        assertThat(report.items()).isEqualTo(7);
+        assertThat(report.unparseableLinks())
+            .containsExactly("100: https://blog.example.ru/2020/05/10/q%2Fa/", "2: https://blog.example.ru/ab%zzout/");
+        assertThat(report.toText()).contains(
+                "Unparseable links (2):\n  100: https://blog.example.ru/2020/05/10/q%2Fa/\n"
+        );
+        assertThat(db.fetchValue(ITEM.PERMALINK, ITEM.SOURCE_ID.eq(2L))).isNull();
+        assertThat(db.fetchValue(ITEM.PERMALINK, ITEM.SOURCE_ID.eq(100L))).isNull();
+        assertThat(items.findByPermalink(MONTH)).isPresent();
+        assertThat(redirects.find("?page_id=2")).isEmpty();
+        // a published item without a permalink must never be rendered over the home page
+        assertThat(items.findPublishedSummaries())
+            .extracting(ItemRepository.Summary::id)
+            .doesNotContain(
+                    db.fetchValue(ITEM.ID, ITEM.SOURCE_ID.eq(2L)),
+                    db.fetchValue(ITEM.ID, ITEM.SOURCE_ID.eq(100L))
+            );
     }
 }

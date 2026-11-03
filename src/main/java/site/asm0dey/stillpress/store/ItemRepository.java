@@ -46,18 +46,23 @@ public class ItemRepository {
     ) {}
 
     /**
-     * Published, non-password-protected posts and pages, newest first (undated last).
+     * Published, non-password-protected posts and pages that have a permalink, newest first (undated last).
      */
     public List<Summary> findPublishedSummaries() {
         return db
             .select(ITEM.ID, ITEM.TYPE, ITEM.PERMALINK, ITEM.PUBLISHED_AT, ITEM.PUBLISHED_LOCAL, ITEM.AUTHOR_ID)
             .from(ITEM)
-            .where(ITEM.STATUS.eq("publish"), ITEM.TYPE.in("post", "page"), ITEM.PASSWORD_PROTECTED.isFalse())
+            .where(
+                    ITEM.STATUS.eq("publish"),
+                    ITEM.TYPE.in("post", "page"),
+                    ITEM.PASSWORD_PROTECTED.isFalse(),
+                    ITEM.PERMALINK.isNotNull()
+            )
             .orderBy(ITEM.PUBLISHED_AT.desc().nullsLast(), ITEM.ID.desc())
             .fetch(r -> new Summary(
                     r.value1(),
                     r.value2(),
-                    Objects.requireNonNullElse(r.value3(), "/"),
+                    r.value3(),
                     r.value4(),
                     r.value5() != null ? r.value5() : r.value4(),
                     r.value6()

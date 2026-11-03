@@ -93,6 +93,7 @@ public class WordPressImporter {
         private final Set<String> missingMedia = new LinkedHashSet<>();
         private final List<String> passwordProtected = new ArrayList<>();
         private final Set<String> skippedPostTypes = new LinkedHashSet<>();
+        private final List<String> unparseableLinks = new ArrayList<>();
 
         @Override
         public void site(WxrSite site) {
@@ -201,7 +202,14 @@ public class WordPressImporter {
                 missingMedia.add(attachment);
             }
             var rewriter = localize(content, i.excerpt());
-            var permalink = permalinkOf(i.link());
+            String permalink;
+            try {
+                permalink = permalinkOf(i.link());
+            } catch (IllegalArgumentException e) {
+                // one bad <link> must not abort a multi-hour import; the item stays, unpublished at any URL
+                permalink = null;
+                unparseableLinks.add(i.postId() + ": " + i.link());
+            }
 
             var r = db.newRecord(ITEM);
             r.setSourceId(i.postId());
@@ -480,19 +488,31 @@ public class WordPressImporter {
                     List.copyOf(missingMedia),
                     List.copyOf(passwordProtected),
                     List.copyOf(skippedPostTypes),
-                    List.copyOf(skippedMedia)
+                    List.copyOf(skippedMedia),
+                    List.copyOf(unparseableLinks)
             );
         }
     }
 
     /**
      * Decoded path of the link; null for query-string links such as drafts ({@code /?p=101}).
+     *
+     * @throws IllegalArgumentException for a link that is not a URI, or whose path encodes {@code /} or {@code \}
+     *         (decoding would change its segments, and the server refuses such paths)
      */
     static String permalinkOf(String link) {
-        if (link == null || link.isBlank() || URI.create(link).getRawQuery() != null) {
+        if (link == null || link.isBlank()) {
             return null;
         }
-        return Permalinks.decodedPath(link);
+        var uri = URI.create(link.strip());
+        if (uri.getRawQuery() != null) {
+            return null;
+        }
+        var raw = Objects.requireNonNullElse(uri.getRawPath(), "").toLowerCase(Locale.ROOT);
+        if (raw.contains("%2f") || raw.contains("%5c")) {
+            throw new IllegalArgumentException("encoded separator in " + link);
+        }
+        return Permalinks.decodedPath(link.strip());
     }
 
     /**
