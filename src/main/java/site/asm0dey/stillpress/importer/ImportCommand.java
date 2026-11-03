@@ -14,8 +14,28 @@ public class ImportCommand implements Callable<Integer> {
             description = "Download at most N media files, leave the rest at the source (for test imports)"
     )
     Integer mediaLimit;
+    @Option(
+            names = "--posts-per-page",
+            defaultValue = "10",
+            description = "Posts per archive page (default: ${DEFAULT-VALUE})"
+    )
+    int postsPerPage;
+    @Option(names = "--posts-per-rss", defaultValue = "10", description = "Items per feed (default: ${DEFAULT-VALUE})")
+    int postsPerRss;
+    @Option(
+            names = "--category-base",
+            defaultValue = "category",
+            description = "Category URL base (default: ${DEFAULT-VALUE})"
+    )
+    String categoryBase;
+    @Option(names = "--tag-base", defaultValue = "tag", description = "Tag URL base (default: ${DEFAULT-VALUE})")
+    String tagBase;
     @Inject
     WordPressImporter importer;
+
+    ImportOptions options() {
+        return new ImportOptions(postsPerPage, categoryBase, tagBase, postsPerRss);
+    }
 
     @Override
     public Integer call() throws IOException {
@@ -23,8 +43,15 @@ public class ImportCommand implements Callable<Integer> {
             System.err.println("--media-limit must be 0 or more, got " + mediaLimit);
             return 2;
         }
+        ImportOptions options;
+        try {
+            options = options();
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            return 2;
+        }
         try (var in = new BufferedInputStream(Files.newInputStream(wxr))) {
-            var report = mediaLimit == null ? importer.importWxr(in) : importer.importWxr(in, mediaLimit);
+            var report = importer.importWxr(in, mediaLimit == null ? Integer.MAX_VALUE : mediaLimit, options);
             System.out.print(report.toText(mediaLimit));
             return 0;
         } catch (AlreadyImportedException e) {

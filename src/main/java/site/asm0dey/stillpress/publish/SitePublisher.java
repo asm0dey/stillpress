@@ -29,12 +29,8 @@ public class SitePublisher {
      */
     public static final String FEED_SEGMENT = "feed";
     static final List<String> ASSETS = List.of("block-library.css", "plain.css", "plain.js");
-    private static final int FEED_SIZE = 10;
     private static final int BATCH = 50;
     private static final Logger LOG = Logger.getLogger(SitePublisher.class);
-    /**
-     * Posts per archive page; read once per publish.
-     */
     @Inject
     ItemRepository items;
     @Inject
@@ -96,7 +92,8 @@ public class SitePublisher {
 
     private void render(Out out) throws IOException {
         var site = views.site();
-        out.perPage = perPage();
+        out.perPage = positive("posts_per_page");
+        out.perRss = positive("posts_per_rss");
         var summaries = items.findPublishedSummaries();
         // the only thing held for the whole run: ids, dates and links; bodies are loaded a page at a time
         for (var chunk : chunks(summaries)) {
@@ -143,8 +140,11 @@ public class SitePublisher {
         linkMedia(out);
     }
 
-    private int perPage() {
-        var raw = settings.get("posts_per_page").orElse("10");
+    /**
+     * A positive integer setting, WordPress's 10 when it is missing or invalid.
+     */
+    private int positive(String key) {
+        var raw = settings.get(key).orElse("10");
         try {
             var n = Integer.parseInt(raw.strip());
             if (n > 0) {
@@ -153,7 +153,7 @@ public class SitePublisher {
         } catch (NumberFormatException ignored) {
             // falls through to the warning
         }
-        LOG.warnf("Invalid posts_per_page '%s', using 10", raw);
+        LOG.warnf("Invalid %s '%s', using 10", key, raw);
         return 10;
     }
 
@@ -297,7 +297,7 @@ public class SitePublisher {
         var newest = views(posts
             .stream()
             .filter(p -> p.publishedAt() != null)
-            .limit(FEED_SIZE)
+            .limit(out.perRss)
             .toList());
         var path = base + FEED_SEGMENT + "/";
         var last = newest.isEmpty() ? Instant.EPOCH : newest.getFirst().publishedAt();
@@ -318,7 +318,7 @@ public class SitePublisher {
     }
 
     private void commentsFeed(Out out, SiteView site) throws IOException {
-        var newest = comments.newestPublic(FEED_SIZE);
+        var newest = comments.newestPublic(out.perRss);
         var ids = newest
             .stream()
             .map(c -> c.getItemId())
@@ -384,6 +384,10 @@ public class SitePublisher {
          * Posts per archive page, read once per publish.
          */
         int perPage = 10;
+        /**
+         * Items per feed ({@code posts_per_rss}), read once per publish.
+         */
+        int perRss = 10;
         String origin = "";
         private final Map<Path, String> written = new HashMap<>();
 

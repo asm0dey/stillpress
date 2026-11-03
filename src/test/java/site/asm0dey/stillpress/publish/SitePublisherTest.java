@@ -14,6 +14,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.importer.ImportOptions;
+import site.asm0dey.stillpress.importer.WordPressImporter;
 
 @QuarkusTest
 class SitePublisherTest {
@@ -25,6 +27,8 @@ class SitePublisherTest {
     DataDir dataDir;
     @Inject
     DSLContext db;
+    @Inject
+    WordPressImporter importer;
 
     @BeforeEach
     void importSample() throws Exception {
@@ -101,6 +105,25 @@ class SitePublisherTest {
         db.update(ITEM).setNull(ITEM.PUBLISHED_LOCAL).where(ITEM.SLUG.eq("night-post")).execute();
         var rel = publisher.publishAll().release();
         assertThat(rel.resolve("2023/01/31/index.html")).content().contains("Ночной пост");
+    }
+
+    @Test
+    void customImportOptionsReachThePublishedSite() throws Exception {
+        store.reset();
+        try (var in = TestStore.sample()) {
+            importer.importWxr(in, Integer.MAX_VALUE, new ImportOptions(1, "rubrika", "metka", 1));
+        }
+        var rel = publisher.publishAll().release();
+        assertThat(rel.resolve("rubrika/travel/europe/index.html")).exists();
+        assertThat(rel.resolve("metka/kids/index.html")).exists();
+        assertThat(rel.resolve("category")).doesNotExist();
+        assertThat(rel.resolve("tag")).doesNotExist();
+        assertThat(rel.resolve("2023/01/14/месяц-ноябрь-год-2022/index.html"))
+            .content()
+            .contains("href=\"/rubrika/travel/europe/\"");
+        assertThat(rel.resolve("page/2/index.html")).exists();
+        assertThat(Files.readString(rel.resolve("feed/index.html")).split("<item>", -1)).hasSize(2);
+        assertThat(Files.readString(rel.resolve("comments/feed/index.html")).split("<item>", -1)).hasSize(2);
     }
 
     @Test

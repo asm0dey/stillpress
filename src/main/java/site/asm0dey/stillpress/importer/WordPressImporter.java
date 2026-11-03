@@ -48,16 +48,20 @@ public class WordPressImporter {
         return importWxr(in, Integer.MAX_VALUE);
     }
 
+    public ImportReport importWxr(InputStream in, int mediaLimit) throws AlreadyImportedException {
+        return importWxr(in, mediaLimit, ImportOptions.DEFAULTS);
+    }
+
     /**
      * @param mediaLimit download at most this many distinct originals; later ones stay at the source and get no row
      */
     @Transactional
     @TransactionConfiguration(timeout = 24 * 60 * 60)
-    public ImportReport importWxr(InputStream in, int mediaLimit) throws AlreadyImportedException {
+    public ImportReport importWxr(InputStream in, int mediaLimit, ImportOptions options) throws AlreadyImportedException {
         if (items.count() > 0) {
             throw new AlreadyImportedException();
         }
-        var run = new Run(mediaLimit);
+        var run = new Run(mediaLimit, options);
         WxrReader.read(in, run);
         run.finish();
         return run.report();
@@ -69,10 +73,12 @@ public class WordPressImporter {
 
     private final class Run implements WxrHandler {
         private final int mediaLimit;
+        private final ImportOptions options;
         private final Set<String> skippedMedia = new LinkedHashSet<>();
 
-        Run(int mediaLimit) {
+        Run(int mediaLimit, ImportOptions options) {
             this.mediaLimit = mediaLimit;
+            this.options = options;
         }
 
         private String homeScheme = "https", homeAuth = "", siteAuth = "";
@@ -112,9 +118,10 @@ public class WordPressImporter {
             settings.put("description", site.description());
             settings.put("language", site.language());
             settings.put("home_url", home);
-            settings.put("posts_per_page", "10");
-            settings.put("category_base", "category");
-            settings.put("tag_base", "tag");
+            settings.put("posts_per_page", String.valueOf(options.postsPerPage()));
+            settings.put("posts_per_rss", String.valueOf(options.postsPerRss()));
+            settings.put("category_base", options.categoryBase());
+            settings.put("tag_base", options.tagBase());
         }
 
         @Override
