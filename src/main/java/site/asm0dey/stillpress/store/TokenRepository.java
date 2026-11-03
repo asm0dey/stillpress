@@ -37,6 +37,7 @@ public class TokenRepository {
             .where(USER_TOKEN.ID.eq(SessionRepository.hash(rawToken)), USER_TOKEN.PURPOSE.eq(purpose))
             .returning(USER_TOKEN.USER_ID, USER_TOKEN.EXPIRES_AT)
             .fetchOptional()
+            // expiry is checked here, not in where: the delete also removes an expired token, else it would stay in user_token forever
             .filter(t -> t.getExpiresAt().isAfter(SessionRepository.now()))
             .map(UserTokenRecord::getUserId);
     }
