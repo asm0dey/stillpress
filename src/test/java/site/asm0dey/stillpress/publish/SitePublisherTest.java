@@ -3,6 +3,7 @@ package site.asm0dey.stillpress.publish;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static site.asm0dey.stillpress.db.Tables.AUTHOR;
+import static site.asm0dey.stillpress.db.Tables.COMMENT;
 import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.TERM;
 import io.quarkus.test.junit.QuarkusTest;
@@ -173,6 +174,40 @@ class SitePublisherTest {
         assertThat(rel.resolve("feed/index.html")).content().doesNotContain("?p=100");
         assertThat(rel.resolve("index.html")).content().contains("Q&amp;A");
         assertThat(rel.resolve("2020/index.html")).doesNotExist();
+    }
+
+    @Test
+    void onlyCategoriesAndTagsGetTermArchives() throws Exception {
+        db.insertInto(TERM, TERM.TAXONOMY, TERM.NAME, TERM.SLUG).values("nav_menu", "Main", "main").execute();
+        db.insertInto(TERM, TERM.TAXONOMY, TERM.NAME, TERM.SLUG).values("nav_menu", "Kids menu", "kids").execute();
+        var rel = publisher.publishAll().release();
+        assertThat(rel.resolve("tag/main")).doesNotExist();
+        assertThat(rel.resolve("tag/kids/index.html")).content().contains("Месяц ноябрь");
+        assertThat(rel.resolve("tag/kids/feed/index.html")).content().contains("?p=5994");
+    }
+
+    @Test
+    void approvedReplyToHeldCommentStillAppearsInSiteCommentsFeed() {
+        var item = db.select(ITEM.ID).from(ITEM).where(ITEM.SLUG.eq("qa")).fetchOne(ITEM.ID);
+        var held = db
+            .insertInto(COMMENT, COMMENT.ITEM_ID, COMMENT.CONTENT, COMMENT.CREATED_AT, COMMENT.STATUS)
+            .values(item, "held", java.time.LocalDateTime.of(2999, 1, 1, 0, 0), "hold")
+            .returningResult(COMMENT.ID)
+            .fetchOne(COMMENT.ID);
+        db
+            .insertInto(
+                    COMMENT,
+                    COMMENT.ITEM_ID,
+                    COMMENT.PARENT_ID,
+                    COMMENT.AUTHOR_NAME,
+                    COMMENT.CONTENT,
+                    COMMENT.CREATED_AT,
+                    COMMENT.STATUS
+            )
+            .values(item, held, "Orphan Olga", "reply", java.time.LocalDateTime.of(2999, 1, 2, 0, 0), "approved")
+            .execute();
+        var rel = publisher.publishAll().release();
+        assertThat(rel.resolve("comments/feed/index.html")).content().contains("Orphan Olga");
     }
 
     private Set<Path> releases() throws IOException {

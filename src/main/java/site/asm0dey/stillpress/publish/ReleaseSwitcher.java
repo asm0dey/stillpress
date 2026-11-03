@@ -14,10 +14,11 @@ public class ReleaseSwitcher {
     static final int KEEP = 3;
     private static final DateTimeFormatter NAME =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
+    private static final DateTimeFormatter NAME_PARSER = NAME;
     private static final Logger LOG = Logger.getLogger(ReleaseSwitcher.class);
     private final DataDir dataDir;
     private final Deleter deleter;
-    private Instant last = Instant.EPOCH;
+    private Instant last;
 
     /**
      * Removes one release tree.
@@ -42,6 +43,9 @@ public class ReleaseSwitcher {
      */
     public synchronized Path newRelease() {
         try {
+            if (last == null) {
+                last = newestExisting();
+            }
             // strictly after the last name handed out, so a burst never produces a name older than a surviving one
             var t = Instant.now().isAfter(last) ? Instant.now() : last.plusMillis(1);
             while (true) {
@@ -55,6 +59,25 @@ public class ReleaseSwitcher {
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * The newest release name on disk as a time, so names stay ordered across restarts and clock skew.
+     */
+    private Instant newestExisting() throws IOException {
+        try (var list = Files.list(dataDir.releases())) {
+            return list
+                .map(p -> p.getFileName().toString())
+                .map(n -> {
+                    try {
+                        return NAME_PARSER.parse(n, Instant::from);
+                    } catch (DateTimeParseException e) {
+                        return Instant.EPOCH;
+                    }
+                })
+                .max(Comparator.naturalOrder())
+                .orElse(Instant.EPOCH);
         }
     }
 

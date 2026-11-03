@@ -80,4 +80,12 @@ class ReleaseSwitcherTest {
         assertThat(dir.current().toRealPath()).isEqualTo(last.toRealPath());
         assertThat(dir.current().resolve("index.html")).hasContent("r4");
     }
+
+    @Test
+    void namesStaySortedAfterExistingReleasesEvenWithClockBehind() throws Exception {
+        var dir = new DataDir(tmp.toString());
+        Files.createDirectory(dir.releases().resolve("29990101-000000-000"));
+        var fresh = switcher(dir).newRelease();
+        assertThat(fresh.getFileName().toString()).isGreaterThan("29990101-000000-000");
+    }
 }

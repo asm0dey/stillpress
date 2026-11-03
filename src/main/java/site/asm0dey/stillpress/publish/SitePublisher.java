@@ -35,7 +35,6 @@ public class SitePublisher {
     /**
      * Posts per archive page; read once per publish.
      */
-    private int perPage = 10;
     @Inject
     ItemRepository items;
     @Inject
@@ -102,6 +101,7 @@ public class SitePublisher {
         // the only thing held for the whole run: ids, dates and links; bodies are loaded a page at a time
         for (var chunk : chunks(summaries)) {
             for (var v : views(chunk)) {
+                out.origin = "item:" + v.id();
                 var path = Permalinks.decode(v.permalinkEncoded());
                 out.page(path, render("plain/single", "site", site, "item", v));
                 out.page(
@@ -122,12 +122,16 @@ public class SitePublisher {
             .stream()
             .filter(r -> "post".equals(r.type()))
             .toList();
+        out.origin = "home";
         paged(out, site, "/", site.title(), posts);
         feed(out, site, "/", posts);
+        out.origin = "comments feed";
         commentsFeed(out, site);
         termArchives(out, site, posts);
         authorArchives(out, site, posts);
+        out.origin = "date archive";
         dateArchives(out, site, posts);
+        out.origin = "static";
 
         out.file("404.html", render("plain/404", "site", site).getBytes(StandardCharsets.UTF_8));
         out.file("robots.txt", "User-agent: *\nDisallow: /admin/\n".getBytes(StandardCharsets.UTF_8));
@@ -192,6 +196,11 @@ public class SitePublisher {
                 .add(post));
         }
         for (var term : byId.values()) {
+            // other taxonomies (nav_menu, post_format, ...) have no archive here; WordPress would 404 them
+            if (!"category".equals(term.getTaxonomy()) && !"post_tag".equals(term.getTaxonomy())) {
+                continue;
+            }
+            out.origin = "term " + term.getTaxonomy() + ":" + term.getSlug();
             var isCategory = "category".equals(term.getTaxonomy());
             var base = settings.get(isCategory ? "category_base" : "tag_base").orElse(isCategory ? "category" : "tag");
             var path = "/" + base + "/" + termPath(byId, term) + "/";
@@ -228,6 +237,7 @@ public class SitePublisher {
             }
         }
         for (var a : authors.all()) {
+            out.origin = "author:" + a.getSlug();
             var list = byAuthor.getOrDefault(a.getId(), List.of());
             var path = "/author/" + a.getSlug() + "/";
             paged(out, site, path, Objects.requireNonNullElse(a.getDisplayName(), a.getLogin()), list);
@@ -373,6 +383,8 @@ public class SitePublisher {
          * Posts per archive page, read once per publish.
          */
         int perPage = 10;
+        String origin = "";
+        private final Map<Path, String> written = new HashMap<>();
 
         Out(Path root) {
             this.root = root;
@@ -391,6 +403,7 @@ public class SitePublisher {
 
         void link(String relative, Path source) throws IOException {
             var target = root.resolve(relative);
+            claim(target);
             Files.createDirectories(target.getParent());
             try {
                 Files.createLink(target, source);
@@ -400,7 +413,18 @@ public class SitePublisher {
             files++;
         }
 
+        /**
+         * Two pages for one path would silently overwrite each other; say so.
+         */
+        private void claim(Path target) {
+            var earlier = written.put(target, origin);
+            if (earlier != null) {
+                LOG.warnf("Path %s written twice: %s then %s; the later one wins", target, earlier, origin);
+            }
+        }
+
         private void write(Path target, byte[] bytes) throws IOException {
+            claim(target);
             Files.createDirectories(target.getParent());
             Files.write(target, bytes);
             files++;
