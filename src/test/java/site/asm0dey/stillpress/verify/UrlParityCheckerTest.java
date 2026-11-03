@@ -318,4 +318,15 @@ class UrlParityCheckerTest {
         assertThat(t).contains("target 404 (2)").contains("network error (1)").contains("target=-");
         assertThat(t).doesNotContain("-1");
     }
+
+    @Test
+    void nonXmlRootSitemapMeansNoSitemapButMalformedXmlFails() {
+        source.stubFor(get("/wp-sitemap.xml").willReturn(okForContentType("text/html", "<html>home</html>")));
+        source.stubFor(get("/sitemap_index.xml").willReturn(okForContentType("text/plain", "nope")));
+        assertThat(checker.check(uri(source), uri(target), 100).mismatches())
+            .noneMatch(m -> m.cause() == Cause.SOURCE_FETCH_FAILURE);
+        source.stubFor(get("/sitemap_index.xml").willReturn(xml("<urlset><url>")));
+        assertThat(checker.check(uri(source), uri(target), 100).mismatches())
+            .anyMatch(m -> m.cause() == Cause.SOURCE_FETCH_FAILURE);
+    }
 }

@@ -3,6 +3,10 @@ package site.asm0dey.stillpress.verify;
 import module java.base;
 import module java.net.http;
 import module java.xml;
+import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import org.jsoup.Jsoup;
 import site.asm0dey.stillpress.verify.ParityReport.Cause;
 import site.asm0dey.stillpress.verify.ParityReport.Mismatch;
@@ -13,8 +17,8 @@ import site.asm0dey.stillpress.verify.ParityReport.Mismatch;
 public class UrlParityChecker {
     private static final String UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
-    private static final java.time.Duration TIMEOUT = java.time.Duration.ofSeconds(30);
-    private static final java.time.Duration MAX_RETRY_WAIT = java.time.Duration.ofSeconds(60);
+    private static final Duration TIMEOUT = Duration.ofSeconds(30);
+    private static final Duration MAX_RETRY_WAIT = Duration.ofSeconds(60);
     private static final int MAX_HOPS = 10;
     private static final int MAX_ATTEMPTS = 5;
     private static final String SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9";
@@ -22,14 +26,14 @@ public class UrlParityChecker {
     private static final List<String> SEED_FEEDS = List.of("/feed/", "/comments/feed/");
     private final HttpClient client =
             HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).connectTimeout(TIMEOUT).build();
-    private final java.time.Duration sourceDelay;
-    private final java.time.Duration retryBase;
+    private final Duration sourceDelay;
+    private final Duration retryBase;
 
     public UrlParityChecker() {
-        this(java.time.Duration.ofMillis(200), java.time.Duration.ofSeconds(1));
+        this(Duration.ofMillis(200), Duration.ofSeconds(1));
     }
 
-    public UrlParityChecker(java.time.Duration sourceDelay, java.time.Duration retryBase) {
+    public UrlParityChecker(Duration sourceDelay, Duration retryBase) {
         this.sourceDelay = sourceDelay;
         this.retryBase = retryBase;
     }
@@ -106,29 +110,26 @@ public class UrlParityChecker {
     // ---- HTTP ----
     private static HttpResponse.BodyHandler<String> textOnly() {
         return info -> {
-            var ct = info.headers().firstValue("Content-Type").orElse("");
+            var ct = info.headers().firstValue("Content-Type").orElse("").toLowerCase(Locale.ROOT);
             return ct.contains("html") || ct.contains("xml")
                     ? HttpResponse.BodySubscribers.ofString(StandardCharsets.UTF_8)
                     : HttpResponse.BodySubscribers.replacing("");
         };
     }
 
-    private java.time.Duration retryWait(Resp r, int attempt) {
+    private Duration retryWait(Resp r, int attempt) {
         var ra = r.retryAfter();
-        java.time.Duration wait = null;
+        Duration wait = null;
         if (ra != null) {
             try {
-                wait = java.time.Duration.ofSeconds(Long.parseLong(ra.trim()));
+                wait = Duration.ofSeconds(Long.parseLong(ra.trim()));
             } catch (NumberFormatException e) {
                 try {
-                    wait = java.time.Duration.between(
-                            java.time.ZonedDateTime.now(),
-                            java.time.ZonedDateTime.parse(
-                                    ra.trim(),
-                                    java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME
-                            )
+                    wait = Duration.between(
+                            ZonedDateTime.now(),
+                            ZonedDateTime.parse(ra.trim(), DateTimeFormatter.RFC_1123_DATE_TIME)
                     );
-                } catch (java.time.format.DateTimeParseException ignored) {
+                } catch (DateTimeParseException ignored) {
                     // fall through to backoff
                 }
             }
@@ -136,7 +137,7 @@ public class UrlParityChecker {
         if (wait == null) {
             wait = retryBase.multipliedBy(1L << (attempt - 1));
         }
-        return wait.isNegative() ? java.time.Duration.ZERO : wait.compareTo(MAX_RETRY_WAIT) > 0 ? MAX_RETRY_WAIT : wait;
+        return wait.isNegative() ? Duration.ZERO : wait.compareTo(MAX_RETRY_WAIT) > 0 ? MAX_RETRY_WAIT : wait;
     }
 
     private Resp send(URI uri, boolean isSource) throws IOException, InterruptedException {
@@ -280,7 +281,7 @@ public class UrlParityChecker {
         void collect() {
             var seen = new HashSet<URI>();
             for (var sm : List.of("/wp-sitemap.xml", "/sitemap_index.xml")) {
-                sitemap(URI.create(root(canonical) + sm), seen);
+                sitemap(URI.create(root(canonical) + sm), seen, true);
             }
             for (var f : SEED_FEEDS) {
                 add(f);
@@ -296,7 +297,7 @@ public class UrlParityChecker {
             return true;
         }
 
-        void sitemap(URI map, Set<URI> seen) {
+        void sitemap(URI map, Set<URI> seen, boolean rootMap) {
             if (!seen.add(map)) {
                 return;
             }
@@ -307,6 +308,10 @@ public class UrlParityChecker {
                 return;
             }
             if (c.last() != 200 || c.body() == null) {
+                return;
+            }
+            // A soft-404 page or text body at a root sitemap path just means "no sitemap here".
+            if (rootMap && !c.contentType().toLowerCase(Locale.ROOT).contains("xml")) {
                 return;
             }
             try {
@@ -338,7 +343,7 @@ public class UrlParityChecker {
                         continue;
                     }
                     if ("sitemapindex".equals(rootName)) {
-                        sitemap(URI.create(root(canonical) + pathQuery(loc)), seen);
+                        sitemap(URI.create(root(canonical) + pathQuery(loc)), seen, false);
                     } else {
                         add(pathQuery(loc));
                     }
@@ -364,7 +369,7 @@ public class UrlParityChecker {
                 if (p.equals("/")) {
                     add(p);
                 }
-                var html = c.body() != null && c.contentType().contains("html");
+                var html = c.body() != null && c.contentType().toLowerCase(Locale.ROOT).contains("html");
                 var doc = html ? Jsoup.parse(c.body(), c.finalUri().toString()) : null;
                 sourceChains.put(p, c.withoutBody());
                 if (doc == null) {
