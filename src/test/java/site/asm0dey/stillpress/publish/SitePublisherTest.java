@@ -67,6 +67,23 @@ class SitePublisherTest {
     }
 
     @Test
+    void commentAnchorsAndFeedGuidsUseTheWxrCommentId() {
+        var rel = publisher.publishAll().release();
+        var dbId = db.fetchValue(COMMENT.ID, COMMENT.SOURCE_ID.eq(902L));
+        assertThat(dbId).isNotEqualTo(902L);
+        assertThat(rel.resolve("2023/01/14/месяц-ноябрь-год-2022/index.html"))
+            .content()
+            .contains("id=\"comment-902\"")
+            .doesNotContain("id=\"comment-" + dbId + "\"");
+        assertThat(rel.resolve("2023/01/14/месяц-ноябрь-год-2022/feed/index.html"))
+            .content()
+            .contains("<guid isPermaLink=\"false\">https://blog.example.ru/?p=5994#comment-902</guid>");
+        assertThat(rel.resolve("comments/feed/index.html"))
+            .content()
+            .contains("<guid isPermaLink=\"false\">https://blog.example.ru/?p=5994#comment-902</guid>");
+    }
+
+    @Test
     void staticFiles() {
         var rel = publisher.publishAll().release();
         assertThat(rel.resolve("robots.txt")).hasContent("User-agent: *\nDisallow: /admin/\n");

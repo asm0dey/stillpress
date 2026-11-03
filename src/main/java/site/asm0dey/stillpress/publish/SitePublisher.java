@@ -333,7 +333,7 @@ public class SitePublisher {
             item
                 .allComments()
                 .stream()
-                .filter(v -> v.id() == c.getId())
+                .filter(v -> v.id() == ViewFactory.anchorId(c))
                 .findFirst()
                 .ifPresent(v -> entries.add(new SiteComment(item, v)));
         }

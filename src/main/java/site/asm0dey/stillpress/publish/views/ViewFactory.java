@@ -140,7 +140,7 @@ public class ViewFactory {
             .getOrDefault(parent, List.of())
             .stream()
             .map(c -> new CommentView(
-                    c.getId(),
+                    anchorId(c),
                     Objects.requireNonNullElse(c.getAuthorName(), ""),
                     c.getAuthorUrl() == null || c.getAuthorUrl().isBlank() ? null : c.getAuthorUrl(),
                     instant(c.getCreatedAt()),
@@ -148,6 +148,14 @@ public class ViewFactory {
                     build(byParent, c.getId())
             ))
             .toList();
+    }
+
+    /**
+     * WordPress anchors and comment-feed GUIDs use {@code comment_ID}: the WXR id, or ours for comments made here.
+     */
+    // shortcut: a native comment's row id could equal an imported comment's WXR id; give native comments their own id space when Stillpress takes comments
+    public static long anchorId(CommentRecord c) {
+        return c.getSourceId() != null ? c.getSourceId() : c.getId();
     }
 
     private static Instant instant(LocalDateTime t) {

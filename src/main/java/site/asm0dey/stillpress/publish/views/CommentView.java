@@ -3,6 +3,7 @@ package site.asm0dey.stillpress.publish.views;
 import module java.base;
 
 public record CommentView(
+        // WordPress comment_ID: the anchor and feed GUID suffix
         long id,
         String authorName,
         String authorUrl,
