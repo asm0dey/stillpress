@@ -1,0 +1,215 @@
+package site.asm0dey.stillpress.admin;
+
+import static io.restassured.RestAssured.given;
+import static io.restassured.http.ContentType.JSON;
+import static io.restassured.matcher.RestAssuredMatchers.detailedCookie;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
+import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.response.Response;
+import jakarta.inject.Inject;
+import module java.base;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import site.asm0dey.stillpress.TestStore;
+import site.asm0dey.stillpress.account.Limiters;
+import site.asm0dey.stillpress.account.LoginLimiter;
+import site.asm0dey.stillpress.account.Passwords;
+import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.TokenRepository;
+
+@QuarkusTest
+class AuthResourceTest {
+    @Inject
+    TestStore store;
+    @Inject
+    AuthorRepository users;
+    @Inject
+    TokenRepository tokens;
+    @Inject
+    LoginLimiter limiter;
+    long adminId;
+
+    @BeforeEach
+    void reset() {
+        store.reset();
+        Limiters.reset(limiter);
+        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        users.setPassword(adminId, Passwords.hash("correct horse battery"));
+    }
+
+    @Test
+    void loginSetsHttpOnlyLaxCookie() {
+        login("admin", "correct horse battery")
+            .then()
+            .statusCode(204)
+            .cookie("sp_session", detailedCookie().httpOnly(true).sameSite("Lax").path("/").secured(false));
+    }
+
+    @Test
+    void loginByEmailWorks() {
+        login("a@example.org", "correct horse battery").then().statusCode(204);
+    }
+
+    @Test
+    void unknownAndWrongGiveSameAnswer() {
+        var a = login("nobody", "correct horse battery").then().statusCode(401).extract().asString();
+        var b = login("admin", "wrong horse battery!").then().statusCode(401).extract().asString();
+        assertThat(a).isEqualTo(b).isEqualTo("{\"error\":\"invalid_credentials\"}");
+    }
+
+    @Test
+    void missingFieldsAre401() {
+        for (var body : List.of(Map.of("login", "admin"), Map.of("password", "correct horse battery"), Map.of())) {
+            given()
+                .header("X-Requested-With", "stillpress")
+                .contentType(JSON)
+                .body(body)
+                .post("/admin/api/login")
+                .then()
+                .statusCode(401)
+                .body("error", equalTo("invalid_credentials"));
+        }
+    }
+
+    @Test
+    void malformedStoredHashIs401() {
+        users.setPassword(adminId, "not-a-hash");
+        login("admin", "correct horse battery").then().statusCode(401);
+    }
+
+    @Test
+    void sixthAttemptIsRateLimitedEvenWithRightPassword() {
+        for (int i = 0; i < 5; i++) {
+            login("admin", "wrong horse battery!").then().statusCode(401);
+        }
+        login("admin", "correct horse battery")
+            .then()
+            .statusCode(429)
+            .header("Retry-After", notNullValue())
+            .body("error", equalTo("rate_limited"));
+    }
+
+    @Test
+    void ipLimitUsesTheForwardedClientAddress() {
+        for (int i = 0; i < 20; i++) {
+            given()
+                .header("X-Forwarded-For", "203.0.113.7")
+                .header("X-Requested-With", "stillpress")
+                .contentType(JSON)
+                .body(Map.of("login", "user" + i, "password", "wrong horse battery!"))
+                .post("/admin/api/login")
+                .then()
+                .statusCode(401);
+        }
+        given()
+            .header("X-Forwarded-For", "203.0.113.7")
+            .header("X-Requested-With", "stillpress")
+            .contentType(JSON)
+            .body(Map.of("login", "admin", "password", "correct horse battery"))
+            .post("/admin/api/login")
+            .then()
+            .statusCode(429);
+        login("admin", "correct horse battery").then().statusCode(204);
+    }
+
+    @Test
+    void importedUserWithoutPasswordCannotLogIn() {
+        users.create("imported", "i@example.org", "Imported", Role.AUTHOR);
+        login("imported", "correct horse battery").then().statusCode(401);
+    }
+
+    @Test
+    void secureCookieBehindHttpsProxy() {
+        given()
+            .header("X-Forwarded-Proto", "https")
+            .header("X-Requested-With", "stillpress")
+            .contentType(JSON)
+            .body(Map.of("login", "admin", "password", "correct horse battery"))
+            .post("/admin/api/login")
+            .then()
+            .statusCode(204)
+            .cookie("sp_session", detailedCookie().secured(true));
+    }
+
+    @Test
+    void sessionDescribesTheUser() {
+        var cookie = login("admin", "correct horse battery").cookie("sp_session");
+        given()
+            .cookie("sp_session", cookie)
+            .get("/admin/api/session")
+            .then()
+            .statusCode(200)
+            .body("id", equalTo((int) adminId))
+            .body("login", equalTo("admin"))
+            .body("displayName", equalTo("Admin"))
+            .body("role", equalTo("administrator"));
+        given().get("/admin/api/session").then().statusCode(401);
+    }
+
+    @Test
+    void logoutKillsTheSession() {
+        var cookie = login("admin", "correct horse battery").cookie("sp_session");
+        given()
+            .header("X-Requested-With", "stillpress")
+            .cookie("sp_session", cookie)
+            .post("/admin/api/logout")
+            .then()
+            .statusCode(204)
+            .cookie("sp_session", detailedCookie().value("").maxAge(0));
+        given().cookie("sp_session", cookie).get("/admin/api/session").then().statusCode(401);
+        // anonymous logout is fine too
+        given().header("X-Requested-With", "stillpress").post("/admin/api/logout").then().statusCode(204);
+    }
+
+    @Test
+    void setPasswordTokenIsSingleUse() {
+        var raw = tokens.create(adminId, "set_password", Duration.ofHours(24));
+        setPassword(raw, "a brand new password").then().statusCode(204).header("Set-Cookie", nullValue());
+        setPassword(raw, "another new password").then().statusCode(410).body("error", equalTo("invalid_token"));
+        login("admin", "a brand new password").then().statusCode(204);
+    }
+
+    @Test
+    void weakPasswordKeepsTheToken() {
+        var raw = tokens.create(adminId, "set_password", Duration.ofHours(24));
+        setPassword(raw, "short").then().statusCode(400).body("error", equalTo("weak_password"));
+        setPassword(raw, "a brand new password").then().statusCode(204);
+    }
+
+    @Test
+    void tokenForAnotherPurposeIsRejected() {
+        var raw = tokens.create(adminId, "other", Duration.ofHours(24));
+        setPassword(raw, "a brand new password").then().statusCode(410);
+        setPassword(null, "a brand new password").then().statusCode(410);
+    }
+
+    @Test
+    void wpAdminRedirects() {
+        for (var path : List.of("/wp-login.php", "/wp-admin", "/wp-admin/", "/wp-admin/post.php")) {
+            given().redirects().follow(false).get(path).then().statusCode(302).header("Location", "/admin/");
+        }
+    }
+
+    private static Response login(String login, String password) {
+        return given()
+            .header("X-Requested-With", "stillpress")
+            .contentType(JSON)
+            .body(Map.of("login", login, "password", password))
+            .post("/admin/api/login");
+    }
+
+    private static Response setPassword(String token, String password) {
+        var body = new HashMap<String, String>();
+        body.put("token", token);
+        body.put("password", password);
+        return given()
+            .header("X-Requested-With", "stillpress")
+            .contentType(JSON)
+            .body(body)
+            .post("/admin/api/set-password");
+    }
+}

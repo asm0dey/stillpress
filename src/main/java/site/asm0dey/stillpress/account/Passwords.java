@@ -2,6 +2,7 @@ package site.asm0dey.stillpress.account;
 
 import com.password4j.Argon2Function;
 import com.password4j.Password;
+import com.password4j.BadParametersException;
 import com.password4j.types.Argon2;
 
 /**
@@ -21,10 +22,18 @@ public final class Passwords {
     }
 
     /**
-     * {@code false} for a {@code null} hash: imported users cannot log in until they set a password.
+     * {@code false} for a {@code null} hash (imported users cannot log in until they set a password), a {@code null}
+     * password, or a malformed hash: a login attempt must fail, never error.
      */
     public static boolean verify(String password, String hash) {
-        return hash != null && Password.check(password, hash).with(Argon2Function.getInstanceFromHash(hash));
+        if (password == null || hash == null) {
+            return false;
+        }
+        try {
+            return Password.check(password, hash).with(Argon2Function.getInstanceFromHash(hash));
+        } catch (BadParametersException e) {
+            return false;
+        }
     }
 
     public static void validate(String password) {

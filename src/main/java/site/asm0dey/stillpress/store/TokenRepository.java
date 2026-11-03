@@ -12,6 +12,8 @@ import site.asm0dey.stillpress.db.tables.records.UserTokenRecord;
  */
 @ApplicationScoped
 public class TokenRepository {
+    public static final String SET_PASSWORD = "set_password";
+    public static final Duration SET_PASSWORD_TTL = Duration.ofHours(24);
     @Inject
     DSLContext db;
 

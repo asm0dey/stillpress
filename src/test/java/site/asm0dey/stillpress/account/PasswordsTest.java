@@ -15,6 +15,15 @@ class PasswordsTest {
     }
 
     @Test
+    void nullPasswordOrMalformedHashNeverVerifies() {
+        var h = Passwords.hash("correct horse battery");
+        assertThat(Passwords.verify(null, h)).isFalse();
+        assertThat(Passwords.verify("correct horse battery", "not-a-hash")).isFalse();
+        assertThat(Passwords.verify("correct horse battery", "$argon2id$v=19$garbage")).isFalse();
+        assertThat(Passwords.verify("correct horse battery", "")).isFalse();
+    }
+
+    @Test
     void lengthBounds() {
         assertThatThrownBy(() -> Passwords.validate("short")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> Passwords.validate("x".repeat(1025))).isInstanceOf(IllegalArgumentException.class);

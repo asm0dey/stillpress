@@ -10,6 +10,7 @@ class StillpressCommandTest {
         assertThat(new CommandLine(new StillpressCommand()).getSubcommands())
             .containsKey("serve")
             .containsKey("import")
-            .containsKey("publish");
+            .containsKey("publish")
+            .containsKey("user");
     }
 }

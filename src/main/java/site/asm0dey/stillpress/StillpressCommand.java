@@ -3,6 +3,7 @@ package site.asm0dey.stillpress;
 import io.quarkus.picocli.runtime.annotations.TopCommand;
 import io.quarkus.runtime.Quarkus;
 import picocli.CommandLine.Command;
+import site.asm0dey.stillpress.account.UserCommand;
 import site.asm0dey.stillpress.importer.ImportCommand;
 import site.asm0dey.stillpress.publish.PublishCommand;
 import site.asm0dey.stillpress.verify.VerifyUrlsCommand;
@@ -15,7 +16,8 @@ import site.asm0dey.stillpress.verify.VerifyUrlsCommand;
         StillpressCommand.ServeCommand.class,
         ImportCommand.class,
         PublishCommand.class,
-        VerifyUrlsCommand.class
+        VerifyUrlsCommand.class,
+        UserCommand.class
         }
 )
 public class StillpressCommand implements Runnable {
