@@ -11,6 +11,7 @@ import org.jsoup.Jsoup;
 import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.verify.ParityReport.Cause;
 import site.asm0dey.stillpress.verify.ParityReport.Mismatch;
+import site.asm0dey.stillpress.wxr.WxrReader;
 
 /**
  * Cutover check #1: every source URL must resolve equivalently on the target.
@@ -327,9 +328,7 @@ public class UrlParityChecker {
                 return;
             }
             try {
-                var f = XMLInputFactory.newInstance();
-                f.setProperty(XMLInputFactory.SUPPORT_DTD, false);
-                f.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+                var f = WxrReader.safeFactory();
                 var rd = f.createXMLStreamReader(new StringReader(c.body()));
                 String rootName = null;
                 while (rd.hasNext()) {

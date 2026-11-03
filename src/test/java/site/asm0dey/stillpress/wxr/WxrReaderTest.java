@@ -1,6 +1,7 @@
 package site.asm0dey.stillpress.wxr;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import module java.base;
 import org.junit.jupiter.api.Test;
 
@@ -100,5 +101,36 @@ class WxrReaderTest {
         assertThat(item(102).password()).isEqualTo("secret");
         assertThat(item(7).attachmentUrl()).endsWith("/2020/05/c.jpg");
         assertThat(item(7).parentId()).isEqualTo(100);
+    }
+
+    @Test
+    void moreThanAHundredThousandEntityReferencesParse() {
+        // JDK 25 StAX caps a document at 100,000 general-entity references by default; a real export has far more
+        var amps = " &amp;".repeat(30);
+        var sb = new StringBuilder("<rss><channel><title>t</title>");
+        int n = 2_000;
+        for (int i = 1; i <= n; i++) {
+            sb
+                .append("<item><title>T")
+                .append(amps)
+                .append("</title><content:encoded xmlns:content=\"http://purl.org/rss/1.0/modules/content/\">C")
+                .append(amps)
+                .append("</content:encoded><post_id>")
+                .append(i)
+                .append("</post_id><post_type>post</post_type></item>");
+        }
+        sb.append("</channel></rss>");
+        var d = WxrReader.read(new ByteArrayInputStream(sb.toString().getBytes(StandardCharsets.UTF_8)));
+        assertThat(d.items()).hasSize(n);
+        assertThat(d.items().getLast().content()).isEqualTo("C" + " &".repeat(30));
+    }
+
+    @Test
+    void doctypeEntitiesStayDisabled() {
+        var xml =
+                "<?xml version=\"1.0\"?><!DOCTYPE rss [<!ENTITY x SYSTEM \"file:///etc/passwd\">]>"
+                + "<rss><channel><title>&x;</title></channel></rss>";
+        assertThatThrownBy(() -> WxrReader.read(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8))))
+            .isInstanceOf(UncheckedIOException.class);
     }
 }

@@ -48,10 +48,8 @@ public final class WxrReader {
     public static void read(InputStream in, WxrHandler h) {
         XMLStreamReader r = null;
         try {
-            var f = XMLInputFactory.newFactory();
+            var f = safeFactory();
             f.setProperty(XMLInputFactory.IS_COALESCING, true);
-            f.setProperty(XMLInputFactory.SUPPORT_DTD, false);
-            f.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
             r = f.createXMLStreamReader(in);
             var ch = new HashMap<String, String>();
             boolean siteSent = false;
@@ -161,6 +159,20 @@ public final class WxrReader {
                 }
             }
         }
+    }
+
+    /**
+     * No DTDs and no external entities. With those off, only the five predefined entities and character references
+     * remain, so the JDK's entity-size limits (100,000 references by default) only break large exports and are lifted.
+     */
+    public static XMLInputFactory safeFactory() {
+        var f = XMLInputFactory.newFactory();
+        f.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+        f.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+        f.setProperty("jdk.xml.maxGeneralEntitySizeLimit", 0);
+        f.setProperty("jdk.xml.totalEntitySizeLimit", 0);
+        f.setProperty("jdk.xml.entityExpansionLimit", 0);
+        return f;
     }
 
     private static WxrSite site(Map<String, String> ch) {
