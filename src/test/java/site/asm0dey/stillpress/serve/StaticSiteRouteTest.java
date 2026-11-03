@@ -2,21 +2,26 @@ package site.asm0dey.stillpress.serve;
 
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.emptyString;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
+import static site.asm0dey.stillpress.db.Tables.REDIRECT;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import module java.base;
+import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.publish.SitePublisher;
 
 @QuarkusTest
@@ -29,6 +34,8 @@ class StaticSiteRouteTest {
     SitePublisher publisher;
     @Inject
     DataDir dataDir;
+    @Inject
+    DSLContext db;
     @TestHTTPResource("/")
     URL base;
 
@@ -63,6 +70,16 @@ class StaticSiteRouteTest {
         assertThat(StaticSiteRoute.decodePath(raw)).isEqualTo(expected);
         assertThat(StaticSiteRoute.decodePath(CYRILLIC_UPPER)).isEqualTo(expected);
         assertThat(StaticSiteRoute.decodePath(CYRILLIC_UPPER.toLowerCase(Locale.ROOT))).isEqualTo(expected);
+    }
+
+    @Test
+    void onlyAsciiHexDigitsDecode() {
+        for (var bad : List.of("/%１２/", "/%١٢/", "/%g0/", "/%0/", "/%")) {
+            assertThatIllegalArgumentException()
+                .as(bad)
+                .isThrownBy(() -> StaticSiteRoute.decodePath(bad));
+        }
+        assertThat(StaticSiteRoute.decodePath("/%4a%4A/")).isEqualTo("/JJ/");
     }
 
     @Test
@@ -198,6 +215,62 @@ class StaticSiteRouteTest {
     void neverRedirectsProtocolRelative() throws Exception {
         assertThat(raw("GET", "//about")).doesNotContainIgnoringCase("location: //");
         assertThat(raw("GET", "/%2fabout")).startsWith("HTTP/1.1 400");
+    }
+
+    @Test
+    void emptySegmentsNeverServeOrRedirect() throws Exception {
+        var current = dataDir.current().toAbsolutePath().normalize();
+        var real = current.toRealPath();
+        for (var target :
+                List.of(
+                        "/" + Permalinks.encode(current + "/about"),
+                        "/" + Permalinks.encode(current + "/feed/"),
+                        "/" + Permalinks.encode(real + "/about"),
+                        "/" + Permalinks.encode(real + "/feed/"),
+                        "/about//x",
+                        "/about//",
+                        "//evil.com/",
+                        "//about/"
+        )) {
+            var head = raw("GET", target);
+            assertThat(head).as(target).matches("(?s)HTTP/1.1 40[04] .*").doesNotContainIgnoringCase("location:");
+        }
+    }
+
+    @Test
+    void unsafeStoredRedirectTargetsAre404() {
+        db
+            .insertInto(REDIRECT, REDIRECT.FROM_PATH, REDIRECT.TO_PATH, REDIRECT.STATUS_CODE)
+            .values("/evil1/", "//evil.com/", 301)
+            .values("/evil2/", "https://evil.com/", 301)
+            .values("/evil3/", "/\\evil.com/", 301)
+            .values("?p=777", "//evil.com/", 301)
+            .execute();
+        for (var u : List.of("/evil1/", "/evil2/", "/evil3/", "/?p=777")) {
+            given().redirects().follow(false).get(u).then().statusCode(404).header("Location", nullValue());
+        }
+    }
+
+    @Test
+    void storedStatusIsReturnedAsIs() {
+        db
+            .insertInto(REDIRECT, REDIRECT.FROM_PATH, REDIRECT.TO_PATH, REDIRECT.STATUS_CODE)
+            .values("/moved/", "/about/", 302)
+            .execute();
+        given().redirects().follow(false).get("/moved/").then().statusCode(302).header("Location", endsWith("/about/"));
+    }
+
+    @Test
+    void xmlContentTypeAndNosniff() throws Exception {
+        Files.writeString(dataDir.current().resolve("sitemap.xml"), "<urlset/>");
+        given()
+            .get("/sitemap.xml")
+            .then()
+            .statusCode(200)
+            .contentType(anyOf(startsWith("application/xml"), startsWith("text/xml")))
+            .header("X-Content-Type-Options", "nosniff");
+        given().get("/about/").then().header("X-Content-Type-Options", "nosniff");
+        given().get("/nope/").then().statusCode(404).header("X-Content-Type-Options", "nosniff");
     }
 
     @Test

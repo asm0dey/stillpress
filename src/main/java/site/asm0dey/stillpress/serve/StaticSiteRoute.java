@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import module java.base;
+import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.publish.SitePublisher;
@@ -21,6 +22,7 @@ public class StaticSiteRoute {
     static final String SHORT_CACHE = "public, max-age=300";
     static final String LONG_CACHE = "public, max-age=31536000, immutable";
     private static final List<String> SHORTLINK_KEYS = List.of("p", "page_id", "attachment_id");
+    private static final Logger LOG = Logger.getLogger(StaticSiteRoute.class);
     @Inject
     DataDir dataDir;
     @Inject
@@ -45,12 +47,7 @@ public class StaticSiteRoute {
         for (var k : SHORTLINK_KEYS) {
             var v = req.getParam(k);
             if (v != null) {
-                redirects
-                    .find("?" + k + "=" + v)
-                    .ifPresentOrElse(r -> redirect(ctx, r.getStatusCode(), Permalinks.encode(r.getToPath())), () -> notFound(
-                            ctx,
-                            root
-                    ));
+                storedRedirect(ctx, root, "?" + k + "=" + v);
                 return;
             }
         }
@@ -62,7 +59,12 @@ public class StaticSiteRoute {
             return;
         }
         if (root != null) {
-            var target = root.resolve(path.substring(1));
+            // decodePath already refuses empty segments; this keeps resolve() relative and lexically inside regardless
+            var target = root.resolve(path.replaceFirst("^/+", "")).normalize();
+            if (!target.startsWith(root)) {
+                notFound(ctx, root);
+                return;
+            }
             if (Files.isDirectory(target)) {
                 var index = inside(root, target.resolve("index.html"));
                 if (index != null) {
@@ -82,12 +84,23 @@ public class StaticSiteRoute {
                 }
             }
         }
-        redirects
-            .find(path)
-            .ifPresentOrElse(r -> redirect(ctx, r.getStatusCode(), Permalinks.encode(r.getToPath())), () -> notFound(
-                    ctx,
-                    root
-            ));
+        storedRedirect(ctx, root, path);
+    }
+
+    private void storedRedirect(RoutingContext ctx, Path root, String key) {
+        var hit = redirects.find(key);
+        if (hit.isEmpty()) {
+            notFound(ctx, root);
+            return;
+        }
+        var to = hit.get().getToPath();
+        // only a site-local, single-slash absolute path; anything else could send visitors off-site
+        if (to == null || !to.startsWith("/") || to.startsWith("//") || to.indexOf('\\') >= 0) {
+            LOG.warnf("Ignoring unsafe redirect target %s for %s", to, key);
+            notFound(ctx, root);
+            return;
+        }
+        redirect(ctx, hit.get().getStatusCode(), Permalinks.encode(to));
     }
 
     /**
@@ -114,7 +127,7 @@ public class StaticSiteRoute {
     }
 
     private static void send(RoutingContext ctx, String path, Path file, int status) {
-        var res = ctx.response().setStatusCode(status);
+        var res = ctx.response().setStatusCode(status).putHeader("X-Content-Type-Options", "nosniff");
         var name = file.getFileName().toString();
         if (name.equals("index.html")
                 && file.getParent().getFileName().toString().equals(SitePublisher.FEED_SEGMENT)) {
@@ -135,6 +148,9 @@ public class StaticSiteRoute {
     }
 
     private static void redirect(RoutingContext ctx, int status, String location) {
+        if (!location.startsWith("/") || location.startsWith("//")) {
+            throw new IllegalStateException("refusing non-local Location " + location);
+        }
         ctx.response().setStatusCode(status).putHeader("Location", location).end();
     }
 
@@ -163,7 +179,7 @@ public class StaticSiteRoute {
                 if (i + 2 >= raw.length()) {
                     throw new IllegalArgumentException("truncated escape");
                 }
-                int hi = Character.digit(raw.charAt(i + 1), 16), lo = Character.digit(raw.charAt(i + 2), 16);
+                int hi = hex(raw.charAt(i + 1)), lo = hex(raw.charAt(i + 2));
                 if (hi < 0 || lo < 0) {
                     throw new IllegalArgumentException("bad escape");
                 }
@@ -193,11 +209,32 @@ public class StaticSiteRoute {
         if (path.indexOf('\0') >= 0 || path.indexOf('\\') >= 0) {
             throw new IllegalArgumentException("NUL or backslash");
         }
-        for (var seg : path.split("/", -1)) {
-            if (seg.equals(".") || seg.equals("..")) {
+        var segs = path.split("/", -1);
+        for (int i = 1; i < segs.length; i++) {
+            if (segs[i].equals(".") || segs[i].equals("..")) {
                 throw new IllegalArgumentException("dot segment");
+            }
+            // only the final segment may be empty (the trailing slash); "//" would make the path absolute
+            if (segs[i].isEmpty() && i < segs.length - 1) {
+                throw new IllegalArgumentException("empty segment");
             }
         }
         return path;
+    }
+
+    /**
+     * ASCII hex digit value, or -1; unlike {@link Character#digit} it refuses non-ASCII digits.
+     */
+    private static int hex(char c) {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'a' && c <= 'f') {
+            return c - 'a' + 10;
+        }
+        if (c >= 'A' && c <= 'F') {
+            return c - 'A' + 10;
+        }
+        return -1;
     }
 }
