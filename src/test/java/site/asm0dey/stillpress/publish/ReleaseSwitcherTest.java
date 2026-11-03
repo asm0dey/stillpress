@@ -64,4 +64,20 @@ class ReleaseSwitcherTest {
         assertThat(oldest).exists();
         assertThat(dir.current().toRealPath()).isEqualTo(oldest.toRealPath());
     }
+
+    @Test
+    void pruneFailureNeverBreaksTheSwapOrDeletesTheLiveRelease() throws Exception {
+        var dir = new DataDir(tmp.toString());
+        var s = new ReleaseSwitcher(dir, p -> {
+            throw new IOException("busy: " + p);
+        });
+        Path last = null;
+        for (int i = 0; i < 5; i++) {
+            last = s.newRelease();
+            Files.writeString(last.resolve("index.html"), "r" + i);
+            s.activate(last);
+        }
+        assertThat(dir.current().toRealPath()).isEqualTo(last.toRealPath());
+        assertThat(dir.current().resolve("index.html")).hasContent("r4");
+    }
 }

@@ -1,7 +1,9 @@
 package site.asm0dey.stillpress.publish;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import module java.base;
+import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.config.DataDir;
 
 /**
@@ -12,10 +14,27 @@ public class ReleaseSwitcher {
     static final int KEEP = 3;
     private static final DateTimeFormatter NAME =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
+    private static final Logger LOG = Logger.getLogger(ReleaseSwitcher.class);
     private final DataDir dataDir;
+    private final Deleter deleter;
+    private Instant last = Instant.EPOCH;
 
+    /**
+     * Removes one release tree.
+     */
+    @FunctionalInterface
+    interface Deleter {
+        void delete(Path dir) throws IOException;
+    }
+
+    @Inject
     public ReleaseSwitcher(DataDir dataDir) {
+        this(dataDir, ReleaseSwitcher::deleteTree);
+    }
+
+    ReleaseSwitcher(DataDir dataDir, Deleter deleter) {
         this.dataDir = dataDir;
+        this.deleter = deleter;
     }
 
     /**
@@ -23,10 +42,13 @@ public class ReleaseSwitcher {
      */
     public synchronized Path newRelease() {
         try {
-            var t = Instant.now();
+            // strictly after the last name handed out, so a burst never produces a name older than a surviving one
+            var t = Instant.now().isAfter(last) ? Instant.now() : last.plusMillis(1);
             while (true) {
                 try {
-                    return Files.createDirectory(dataDir.releases().resolve(NAME.format(t)));
+                    var dir = Files.createDirectory(dataDir.releases().resolve(NAME.format(t)));
+                    last = t;
+                    return dir;
                 } catch (FileAlreadyExistsException e) {
                     t = t.plusMillis(1);
                 }
@@ -41,26 +63,35 @@ public class ReleaseSwitcher {
      */
     public synchronized void activate(Path release) {
         try {
+            var live = release.toRealPath();
             var current = dataDir.current();
             var tmp = current.resolveSibling("current.tmp");
             Files.deleteIfExists(tmp);
             Files.createSymbolicLink(tmp, current.getParent().relativize(release.toAbsolutePath()));
             Files.move(tmp, current, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            prune(release.toRealPath());
+            prune(live);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
-    private void prune(Path live) throws IOException {
-        List<Path> all;
+    /**
+     * Housekeeping after the swap: a failure here must never undo or break it, so each release is tried on its own.
+     */
+    private void prune(Path live) {
         try (var list = Files.list(dataDir.releases())) {
-            all = list.filter(Files::isDirectory).sorted().toList();
-        }
-        for (var old : all.subList(0, Math.max(0, all.size() - KEEP))) {
-            if (!old.toRealPath().equals(live)) {
-                deleteTree(old);
+            var all = list.filter(Files::isDirectory).sorted().toList();
+            for (var old : all.subList(0, Math.max(0, all.size() - KEEP))) {
+                try {
+                    if (!old.toRealPath().equals(live)) {
+                        deleter.delete(old);
+                    }
+                } catch (IOException | RuntimeException e) {
+                    LOG.warnf(e, "Could not prune old release %s", old);
+                }
             }
+        } catch (IOException | RuntimeException e) {
+            LOG.warnf(e, "Could not list releases to prune");
         }
     }
 

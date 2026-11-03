@@ -2,7 +2,9 @@ package site.asm0dey.stillpress.publish;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import static site.asm0dey.stillpress.db.Tables.ITEM;
+import static site.asm0dey.stillpress.db.Tables.TERM;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import module java.base;
@@ -108,6 +110,69 @@ class SitePublisherTest {
         assertThatThrownBy(publisher::publishAll).isInstanceOf(RuntimeException.class);
         assertThat(dataDir.current().toRealPath()).isEqualTo(good.toRealPath());
         assertThat(releases()).isEqualTo(before);
+    }
+
+    @Test
+    void failureAfterEveryFileIsWrittenStillKeepsPreviousReleaseLive() throws Exception {
+        var good = publisher.publishAll().release();
+        var before = releases();
+        var written = new java.util.concurrent.atomic.AtomicInteger();
+        publisher.beforeActivate(release -> {
+            try (var walk = Files.walk(release)) {
+                written.set((int) walk.filter(Files::isRegularFile).count());
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            throw new IllegalStateException("boom");
+        });
+        try {
+            assertThatThrownBy(publisher::publishAll).hasMessage("boom");
+        } finally {
+            publisher.beforeActivate(r -> {});
+        }
+        assertThat(written.get()).isPositive();
+        assertThat(dataDir.current().toRealPath()).isEqualTo(good.toRealPath());
+        assertThat(releases()).isEqualTo(before);
+    }
+
+    @Test
+    void emptyTermAndAuthorArchivesAndFeedsArePublished() {
+        db.insertInto(TERM, TERM.TAXONOMY, TERM.NAME, TERM.SLUG).values("post_tag", "Empty", "empty").execute();
+        db.insertInto(TERM, TERM.TAXONOMY, TERM.NAME, TERM.SLUG).values("category", "Void", "void").execute();
+        db.insertInto(AUTHOR, AUTHOR.LOGIN, AUTHOR.SLUG).values("ghost", "ghost").execute();
+        var rel = publisher.publishAll().release();
+        assertThat(rel.resolve("tag/empty/index.html")).exists();
+        assertThat(rel.resolve("tag/empty/feed/index.html")).content().contains("<rss");
+        assertThat(rel.resolve("category/void/index.html")).exists();
+        assertThat(rel.resolve("category/void/feed/index.html")).exists();
+        assertThat(rel.resolve("author/ghost/index.html")).exists();
+        assertThat(rel.resolve("author/ghost/feed/index.html")).exists();
+    }
+
+    @Test
+    void nonNumericPostsPerPageFallsBackToTen() {
+        dataSetPerPage("lots");
+        assertThat(publisher.publishAll().release().resolve("index.html")).exists();
+    }
+
+    @Test
+    void trailingSlashOnHomeUrlNeverDoublesSlashes() throws Exception {
+        db.execute("update setting set value = 'https://blog.example.ru/' where key = 'home_url'");
+        var rel = publisher.publishAll().release();
+        assertThat(rel.resolve("feed/index.html"))
+            .content()
+            .contains("href=\"https://blog.example.ru/feed/\"")
+            .doesNotContain("ru//");
+        assertThat(rel.resolve("comments/feed/index.html")).content().doesNotContain("ru//");
+    }
+
+    @Test
+    void undatedPostsStayOutOfFeedsAndDateArchives() throws Exception {
+        db.update(ITEM).setNull(ITEM.PUBLISHED_AT).where(ITEM.SLUG.eq("qa")).execute();
+        var rel = publisher.publishAll().release();
+        assertThat(rel.resolve("feed/index.html")).content().doesNotContain("?p=100");
+        assertThat(rel.resolve("index.html")).content().contains("Q&amp;A");
+        assertThat(rel.resolve("2020/index.html")).doesNotExist();
     }
 
     private Set<Path> releases() throws IOException {

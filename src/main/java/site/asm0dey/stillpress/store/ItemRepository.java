@@ -30,4 +30,39 @@ public class ItemRepository {
     public int count() {
         return db.fetchCount(ITEM);
     }
+
+    /**
+     * An item without its body: enough to place it in archives and feeds without holding content in memory.
+     */
+    public record Summary(long id, String type, String permalink, LocalDateTime publishedAt, Long authorId) {}
+
+    /**
+     * Published, non-password-protected posts and pages, newest first (undated last).
+     */
+    public List<Summary> findPublishedSummaries() {
+        return db
+            .select(ITEM.ID, ITEM.TYPE, ITEM.PERMALINK, ITEM.PUBLISHED_AT, ITEM.AUTHOR_ID)
+            .from(ITEM)
+            .where(ITEM.STATUS.eq("publish"), ITEM.TYPE.in("post", "page"), ITEM.PASSWORD_PROTECTED.isFalse())
+            .orderBy(ITEM.PUBLISHED_AT.desc().nullsLast(), ITEM.ID.desc())
+            .fetch(r -> new Summary(
+                    r.value1(),
+                    r.value2(),
+                    Objects.requireNonNullElse(r.value3(), "/"),
+                    r.value4(),
+                    r.value5()
+            ));
+    }
+
+    /**
+     * Full records for the given ids, in the order of {@code ids}.
+     */
+    public List<ItemRecord> findByIds(List<Long> ids) {
+        var byId = new HashMap<Long, ItemRecord>();
+        db
+            .selectFrom(ITEM)
+            .where(ITEM.ID.in(ids))
+            .forEach(r -> byId.put(r.getId(), r));
+        return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+    }
 }
