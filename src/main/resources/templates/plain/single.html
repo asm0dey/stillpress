@@ -1,0 +1,21 @@
+{@site.asm0dey.stillpress.publish.views.SiteView site}
+{@site.asm0dey.stillpress.publish.views.ItemView item}
+{#include plain/base}
+{#title}{item.title} - {site.title}{/title}
+{#body}
+<article>
+<h1>{item.title}</h1>
+<div class="meta">{#if item.publishedAt}<time datetime="{item.publishedAt}">{item.publishedAt}</time>{/if}{#if item.authorName} · {#if item.authorUrl}<a href="{item.authorUrl}">{item.authorName}</a>{#else}{item.authorName}{/if}{/if}</div>
+<div class="entry">{item.contentHtml.raw}</div>
+<footer class="meta">
+{#if item.categories}<div>{#for t in item.categories}<a href="{t.url}">{t.name}</a>{#if t_hasNext}, {/if}{/for}</div>{/if}
+{#if item.tags}<div>{#for t in item.tags}<a href="{t.url}">#{t.name}</a>{#if t_hasNext}, {/if}{/for}</div>{/if}
+</footer>
+</article>
+{#if item.comments}
+<section class="comments"><h2>Comments</h2>
+<ul class="comments">{#for c in item.comments}{#include plain/comment c=c /}{/for}</ul>
+</section>
+{/if}
+{/body}
+{/include}

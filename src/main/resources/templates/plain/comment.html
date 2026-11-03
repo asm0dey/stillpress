@@ -1,0 +1,5 @@
+{@site.asm0dey.stillpress.publish.views.CommentView c}<li class="comment" id="comment-{c.id}">
+<div class="meta">{#if c.authorUrl}<a href="{c.authorUrl}" rel="nofollow ugc">{c.authorName}</a>{#else}{c.authorName}{/if} · <time datetime="{c.createdAt}">{c.createdAt}</time></div>
+<div class="comment-body">{c.contentHtml.raw}</div>
+{#if c.replies}<ul class="replies">{#for r in c.replies}{#include plain/comment c=r /}{/for}</ul>{/if}
+</li>

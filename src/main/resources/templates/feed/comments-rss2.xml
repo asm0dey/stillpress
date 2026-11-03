@@ -1,0 +1,23 @@
+{@site.asm0dey.stillpress.publish.views.SiteView site}
+{@site.asm0dey.stillpress.publish.views.ItemView item}
+{@java.lang.String selfUrl}
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+<title>Comments on: {item.title}</title>
+<atom:link href="{selfUrl}" rel="self" type="application/rss+xml"/>
+<link>{item.absoluteUrl}</link>
+<description>{site.description}</description>
+<language>{site.language}</language>
+{#for c in item.allComments}
+<item>
+<title>Comment on {item.title} by {c.authorName}</title>
+<link>{item.absoluteUrl}#comment-{c.id}</link>
+<dc:creator>{c.authorName}</dc:creator>
+<pubDate>{c.pubDate}</pubDate>
+<guid isPermaLink="false">{item.guid}#comment-{c.id}</guid>
+<content:encoded><![CDATA[{c.contentCdata.raw}]]></content:encoded>
+</item>
+{/for}
+</channel>
+</rss>

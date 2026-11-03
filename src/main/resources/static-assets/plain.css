@@ -1,0 +1,9 @@
+body{font:18px/1.6 Georgia,serif;max-width:46rem;margin:0 auto;padding:1rem;color:#222}
+a{color:#0645ad}
+header.site,footer.site{margin:1rem 0}
+header.site a{color:inherit;text-decoration:none;font-weight:bold}
+.meta{color:#666;font-size:.85em}
+img,video,iframe{max-width:100%;height:auto}
+ul.comments,ul.replies{list-style:none;padding-left:0}
+ul.replies{padding-left:1.5rem;border-left:2px solid #ddd}
+.sp-yt-facade{display:block;width:100%;aspect-ratio:16/9;background:#000;color:#fff;border:0;cursor:pointer;font-size:1.2rem}

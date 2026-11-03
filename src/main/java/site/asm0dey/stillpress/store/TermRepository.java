@@ -23,4 +23,8 @@ public class TermRepository {
             .orderBy(TERM.TAXONOMY, TERM.NAME)
             .fetchInto(TERM);
     }
+
+    public Optional<TermRecord> findById(long id) {
+        return db.selectFrom(TERM).where(TERM.ID.eq(id)).fetchOptional();
+    }
 }

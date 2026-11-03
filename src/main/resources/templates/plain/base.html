@@ -1,0 +1,18 @@
+{@site.asm0dey.stillpress.publish.views.SiteView site}<!DOCTYPE html>
+<html lang="{site.lang}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{#insert title}{site.title}{/insert}</title>
+<link rel="stylesheet" href="/assets/block-library.css">
+<link rel="stylesheet" href="/assets/plain.css">
+</head>
+<body>
+<header class="site"><a href="/">{site.title}</a><div class="meta">{site.description}</div></header>
+<main>
+{#insert body}{/insert}
+</main>
+<footer class="site meta">{site.title}</footer>
+<script src="/assets/plain.js"></script>
+</body>
+</html>
