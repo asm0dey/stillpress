@@ -4,7 +4,7 @@ A self-hostable CMS on Quarkus that replaces WordPress for blogs. Authors write 
 
 One install runs one site. Several sites means several installs.
 
-> **Status: early development.** Plan 1 of 5 (the core pipeline: import → store → render → publish → serve) is being built. There is no admin UI, editor or theme engine yet. See [the design](docs/superpowers/specs/2026-11-03-wordpress-static-cms-design.md) and [plan 1](docs/superpowers/plans/2026-11-03-stillpress-01-core-pipeline.md).
+> **Status: early development.** Plan 1 of 5 (the core pipeline: import → store → render → publish → serve) is in place. There is no admin UI, editor or theme engine yet. See [the design](docs/superpowers/specs/2026-11-03-wordpress-static-cms-design.md) and [plan 1](docs/superpowers/plans/2026-11-03-stillpress-01-core-pipeline.md).
 
 ## What works today
 
@@ -13,10 +13,11 @@ One install runs one site. Several sites means several installs.
 - Classic (pre-Gutenberg) content: ports of `wpautop()`, `shortcode_unautop()` and the `[caption]` shortcode.
 - Streaming the WXR export reader: multi-GB exports never sit in memory.
 - A one-shot importer: posts, pages, attachments, terms, authors, comments and reusable blocks.
-  - Media is downloaded into `data/media/`, and its URLs are rewritten in HTML and block JSON.
+  - Media is downloaded into `data/media/`, and its URLs are rewritten in HTML and block JSON, Jetpack Photon (`i0.wp.com`) links included.
   - A redirect map is built for `?p=`, `?page_id=`, `?attachment_id=` and attachment pages.
-
-Still to come in plan 1: page templates and feeds, the atomic static publisher, serving with a redirect fallback, and a URL parity checker against the live site.
+- The publisher: every published post and page, home, category, tag, author and date archives (paginated), and RSS feeds, rendered into a fresh release that goes live atomically.
+- Serving the live release with WordPress-compatible redirects as the fallback.
+- A URL parity checker that crawls the live site's sitemaps and feeds and compares every URL against Stillpress.
 
 ## Requirements
 
@@ -42,21 +43,34 @@ mise exec -- mvn spotless:apply
 
 ```bash
 mise exec -- mvn package -DskipTests
-java -jar target/quarkus-app/quarkus-run.jar import --wxr export.xml   # one-shot; refuses a second import
-java -jar target/quarkus-app/quarkus-run.jar                          # serve (default command)
+alias stillpress='java -jar target/quarkus-app/quarkus-run.jar'
+
+stillpress import --wxr export.xml     # one-shot; refuses a second import
+stillpress publish                     # render a new release and make it live
+stillpress serve                       # serve the live release on :8080 (also the default command)
+stillpress verify-urls --source https://old-blog.example --target http://localhost:8080
 ```
 
-`--media-limit N` on `import` downloads at most N media files; it is for test imports, and a full import (no flag) downloads everything.
+`import` options:
+
+- `--media-limit N` downloads at most N media files. It is for test imports; a full import (no flag) downloads everything.
+- `--posts-per-page N` (default 10), `--posts-per-rss N` (default 10), `--category-base BASE` (default `category`) and `--tag-base BASE` (default `tag`) carry the WordPress settings an export does not include. Set them to the source site's values, or archive URLs and page counts will differ. The bases are a single path segment.
+
+`verify-urls` takes `--source` (the live WordPress site), `--target` (Stillpress) and `--max N` (default 20000 URLs). It exits 0 only when every URL matches.
+
+Only `serve` binds the HTTP port, and the H2 database runs in auto-server mode. `publish` and `verify-urls` therefore run while `serve` is up; a new release is picked up without a restart. Pass `-Dquarkus.http.port=…` to serve elsewhere.
 
 Data lives in `./data`, or wherever `STILLPRESS_DATA_DIR` points: the H2 database, `media/` and `output/`.
 
 ### Database
 
-The default is an embedded H2 file, with nothing to install. To use PostgreSQL, set the datasource kind and URL. The jOOQ dialect follows the datasource kind automatically.
+The default is an embedded H2 file, with nothing to install. The database kind is fixed when the app is built, so PostgreSQL needs its own build; the URL and credentials are runtime settings. The jOOQ dialect follows the datasource kind automatically.
 
-```properties
-quarkus.datasource.db-kind=postgresql
-quarkus.datasource.jdbc.url=jdbc:postgresql://localhost:5432/stillpress
+```bash
+mise exec -- mvn package -DskipTests -Dquarkus.datasource.db-kind=postgresql
+QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://localhost:5432/stillpress \
+QUARKUS_DATASOURCE_USERNAME=stillpress QUARKUS_DATASOURCE_PASSWORD=… \
+  java -jar target/quarkus-app/quarkus-run.jar serve
 ```
 
 ## Conventions
