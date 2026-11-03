@@ -51,9 +51,9 @@ src/main/resources/db/migration/common/V3__accounts.sql
 src/main/java/site/asm0dey/stillpress/
   account/Role.java                 enum of the four roles
   account/Passwords.java            Argon2id hash/verify
-  account/UserRepository.java       jOOQ over AUTHOR (users are author rows)
-  account/SessionStore.java         session create/find/delete
-  account/TokenStore.java           set-password tokens
+  store/AuthorRepository.java       + user methods (users are author rows)
+  store/SessionRepository.java      session create/find/delete
+  store/TokenRepository.java        set-password tokens
   account/LoginLimiter.java         per-account / per-IP failure windows
   account/SessionAuthMechanism.java HttpAuthenticationMechanism reading sp_session
   account/SessionIdentityProvider.java + SessionAuthenticationRequest.java
@@ -83,8 +83,8 @@ src/test/java/site/asm0dey/stillpress/... mirrors main; TestStore gains account 
 ### Task 1: Accounts schema, passwords, sessions, auth mechanism
 
 **Files:**
-- Create: `V3__accounts.sql`, `account/Role.java`, `account/Passwords.java`, `account/UserRepository.java`, `account/SessionStore.java`, `account/TokenStore.java`, `account/SessionAuthenticationRequest.java`, `account/SessionIdentityProvider.java`, `account/SessionAuthMechanism.java`, `account/CsrfFilter.java`
-- Modify: `pom.xml` (add `io.quarkus:quarkus-security`, `com.password4j:password4j:1.8.4`), `application.properties` (proxy settings, body limit from Global Constraints), `src/test/java/.../TestStore.java` (`reset()` also deletes `session`, `user_token`)
+- Create: `V3__accounts.sql`, `account/Role.java`, `account/Passwords.java`, `store/SessionRepository.java`, `store/TokenRepository.java`, `account/SessionAuthenticationRequest.java`, `account/SessionIdentityProvider.java`, `account/SessionAuthMechanism.java`, `account/CsrfFilter.java`
+- Modify: `store/AuthorRepository.java` (user methods), `pom.xml` (add `io.quarkus:quarkus-security`, `com.password4j:password4j:1.8.4`), `application.properties` (proxy settings, body limit from Global Constraints), `src/test/java/.../TestStore.java` (`reset()` also deletes `session`, `user_token`)
 - Test: `account/PasswordsTest.java`, `account/SessionAuthTest.java`
 
 **Interfaces:**
@@ -93,9 +93,9 @@ src/test/java/site/asm0dey/stillpress/... mirrors main; TestStore gains account 
   - `V3__accounts.sql`: `ALTER TABLE author ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'author'`; `ALTER TABLE author ADD COLUMN password_hash VARCHAR(255)`; `CREATE TABLE session(id VARCHAR(64) PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES author(id), created_at TIMESTAMP NOT NULL, expires_at TIMESTAMP NOT NULL)`; `CREATE TABLE user_token(id VARCHAR(64) PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES author(id), purpose VARCHAR(20) NOT NULL, expires_at TIMESTAMP NOT NULL)`. Re-run `-Pcodegen`.
   - `enum Role { ADMINISTRATOR, EDITOR, AUTHOR, CONTRIBUTOR; String id() /* lower-case name */; static Role of(String id) /* IllegalArgumentException on unknown */ }`
   - `final class Passwords { static String hash(String password); static boolean verify(String password, String hash /* nullable → false */); static void validate(String password) /* IllegalArgumentException unless 12..1024 chars */ }` — password4j `Password.hash(pw).addRandomSalt(16).withArgon2()` with `Argon2Function.getInstance(19456, 2, 1, 32, Argon2.ID)`; verify with `Password.check(pw, hash).with(Argon2Function.getInstanceFromHash(hash))`.
-  - `@ApplicationScoped class UserRepository { Optional<AuthorRecord> findByLoginOrEmail(String s); Optional<AuthorRecord> findById(long id); List<AuthorRecord> all(); AuthorRecord create(String login, String email, String displayName, Role role) /* slug = unique Nicename.of(login) */; void setPassword(long id, String hash); void setRole(long id, Role role); boolean anyAdministratorWithPassword(); int countAdministrators(); }` — `findByLoginOrEmail` matches login exactly, else email case-insensitively when exactly one row has it.
-  - `@ApplicationScoped class SessionStore { String create(long userId) /* returns raw cookie value */; Optional<AuthorRecord> find(String rawToken) /* null/expired → empty; expired rows deleted */; void delete(String rawToken); }`
-  - `@ApplicationScoped class TokenStore { String create(long userId, String purpose, Duration ttl); Optional<Long> consume(String rawToken, String purpose) /* deletes the row; empty if unknown/expired/other purpose */ }` — purpose `"set_password"` in this plan.
+  - `store/AuthorRepository` gains (keeping its existing `findById`, `all`): `{ Optional<AuthorRecord> findByLoginOrEmail(String s); AuthorRecord create(String login, String email, String displayName, Role role) /* slug = unique Nicename.of(login) */; void setPassword(long id, String hash); void setRole(long id, Role role); boolean anyAdministratorWithPassword(); int countAdministrators(); }` — `findByLoginOrEmail` matches login exactly, else email case-insensitively when exactly one row has it.
+  - `@ApplicationScoped class SessionRepository { String create(long userId) /* returns raw cookie value */; Optional<AuthorRecord> find(String rawToken) /* null/expired → empty; expired rows deleted */; void delete(String rawToken); }`
+  - `@ApplicationScoped class TokenRepository { String create(long userId, String purpose, Duration ttl); Optional<Long> consume(String rawToken, String purpose) /* deletes the row; empty if unknown/expired/other purpose */ }` — purpose `"set_password"` in this plan.
   - `SessionAuthMechanism implements HttpAuthenticationMechanism`: reads cookie `sp_session`; no cookie → `Uni.createFrom().nullItem()` (anonymous); else delegates `SessionAuthenticationRequest(token)` to `SessionIdentityProvider`, which (on a worker via `context.runBlocking`) builds a `QuarkusSecurityIdentity` with principal = login, role = `Role.id()`, attribute `userId` (Long). `getChallenge` → 401 without `WWW-Authenticate`.
   - Static helper `SessionAuthMechanism.cookie(String raw, boolean secure) -> io.vertx.core.http.Cookie` and `clearedCookie(boolean secure)` (Max-Age 0) used by Tasks 2–3.
   - `CsrfFilter`: Vert.x route filter (`@RouteFilter`) for `/admin/api/*` enforcing the `X-Requested-With: stillpress` rule from Global Constraints → 403 `text/plain` "Missing X-Requested-With".
@@ -125,7 +125,7 @@ class PasswordsTest {
 
 // a test-only resource under src/test: @Path("/admin/api/test/whoami") @RolesAllowed("administrator") GET → principal name
 @QuarkusTest class SessionAuthTest {
-  @Inject TestStore store; @Inject UserRepository users; @Inject SessionStore sessions;
+  @Inject TestStore store; @Inject AuthorRepository users; @Inject SessionRepository sessions;
   @BeforeEach void reset() { store.reset(); }
   @Test void validSessionAuthenticates() {
     var u = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
@@ -371,7 +371,7 @@ git push
 - Test: `admin/UsersResourceTest.java`
 
 **Interfaces:**
-- Consumes: `UserRepository`, `TokenStore`, `Role`, `SettingRepository` (`home_url`).
+- Consumes: `AuthorRepository`, `TokenRepository`, `Role`, `SettingRepository` (`home_url`).
 - Produces (all `@RolesAllowed("administrator")`):
   - `GET /admin/api/users` → `[{"id","login","displayName","email","role","hasPassword"}]` ordered by login.
   - `POST /admin/api/users` `{"login","email","displayName","role"}` → 201 `{"id", "setPasswordUrl"}`; 409 `{"error":"login_taken"}`; 400 unknown role.
@@ -596,4 +596,4 @@ git push
 
 - Roadmap coverage for 02a: Mode 2 include + example + acceptance through nginx (T6, T7); wizard with one-time token, Start empty, WXR upload (T3, T5); admin at `/admin`, `/wp-admin` and `/wp-login.php` redirects (T2); Quinoa + pinned Bun with build check, ui-ux-pro-max (T3); password login with Argon2id and per-account/per-IP limits (T1, T2); multiple users with the four roles, imported authors become accounts without passwords (T1, T4, T5); server CLI password reset without SMTP (T2); server-side "import at most once", including the carried-over "check more than items" item (T5).
 - Left for 02b: editor, WP REST slice (`/wp-json` joins `DYNAMIC_PREFIXES` there), statuses and scheduling, incremental and background republish, preview, media library, reusable-block editor, revisions, admin i18n, role capabilities beyond "administrator manages users and import".
-- Left for 02c: TOTP, passkeys, mandatory 2FA, CAPTCHA (`none|turnstile|altcha`) on login/reset/setup, SMTP settings, email reset and invites (they reuse `TokenStore` and the set-password page).
+- Left for 02c: TOTP, passkeys, mandatory 2FA, CAPTCHA (`none|turnstile|altcha`) on login/reset/setup, SMTP settings, email reset and invites (they reuse `TokenRepository` and the set-password page).
