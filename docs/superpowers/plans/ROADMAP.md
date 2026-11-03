@@ -32,6 +32,11 @@ Migration order from the spec (§10): the blog site goes first (plans 01-04), th
 - Multiple users with roles (administrator, editor, author, contributor); imported authors become accounts that set passwords by invite or reset (§6.2.2, §10).
 - Item statuses (draft, pending review, scheduled, published, private) and scheduled publishing (§6.2.1, §11).
 - Publish/Update with incremental republish and dependency tracking (item, listings, archives, feeds, items using an edited reusable block) (§6.2 item 8, §6.2.1, §12).
+  - Recommended approach (agreed 2026-11-03). A new post shifts every pagination page of every listing it lands in: home, category, tag, author and date archives. At 1,000 pages × 10 posts that is ~1,000–1,500 files per publish, so:
+    - cache one list-entry fragment per post (title, link, date, excerpt as ready HTML), rebuilt only when that post changes;
+    - assemble each pagination page by concatenating cached fragments into the layout: no block rendering or per-post queries;
+    - build the new release by hard-linking every unchanged file from the previous one and writing only changed files, so the atomic swap stays cheap on large sites.
+  - Rejected: numbering pages from the oldest post (breaks WordPress `/page/N/` URL parity); rebuilding only the first few pages eagerly (readers would see mismatched pages, breaking the always-complete release); client-side pagination from a JSON index (no JavaScript means no page; bad for SEO and old links).
 - Background full-site republish with progress in the admin (§6.2.1).
 - Preview rendered on the fly for logged-in users, never written to output (§6.2.1).
 - Revisions and autosave with compare, restore and 25-per-object retention; covers items and reusable blocks now, and templates and style overrides when plan 03 creates them (§6.2.6).
