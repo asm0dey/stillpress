@@ -1,0 +1,6 @@
+spike/
+.quinoa/
+target/
+node_modules/
+.idea/
+.claude/
