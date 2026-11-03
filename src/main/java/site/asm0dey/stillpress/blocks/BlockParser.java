@@ -2,21 +2,16 @@ package site.asm0dey.stillpress.blocks;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import module java.base;
 
 /** Port of WordPress's WP_Block_Parser. Never throws on malformed input. */
 public final class BlockParser {
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  // [^}]++ is possessive to avoid StackOverflowError on long attribute JSON.
-  private static final Pattern DELIM = Pattern.compile(
-      "<!--\\s+(?<closer>/)?wp:(?<namespace>[a-z][a-z0-9_-]*/)?(?<name>[a-z][a-z0-9_-]*)\\s+"
-          + "(?<attrs>\\{(?:(?:[^}]++|}+(?=})|(?!}\\s+/?-->).)*)?}\\s+)?(?<void>/)?-->",
-      Pattern.DOTALL);
+  // The attrs JSON is located by hand (first '}' followed by "\s+/?-->"), so no regex recursion grows with input size.
+  private static final Pattern HEAD = Pattern.compile(
+      "<!--\\s+(?<closer>/)?wp:(?<namespace>[a-z][a-z0-9_-]*/)?(?<name>[a-z][a-z0-9_-]*)\\s+");
+  private static final Pattern ATTRS_END = Pattern.compile("}\\s+(?<void>/)?-->");
+  private static final Pattern TAIL = Pattern.compile("(?<void>/)?-->");
 
   private record Frame(Block block, int tokenStart, int tokenLength, int leadingStart, int[] prevOffset) {}
 
@@ -29,25 +24,44 @@ public final class BlockParser {
 
   public static List<Block> parse(String document) {
     var p = new BlockParser(document == null ? "" : document);
-    var m = DELIM.matcher(p.doc);
-    try {
-      while (p.step(m)) { /* until done */ }
-    } catch (StackOverflowError e) {
-      p.stack.clear();
-      p.addFreeform();
-    }
+    while (p.step()) { /* until done */ }
     return p.output;
   }
 
-  private boolean step(Matcher m) {
-    if (!m.find(offset)) {
+  /** Delimiter found at {@code start..end}. */
+  private record Token(int start, int end, boolean closer, boolean isVoid, String name, String attrs) {}
+
+  private Token nextToken() {
+    var head = HEAD.matcher(doc);
+    var attrsEnd = ATTRS_END.matcher(doc);
+    var tail = TAIL.matcher(doc);
+    for (int from = offset; head.find(from); from = head.start() + 1) {
+      int p = head.end();
+      String attrs = null;
+      Matcher end;
+      if (p < doc.length() && doc.charAt(p) == '{' && attrsEnd.find(p)) {
+        attrs = doc.substring(p, attrsEnd.start() + 1);
+        end = attrsEnd;
+      } else if (tail.region(p, doc.length()).lookingAt()) {
+        end = tail;
+      } else continue;
+      String ns = head.group("namespace");
+      return new Token(head.start(), end.end(), head.group("closer") != null, end.group("void") != null,
+          (ns == null ? "core/" : ns) + head.group("name"), attrs);
+    }
+    return null;
+  }
+
+  private boolean step() {
+    var t = nextToken();
+    if (t == null) {
       if (stack.isEmpty()) addFreeform();
       else while (!stack.isEmpty()) addBlockFromStack(-1); // implicit closers
       return false;
     }
-    int start = m.start(), length = m.end() - start;
-    var block = newBlock(m);
-    if (m.group("closer") != null) {
+    int start = t.start(), length = t.end() - start;
+    var block = newBlock(t);
+    if (t.closer()) {
       if (stack.isEmpty()) { addFreeform(); return false; }
       if (stack.size() == 1) {
         addBlockFromStack(start);
@@ -56,7 +70,7 @@ public final class BlockParser {
         appendHtml(top.block, doc.substring(top.prevOffset[0], start));
         addInnerBlock(top.block, top.tokenStart, top.tokenLength, start + length);
       }
-    } else if (m.group("void") != null) {
+    } else if (t.isVoid()) {
       if (stack.isEmpty()) {
         if (start > offset) output.add(freeform(doc.substring(offset, start)));
         output.add(block);
@@ -71,12 +85,11 @@ public final class BlockParser {
     return true;
   }
 
-  private static Block newBlock(Matcher m) {
-    String ns = m.group("namespace");
-    var name = (ns == null ? "core/" : ns) + m.group("name");
+  private static Block newBlock(Token t) {
+    var name = t.name();
     JsonNode attrs = null;
-    if (m.group("attrs") != null) {
-      try { attrs = MAPPER.readTree(m.group("attrs").trim()); } catch (Exception e) { /* invalid JSON -> empty */ }
+    if (t.attrs() != null) {
+      try { attrs = MAPPER.readTree(t.attrs()); } catch (Exception e) { /* invalid JSON -> empty */ }
     }
     if (attrs == null || !attrs.isObject()) attrs = MAPPER.createObjectNode();
     return new Block(name, attrs, new ArrayList<>(), new ArrayList<>());

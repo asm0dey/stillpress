@@ -1,10 +1,7 @@
 package site.asm0dey.stillpress.config;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import module java.base;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @ApplicationScoped

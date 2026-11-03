@@ -36,8 +36,22 @@ class BlockParserTest {
     assertThat(BlockParser.parse("<!-- wp:jetpack/tiled-gallery {\"columnWidths\":[[50,50]]} --><div></div><!-- /wp:jetpack/tiled-gallery -->")
       .getFirst().name()).isEqualTo("jetpack/tiled-gallery");
   }
-  @Test void unclosedBlockBecomesFreeformNotException() {
-    assertThat(BlockParser.parse("<!-- wp:paragraph --><p>x</p>")).isNotEmpty();
+  @Test void unclosedBlockIsImplicitlyClosed() {
+    assertThat(BlockParser.parse("<!-- wp:paragraph --><p>x</p>")).singleElement().satisfies(x -> {
+      assertThat(x.name()).isEqualTo("core/paragraph");
+      assertThat(x.innerHtml()).isEqualTo("<p>x</p>");
+    });
+  }
+  @Test void hugeUnterminatedAttrsDoNotOverflowOrLoseBytes() {
+    var doc = "<p>lead</p><!-- wp:x {\"a\":1 " + "} a ".repeat(100_000);
+    var out = BlockParser.parse(doc);
+    assertThat(out).hasSize(1);
+    assertThat(out.getFirst().name()).isNull();
+    assertThat(out.getFirst().innerHtml()).isEqualTo(doc);
+  }
+  @Test void unclosedBlockWithLeadingHtmlLosesNothing() {
+    var out = BlockParser.parse("lead<!-- wp:a --><p>x</p><!-- wp:b -->y");
+    assertThat(out).extracting(Block::name).containsExactlyInAnyOrder(null, "core/b", "core/a");
   }
   @Test void trailingFreeformAndStrayCloserAndBadJson() {
     var b = BlockParser.parse("<!-- wp:html {bad} --><i/><!-- /wp:html -->tail<!-- /wp:x -->");

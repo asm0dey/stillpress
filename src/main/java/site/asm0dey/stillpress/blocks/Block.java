@@ -1,7 +1,7 @@
 package site.asm0dey.stillpress.blocks;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.util.List;
+import module java.base;
 
 /** Parsed WordPress block. {@code name == null} is freeform HTML; {@code innerContent} holds one {@code null} per inner block. */
 public record Block(String name, JsonNode attrs, List<Block> innerBlocks, List<String> innerContent) {
