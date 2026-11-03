@@ -18,6 +18,20 @@ public final class Permalinks {
     }
 
     /**
+     * Percent-decodes UTF-8 ({@code +} stays a plus); text that is not valid percent-encoding is returned as is.
+     */
+    public static String decode(String encoded) {
+        if (encoded == null || encoded.indexOf('%') < 0) {
+            return encoded;
+        }
+        try {
+            return URLDecoder.decode(encoded.replace("+", "%2B"), StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return encoded;
+        }
+    }
+
+    /**
      * Percent-encodes everything except RFC 3986 unreserved characters and {@code '/'}, with lowercase hex like WordPress.
      */
     public static String encode(String decodedPath) {

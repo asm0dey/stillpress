@@ -20,4 +20,11 @@ class PermalinksTest {
         assertThat(Permalinks.toFile(root, "/")).isEqualTo(Path.of("/out/index.html"));
         assertThatThrownBy(() -> Permalinks.toFile(root, "/../etc/")).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void decodeKeepsPlusAndMalformedInput() {
+        assertThat(Permalinks.decode("%d0%bf%d1%80%d0%b8")).isEqualTo("при");
+        assertThat(Permalinks.decode("a+b%20c")).isEqualTo("a+b c");
+        assertThat(Permalinks.decode("100%")).isEqualTo("100%");
+    }
 }

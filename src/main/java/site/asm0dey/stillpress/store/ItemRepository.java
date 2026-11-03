@@ -13,12 +13,12 @@ public class ItemRepository {
     DSLContext db;
 
     /**
-     * Published posts and pages, newest first.
+     * Published, non-password-protected posts and pages, newest first.
      */
     public List<ItemRecord> findPublished() {
         return db
             .selectFrom(ITEM)
-            .where(ITEM.STATUS.eq("publish"), ITEM.TYPE.in("post", "page"))
+            .where(ITEM.STATUS.eq("publish"), ITEM.TYPE.in("post", "page"), ITEM.PASSWORD_PROTECTED.isFalse())
             .orderBy(ITEM.PUBLISHED_AT.desc())
             .fetch();
     }

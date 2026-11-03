@@ -25,7 +25,10 @@ class HttpMediaFetcherTest {
     @Test
     void followsRedirectsAndReportsMissing() {
         wm.stubFor(get("/old.jpg").willReturn(permanentRedirect("/a.jpg")));
-        wm.stubFor(get("/a.jpg").willReturn(ok().withBody(new byte[] {7, 8})));
+        wm.stubFor(get("/a.jpg")
+            .withHeader("User-Agent", containing("Mozilla/5.0"))
+            .willReturn(ok().withBody(new byte[] {7, 8}))
+        );
         wm.stubFor(get("/gone.jpg").willReturn(notFound()));
         var f = new HttpMediaFetcher();
         assertThat(f.fetch(URI.create(wm.url("/old.jpg")))).hasValueSatisfying(b -> assertThat(b).containsExactly(7, 8));

@@ -27,6 +27,9 @@ public class WordPressImporter {
     private static final Pattern SIZE_VARIANT = Pattern.compile("-\\d+x\\d+(?=\\.[^./]+$)");
     private static final Pattern DATED = Pattern.compile("^(\\d{4})/(\\d{2})/");
     private static final String UPLOADS = "/wp-content/uploads/";
+    // no '&': WordPress strips it from upload names, and it would swallow a following &quot;
+    private static final String URL_CHARS = "[^\\s\"'<>()\\[\\]\\\\?#&]+";
+    private static final Pattern ANY_UPLOAD = Pattern.compile("(?:https?:)?//" + URL_CHARS + UPLOADS + URL_CHARS);
     @Inject
     DSLContext db;
     @Inject
@@ -58,8 +61,9 @@ public class WordPressImporter {
     private record PendingItem(long id, long sourceId, String type, String permalink, long parentSourceId) {}
 
     private final class Run implements WxrHandler {
-        private String home = "";
+        private String homeScheme = "https", homeAuth = "", siteAuth = "";
         private Pattern uploadUrl;
+        private final Set<String> authorSlugs = new HashSet<>();
         private final Map<String, Long> authorIds = new HashMap<>();
         private final List<PendingTerm> pendingTerms = new ArrayList<>();
         private final List<PendingItem> pendingItems = new ArrayList<>();
@@ -72,8 +76,24 @@ public class WordPressImporter {
 
         @Override
         public void site(WxrSite site) {
-            home = Objects.requireNonNullElse(site.link(), "").replaceFirst("/+$", "");
-            uploadUrl = Pattern.compile(Pattern.quote(home + UPLOADS) + "[^\\s\"'<>()\\[\\]\\\\?#]+");
+            var home = Objects.requireNonNullElse(site.link(), "").replaceFirst("/+$", "");
+            var homeUri = URI.create(home);
+            var siteUri = URI.create(Objects.requireNonNullElse(site.baseSiteUrl(), home).replaceFirst("/+$", ""));
+            homeScheme = Objects.requireNonNullElse(homeUri.getScheme(), "https");
+            homeAuth = Objects.requireNonNullElse(homeUri.getRawAuthority(), "");
+            siteAuth = Objects.requireNonNullElse(siteUri.getRawAuthority(), homeAuth);
+            var sitePath = Objects.requireNonNullElse(siteUri.getRawPath(), "");
+            // any scheme or none, optional www., home or site host, optional WP-in-subdirectory path
+            uploadUrl = Pattern.compile(
+                    "(?:https?:)?//(?:www\\.)?(?:"
+                    + Pattern.quote(noWww(homeAuth))
+                    + "|"
+                    + Pattern.quote(noWww(siteAuth))
+                    + ")"
+                    + (sitePath.isEmpty() ? "" : "(?:" + Pattern.quote(sitePath) + ")?")
+                    + Pattern.quote(UPLOADS)
+                    + URL_CHARS
+            );
             settings.put("title", site.title());
             settings.put("description", site.description());
             settings.put("language", site.language());
@@ -89,10 +109,25 @@ public class WordPressImporter {
             r.setLogin(a.login());
             r.setDisplayName(a.displayName());
             r.setEmail(a.email());
-            r.setSlug(a.login());
+            r.setSlug(uniqueAuthorSlug(a));
             r.setSourceId(a.id());
             r.store();
             authorIds.put(a.login(), r.getId());
+        }
+
+        /**
+         * {@code wp_insert_user}: nicename, then {@code -2}, {@code -3}... on collision.
+         */
+        private String uniqueAuthorSlug(WxrAuthor a) {
+            var base = Nicename.of(a.login());
+            if (base.isEmpty()) {
+                base = "author-" + a.id();
+            }
+            var slug = base;
+            for (int n = 2; !authorSlugs.add(slug); n++) {
+                slug = base + "-" + n;
+            }
+            return slug;
         }
 
         @Override
@@ -101,11 +136,11 @@ public class WordPressImporter {
             r.setSourceId(t.id());
             r.setTaxonomy(t.taxonomy());
             r.setName(t.name());
-            r.setSlug(t.slug());
+            r.setSlug(Permalinks.decode(t.slug()));
             r.setDescription(t.description());
             r.store();
             if (t.parentSlug() != null && !t.parentSlug().isBlank()) {
-                pendingTerms.add(new PendingTerm(r.getId(), t.taxonomy(), t.parentSlug()));
+                pendingTerms.add(new PendingTerm(r.getId(), t.taxonomy(), Permalinks.decode(t.parentSlug())));
             }
         }
 
@@ -118,6 +153,7 @@ public class WordPressImporter {
                     r.setSourceId(i.postId());
                     r.setTitle(i.title());
                     r.setContent(localize(i.content()).rewrite(Objects.requireNonNullElse(i.content(), "")));
+                    reportLeftovers(r.getContent());
                     r.store();
                     reusableCount++;
                 }
@@ -138,8 +174,10 @@ public class WordPressImporter {
                     }
                 }
             }
-            if (i.attachmentUrl() != null && !i.attachmentUrl().isBlank()) {
-                ensureMedia(i.attachmentUrl());
+            var attachment =
+                    i.attachmentUrl() == null || i.attachmentUrl().isBlank() ? null : sourceKey(i.attachmentUrl());
+            if (attachment != null && ensureMedia(attachment) == null) {
+                missingMedia.add(attachment);
             }
             var rewriter = localize(content, i.excerpt());
             var permalink = permalinkOf(i.link());
@@ -150,11 +188,12 @@ public class WordPressImporter {
             r.setStatus(i.status());
             r.setPasswordProtected(i.password() != null && !i.password().isBlank());
             r.setTitle(i.title());
-            r.setSlug(i.postName());
+            r.setSlug(Permalinks.decode(i.postName()));
             r.setPermalink(permalink);
             r.setBody(rewriter.rewrite(content));
             r.setBodyFormat(blocks ? "blocks" : "classic");
             r.setExcerpt(rewriter.rewrite(i.excerpt()));
+            reportLeftovers(r.getBody(), r.getExcerpt());
             r.setAuthorId(authorIds.get(i.creator()));
             r.setPublishedAt(utc(i.postDateGmt()));
             r.setModifiedAt(utc(i.modifiedGmt()));
@@ -168,12 +207,15 @@ public class WordPressImporter {
             long id = r.getId();
             itemCount++;
 
-            if (i.attachmentUrl() != null) {
-                db.update(MEDIA).set(MEDIA.ITEM_ID, id).where(MEDIA.SOURCE_URL.eq(i.attachmentUrl())).execute();
+            if (attachment != null) {
+                db.update(MEDIA).set(MEDIA.ITEM_ID, id).where(MEDIA.SOURCE_URL.eq(attachment)).execute();
             }
             linkTerms(id, i.terms());
             importComments(id, i);
-            if (permalink != null && !i.postType().equals("attachment")) {
+            // redirects only lead to pages that will be published
+            if (permalink != null
+                    && !i.postType().equals("attachment")
+                    && publishable(r.getStatus(), r.getPasswordProtected())) {
                 redirect("?p=" + i.postId(), permalink);
                 if (i.postType().equals("page")) {
                     redirect("?page_id=" + i.postId(), permalink);
@@ -199,13 +241,14 @@ public class WordPressImporter {
         private void linkTerms(long itemId, List<WxrTermRef> refs) {
             var seen = new HashSet<Long>();
             for (var ref : refs) {
-                var termId = db.fetchValue(TERM.ID, TERM.TAXONOMY.eq(ref.domain()).and(TERM.SLUG.eq(ref.nicename())));
+                var slug = Permalinks.decode(ref.nicename());
+                var termId = db.fetchValue(TERM.ID, TERM.TAXONOMY.eq(ref.domain()).and(TERM.SLUG.eq(slug)));
                 if (termId == null) {
                     // terms used inline but absent from the header (e.g. post_format) still get a row
                     var t = db.newRecord(TERM);
                     t.setTaxonomy(ref.domain());
-                    t.setName(ref.nicename());
-                    t.setSlug(ref.nicename());
+                    t.setName(slug);
+                    t.setSlug(slug);
                     t.store();
                     termId = t.getId();
                 }
@@ -263,15 +306,49 @@ public class WordPressImporter {
                     }
                     var m = uploadUrl.matcher(text);
                     while (m.find()) {
-                        var original = SIZE_VARIANT.matcher(m.group().replaceFirst("[.,;:!]+$", "")).replaceFirst("");
-                        var local = ensureMedia(original);
+                        var raw = m.group().replaceFirst("[.,;:!]+$", "");
+                        var key = SIZE_VARIANT.matcher(raw).replaceFirst("");
+                        var local = ensureMedia(sourceKey(key));
+                        if (local == null && !key.equals(raw)) {
+                            // a real original named like a size variant (screenshot-1920x1080.png)
+                            key = raw;
+                            local = ensureMedia(sourceKey(raw));
+                        }
                         if (local != null) {
-                            map.put(original, local);
+                            map.put(key, local);
                         }
                     }
                 }
             }
             return new MediaRewriter(map);
+        }
+
+        /**
+         * Every upload URL still in the text after rewriting is hotlinked; report it instead of leaving it silently.
+         */
+        private void reportLeftovers(String... texts) {
+            for (var text : texts) {
+                if (text != null) {
+                    var m = ANY_UPLOAD.matcher(text);
+                    while (m.find()) {
+                        missingMedia.add(m.group().replaceFirst("[.,;:!]+$", ""));
+                    }
+                }
+            }
+        }
+
+        /**
+         * Dedupe and fetch key for an upload URL: this site's uploads get the home scheme and canonical host, so
+         * http, https, protocol-relative and www. spellings share one MEDIA row. Other URLs are kept as written.
+         */
+        private String sourceKey(String url) {
+            if (uploadUrl == null || !uploadUrl.matcher(url).matches()) {
+                return url;
+            }
+            int start = url.indexOf("//") + 2;
+            int slash = url.indexOf('/', start);
+            var auth = noWww(url.substring(start, slash)).equals(noWww(homeAuth)) ? homeAuth : siteAuth;
+            return homeScheme + "://" + auth + url.substring(slash);
         }
 
         /**
@@ -293,7 +370,6 @@ public class WordPressImporter {
             r.setSourceUrl(original);
             if (bytes.isEmpty()) {
                 r.store();
-                missingMedia.add(original);
                 return null;
             }
             var decoded = Permalinks.decodedPath(original);
@@ -343,9 +419,8 @@ public class WordPressImporter {
                 }
             }
             for (var p : pendingItems) {
-                var parent =
-                        db
-                    .select(ITEM.ID, ITEM.PERMALINK)
+                var parent = db
+                    .select(ITEM.ID, ITEM.PERMALINK, ITEM.STATUS, ITEM.PASSWORD_PROTECTED)
                     .from(ITEM)
                     .where(ITEM.SOURCE_ID.eq(p.parentSourceId()))
                     .fetchOne();
@@ -353,7 +428,9 @@ public class WordPressImporter {
                     continue;
                 }
                 db.update(ITEM).set(ITEM.PARENT_ID, parent.value1()).where(ITEM.ID.eq(p.id())).execute();
-                if (p.type().equals("attachment") && parent.value2() != null) {
+                if (p.type().equals("attachment")
+                        && parent.value2() != null
+                        && publishable(parent.value3(), parent.value4())) {
                     if (p.permalink() != null) {
                         redirect(p.permalink(), parent.value2());
                     }
@@ -385,6 +462,17 @@ public class WordPressImporter {
             return null;
         }
         return Permalinks.decodedPath(link);
+    }
+
+    /**
+     * Private, draft, pending and password-protected items are never published.
+     */
+    static boolean publishable(String status, Boolean passwordProtected) {
+        return "publish".equals(status) && !Boolean.TRUE.equals(passwordProtected);
+    }
+
+    private static String noWww(String authority) {
+        return authority.startsWith("www.") ? authority.substring(4) : authority;
     }
 
     private static LocalDateTime utc(Instant i) {

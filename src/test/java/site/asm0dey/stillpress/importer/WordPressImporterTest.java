@@ -48,7 +48,7 @@ class WordPressImporterTest {
 
     @AfterEach
     void restoreFetcher() {
-        fetcher.failOn(null);
+        fetcher.reset();
     }
 
     @Test
@@ -65,6 +65,8 @@ class WordPressImporterTest {
         assertThat(items.findByPermalink(MONTH)).isPresent();
         assertThat(items.findByPermalink(MONTH).orElseThrow().getBody()).doesNotContain("wp-content/uploads");
         assertThat(redirects.find("?p=5994").orElseThrow().getToPath()).isEqualTo(MONTH);
+        assertThat(redirects.find("?p=102")).as("password-protected target").isEmpty();
+        assertThat(redirects.find("?p=101")).as("draft").isEmpty();
         assertThat(redirects.find("?page_id=2").orElseThrow().getToPath()).isEqualTo("/about/");
         assertThat(redirects.find("/2020/05/10/qa/c/").orElseThrow().getToPath()).isEqualTo("/2020/05/10/qa/");
         assertThat(redirects.find("?attachment_id=7").orElseThrow().getToPath()).isEqualTo("/2020/05/10/qa/");
@@ -100,7 +102,7 @@ class WordPressImporterTest {
         assertThat(db.fetchValue(COMMENT.STATUS, COMMENT.SOURCE_ID.eq(3L))).isEqualTo("spam");
         assertThat(items.findPublished())
             .extracting(r -> r.getSourceId())
-            .containsExactlyInAnyOrder(5994L, 100L, 2L, 102L);
+            .containsExactlyInAnyOrder(5994L, 100L, 2L);
     }
 
     @Test
@@ -123,5 +125,142 @@ class WordPressImporterTest {
         for (var t : List.of(ITEM, TERM, ITEM_TERM, AUTHOR, REUSABLE_BLOCK, COMMENT, MEDIA, REDIRECT, SETTING)) {
             assertThat(db.fetchCount(t)).as(t.getName()).isZero();
         }
+    }
+
+    static final String HOME = "https://blog.example.ru";
+
+    /**
+     * Minimal WXR: one author, one percent-encoded category, one published post with the given content.
+     */
+    static InputStream wxr(String home, String siteUrl, String content) {
+        var xml = """
+                <?xml version="1.0" encoding="UTF-8" ?>
+                <rss version="2.0" xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
+                  xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/"
+                  xmlns:wp="http://wordpress.org/export/1.2/">
+                <channel>
+                  <title>T</title><link>%1$s</link><description>D</description><language>ru-RU</language>
+                  <wp:wxr_version>1.2</wp:wxr_version>
+                  <wp:base_site_url>%2$s</wp:base_site_url><wp:base_blog_url>%1$s</wp:base_blog_url>
+                  <wp:author><wp:author_id>5</wp:author_id><wp:author_login><![CDATA[Pavel.Doe]]></wp:author_login><wp:author_email><![CDATA[p@example.ru]]></wp:author_email><wp:author_display_name><![CDATA[Pavel]]></wp:author_display_name></wp:author>
+                  <wp:category><wp:term_id>30</wp:term_id><wp:category_nicename><![CDATA[%%d0%%bf%%d1%%80%%d0%%b8]]></wp:category_nicename><wp:category_parent><![CDATA[]]></wp:category_parent><wp:cat_name><![CDATA[При]]></wp:cat_name></wp:category>
+                  <item>
+                    <title><![CDATA[P]]></title>
+                    <link>%1$s/2024/01/01/%%d0%%bf%%d1%%80%%d0%%b8/</link>
+                    <dc:creator><![CDATA[Pavel.Doe]]></dc:creator>
+                    <guid isPermaLink="false">%1$s/?p=1</guid>
+                    <content:encoded><![CDATA[%3$s]]></content:encoded>
+                    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+                    <wp:post_id>1</wp:post_id>
+                    <wp:post_date_gmt><![CDATA[2024-01-01 00:00:00]]></wp:post_date_gmt>
+                    <wp:post_modified_gmt><![CDATA[2024-01-01 00:00:00]]></wp:post_modified_gmt>
+                    <wp:comment_status><![CDATA[open]]></wp:comment_status>
+                    <wp:post_name><![CDATA[%%d0%%bf%%d1%%80%%d0%%b8]]></wp:post_name>
+                    <wp:status><![CDATA[publish]]></wp:status>
+                    <wp:post_parent>0</wp:post_parent>
+                    <wp:menu_order>0</wp:menu_order>
+                    <wp:post_type><![CDATA[post]]></wp:post_type>
+                    <wp:post_password><![CDATA[]]></wp:post_password>
+                    <category domain="category" nicename="%%d0%%bf%%d1%%80%%d0%%b8"><![CDATA[При]]></category>
+                  </item>
+                </channel>
+                </rss>
+                """
+            .formatted(home, siteUrl, content);
+        return new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8));
+    }
+
+    String importedBody(ImportReport report) {
+        assertThat(report.missingMedia()).as("missing").isEmpty();
+        return db.fetchValue(ITEM.BODY, ITEM.SOURCE_ID.eq(1L));
+    }
+
+    @Test
+    void httpLinkOnHttpsHomeSharesOneMediaRow() throws Exception {
+        var body = importedBody(importer.importWxr(
+                wxr(
+                        HOME,
+                        HOME,
+                        "<img src=\"http://blog.example.ru/wp-content/uploads/2024/01/h.jpg\"> "
+                        + "<img src=\"https://blog.example.ru/wp-content/uploads/2024/01/h-300x200.jpg\">"
+                )
+        ));
+        assertThat(body).doesNotContain("wp-content/uploads").contains("/media/2024/01/");
+        assertThat(fetcher.fetched()).containsExactly(HOME + "/wp-content/uploads/2024/01/h.jpg");
+        assertThat(db.fetchCount(MEDIA)).isEqualTo(1);
+    }
+
+    @Test
+    void protocolRelativeAndWwwLinksFetchedOverHomeScheme() throws Exception {
+        var body = importedBody(importer.importWxr(
+                wxr(
+                        HOME,
+                        HOME,
+                        "<img src=\"//blog.example.ru/wp-content/uploads/2024/01/p.jpg\"> "
+                        + "<img src=\"https://www.blog.example.ru/wp-content/uploads/2024/01/w.jpg\">"
+                )
+        ));
+        assertThat(body).doesNotContain("wp-content/uploads");
+        assertThat(fetcher.fetched())
+            .containsExactly(HOME + "/wp-content/uploads/2024/01/p.jpg", HOME + "/wp-content/uploads/2024/01/w.jpg");
+    }
+
+    @Test
+    void subdirectorySiteUrlMatched() throws Exception {
+        var body = importedBody(importer.importWxr(
+                wxr(
+                        "https://example.ru",
+                        "https://example.ru/wp",
+                        "<img src=\"https://example.ru/wp/wp-content/uploads/2024/01/s.jpg\"> "
+                        + "<img src=\"https://example.ru/wp-content/uploads/2024/01/t.jpg\">"
+                )
+        ));
+        assertThat(body).doesNotContain("wp-content/uploads");
+        assertThat(fetcher.fetched())
+            .containsExactly(
+                    "https://example.ru/wp/wp-content/uploads/2024/01/s.jpg",
+                    "https://example.ru/wp-content/uploads/2024/01/t.jpg"
+            );
+    }
+
+    @Test
+    void leftoverUploadUrlsAreReportedMissing() throws Exception {
+        var report =
+                importer.importWxr(
+                        wxr(HOME, HOME, "<img src=\"https://cdn.other.net/wp-content/uploads/2024/01/x.jpg\">")
+        );
+        assertThat(report.missingMedia()).containsExactly("https://cdn.other.net/wp-content/uploads/2024/01/x.jpg");
+    }
+
+    @Test
+    void entityAfterUrlIsNotCaptured() throws Exception {
+        var body = importedBody(importer.importWxr(
+                wxr(
+                        HOME,
+                        HOME,
+                        "<div data-x=\"{&quot;u&quot;:&quot;https://blog.example.ru/wp-content/uploads/2024/01/q.jpg&quot;}\"></div>"
+                )
+        ));
+        assertThat(fetcher.fetched()).containsExactly(HOME + "/wp-content/uploads/2024/01/q.jpg");
+        assertThat(body).contains("q.jpg&quot;}").doesNotContain("wp-content/uploads");
+    }
+
+    @Test
+    void originalNamedLikeSizeVariantFallsBackToItself() throws Exception {
+        fetcher.missing("/2024/01/shot.png");
+        var body = importedBody(importer.importWxr(
+                wxr(HOME, HOME, "<img src=\"https://blog.example.ru/wp-content/uploads/2024/01/shot-1920x1080.png\">")
+        ));
+        assertThat(body).doesNotContain("wp-content/uploads").contains("-shot-1920x1080.png");
+    }
+
+    @Test
+    void slugsStoredDecodedAndAuthorSlugIsNicename() throws Exception {
+        importer.importWxr(wxr(HOME, HOME, "x"));
+        assertThat(db.fetchValue(ITEM.SLUG, ITEM.SOURCE_ID.eq(1L))).isEqualTo("при");
+        assertThat(db.fetchValue(TERM.SLUG, TERM.SOURCE_ID.eq(30L))).isEqualTo("при");
+        assertThat(terms.forItem(db.fetchValue(ITEM.ID, ITEM.SOURCE_ID.eq(1L)))).hasSize(1);
+        assertThat(db.fetchCount(TERM)).isEqualTo(1);
+        assertThat(db.fetchValue(AUTHOR.SLUG, AUTHOR.LOGIN.eq("Pavel.Doe"))).isEqualTo("pavel-doe");
     }
 }
