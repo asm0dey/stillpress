@@ -161,12 +161,8 @@ without PHP.
    republish on change (a post edit re-renders that post plus the listing
    pages, feeds, and pages embedding a changed reusable block). Full
    rebuild on theme/settings change.
-9. **Serving — two supported modes:**
-   - **Mode 1 (default): Stillpress serves everything** — static files from
-     its output directory plus all dynamic paths; any reverse proxy (e.g.
-     nginx-proxy-manager) only terminates TLS and forwards. Simplest; the
-     site is down while Stillpress is down.
-   - **Mode 2: nginx serves static files directly** from the output
+9. **Serving — two supported modes** (ADR 0004):
+   - **Mode 2 (default): nginx serves static files directly** from the output
      directory (shared read-only volume) and proxies only dynamic traffic
      to Stillpress: `/admin`, `/wp-admin`, `/wp-login.php`, admin API,
      preview, comment submission, ALTCHA challenge, `/podcast-download/`,
@@ -180,6 +176,11 @@ without PHP.
    - In Mode 2 readers keep the whole site while Stillpress restarts; only
      admin, new comments and download counting pause (audio links fall
      back to nginx's static copy).
+   - **Mode 1 (simple option): Stillpress serves everything** — static files
+     from its output directory plus all dynamic paths; any reverse proxy
+     (e.g. nginx-proxy-manager) only terminates TLS and forwards. Least
+     setup; the site is down while Stillpress is down. Stillpress always
+     answers the paths nginx falls back to, so Mode 1 costs nothing extra.
 10. **Admin per domain (decided)** — every site's admin lives on that
     site's own domain at **`/admin`** (like `/wp-admin`); `/wp-admin` and
     `/wp-login.php` redirect there. Login sessions are per domain.

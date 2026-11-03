@@ -11,11 +11,12 @@ Migration order from the spec (§10): the blog site goes first (plans 01-04), th
 - One-shot WXR import (streaming) with media download, URL rewriting, authors, terms, comments and import report.
 - Permalinks, redirect map, and "never publish drafts, private or password-protected items".
 - Minimal built-in "plain" layout, archives, pagination, RSS feeds, comment feeds with the source GUIDs.
-- Atomic static publish into `output/current` and Mode 1 serving with redirect fallback and 404.
+- Atomic static publish into `output/current` and the Stillpress-side serving every mode needs: files, redirect map and 404 (this is Mode 1, and the fallback target in Mode 2).
 - `verify-urls` crawler (cutover check 1 of §12.1).
 
 ## Plan 02: Admin & editing
 
+- Serving Mode 2, the default: one-time generated nginx include (static root at `output/current`, `try_files $uri $uri/ @stillpress` fallback, proxied `/admin`, login, API, preview and legacy query URLs) plus an example nginx setup; the acceptance run goes through nginx (§6.2 item 9, ADR 0004). Mode 1 (Stillpress serves everything) ships in plan 01 and stays supported.
 - Setup wizard at `/admin` with one-time setup token; wizard screens for Start empty and WXR upload (§6.4).
 - Admin on each site's own domain at `/admin`; `/wp-admin` and `/wp-login.php` redirect there (§6.2 item 10).
 - Admin front end: Quinoa + Bun (pinned equal to `mise.toml`, with a build check), ui-ux-pro-max design (§6.1, §6.2 item 3).
@@ -78,7 +79,6 @@ Migration order from the spec (§10): the blog site goes first (plans 01-04), th
 - REST import with an application password, covering settings, menus, widgets, global styles, templates, navigation and custom CSS (§6.2 item 4, §10; assignment is a judgement call).
 - Export helper WordPress plugin, shipped as a zip with each release, and the importer for its bundle (§6.2.5, §10).
 - Import report completeness for the blog's content: unknown blocks, shortcodes, missing media, password-protected items (§6.2 item 4, §4).
-- Serving Mode 2: one-time generated nginx include with `try_files` fallback and proxied dynamic paths (§6.2 item 9; assignment is a judgement call).
 - Distribution: multi-arch JVM image on GHCR and example `compose.yaml` with optional PostgreSQL and nginx (§6.2.5; assignment is a judgement call).
 - Cutover gate checks 2-5 for the blog: screenshot diff, counts match, feed GUIDs match, hands-on session (§12.1).
 
