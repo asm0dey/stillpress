@@ -39,6 +39,18 @@
       "depNameTemplate": "liberica-jdk",
       "datasourceTemplate": "custom.liberica",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+)(?:\\.(?<revision>\\d+))?)?\\+\\d+$"
+    },
+    {
+      "description": "The Prince of Space version sits inside Spotless's configuration, where the Maven manager does not look.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^pom\\.xml$/"
+      ],
+      "matchStrings": [
+        "<princeOfSpace>\\s*<version>(?<currentValue>[^<]+)</version>"
+      ],
+      "depNameTemplate": "io.github.agustafson.princeofspace:prince-of-space-core",
+      "datasourceTemplate": "maven"
     }
   ],
   "customDatasources": {

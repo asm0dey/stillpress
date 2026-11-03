@@ -29,6 +29,7 @@
         <postgresql.version>42.7.14</postgresql.version>
         <db.codegen.schema>public</db.codegen.schema>
         <surefire-plugin.version>3.6.1</surefire-plugin.version>
+        <spotless-plugin.version>3.11.0</spotless-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -147,6 +148,29 @@
                                 <source>${project.build.directory}/generated-sources/jooq</source>
                             </sources>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- `mvn spotless:apply` formats; `verify` fails on unformatted code -->
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless-plugin.version}</version>
+                <configuration>
+                    <java>
+                        <princeOfSpace>
+                            <version>2.3.1</version>
+                            <lineLength>120</lineLength>
+                            <javaLanguageLevel>25</javaLanguageLevel>
+                        </princeOfSpace>
+                        <removeUnusedImports/>
+                        <formatAnnotations/>
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals><goal>check</goal></goals>
+                        <phase>verify</phase>
                     </execution>
                 </executions>
             </plugin>
