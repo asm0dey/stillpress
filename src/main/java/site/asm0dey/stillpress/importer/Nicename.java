@@ -6,7 +6,7 @@ import module java.base;
  * WordPress {@code user_nicename} from a login, as {@code wp_insert_user} derives it:
  * {@code sanitize_title(sanitize_user(mb_substr(login, 0, 50), true))}. WXR does not export the nicename.
  */
-final class Nicename {
+public final class Nicename {
     private Nicename() {
     }
 
@@ -28,7 +28,7 @@ final class Nicename {
             Map.entry("Þ", "TH")
     );
 
-    static String of(String login) {
+    public static String of(String login) {
         var s =
                 login.codePointCount(0, login.length()) > 50
                 ? login.substring(0, login.offsetByCodePoints(0, 50))

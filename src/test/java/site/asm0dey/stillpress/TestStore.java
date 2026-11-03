@@ -31,6 +31,8 @@ public class TestStore {
         db.deleteFrom(MEDIA).execute();
         db.deleteFrom(ITEM).execute();
         db.deleteFrom(TERM).execute();
+        db.deleteFrom(SESSION).execute();
+        db.deleteFrom(USER_TOKEN).execute();
         db.deleteFrom(AUTHOR).execute();
         db.deleteFrom(REUSABLE_BLOCK).execute();
         db.deleteFrom(REDIRECT).execute();
