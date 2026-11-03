@@ -1,6 +1,8 @@
 package site.asm0dey.stillpress.store;
 
+import static org.jooq.impl.DSL.escape;
 import static org.jooq.impl.DSL.lower;
+import static org.jooq.impl.DSL.when;
 import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -30,16 +32,17 @@ public class AuthorRepository {
      * The exact login, else the email (case-insensitive) when exactly one user has it.
      */
     public Optional<AuthorRecord> findByLoginOrEmail(String s) {
-        var byLogin = db.selectFrom(AUTHOR).where(AUTHOR.LOGIN.eq(s)).fetchOptional();
-        if (byLogin.isPresent()) {
-            return byLogin;
-        }
-        var byEmail = db
+        // the login match (at most one: login is unique) sorts first, so the limit never cuts it off
+        var rows = db
             .selectFrom(AUTHOR)
-            .where(lower(AUTHOR.EMAIL).eq(s.toLowerCase(Locale.ROOT)))
-            .limit(2)
+            .where(AUTHOR.LOGIN.eq(s).or(lower(AUTHOR.EMAIL).eq(s.toLowerCase(Locale.ROOT))))
+            .orderBy(when(AUTHOR.LOGIN.eq(s), 0).otherwise(1))
+            .limit(3)
             .fetch();
-        return byEmail.size() == 1 ? Optional.of(byEmail.getFirst()) : Optional.empty();
+        if (!rows.isEmpty() && rows.getFirst().getLogin().equals(s)) {
+            return Optional.of(rows.getFirst());
+        }
+        return rows.size() == 1 ? Optional.of(rows.getFirst()) : Optional.empty();
     }
 
     public AuthorRecord create(String login, String email, String displayName, Role role) {
@@ -77,8 +80,14 @@ public class AuthorRepository {
         if (base.isEmpty()) {
             base = "user";
         }
+        var taken = new HashSet<>(db
+            .select(AUTHOR.SLUG)
+            .from(AUTHOR)
+            .where(AUTHOR.SLUG.eq(base).or(AUTHOR.SLUG.like(escape(base, '!') + "-%", '!')))
+            .fetch(AUTHOR.SLUG)
+        );
         var slug = base;
-        for (int n = 2; db.fetchExists(AUTHOR, AUTHOR.SLUG.eq(slug)); n++) {
+        for (int n = 2; taken.contains(slug); n++) {
             slug = base + "-" + n;
         }
         return slug;

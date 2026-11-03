@@ -5,6 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import site.asm0dey.stillpress.db.tables.records.UserTokenRecord;
 
 /**
  * Single-use, purpose-bound user tokens (e.g. {@code set_password}); only their SHA-256 is stored.
@@ -30,15 +31,13 @@ public class TokenRepository {
         if (rawToken == null) {
             return Optional.empty();
         }
-        var id = SessionRepository.hash(rawToken);
-        var token =
-                db.selectFrom(USER_TOKEN).where(USER_TOKEN.ID.eq(id), USER_TOKEN.PURPOSE.eq(purpose)).fetchOptional();
-        // only the request whose delete hits the row may use it, so concurrent consumers cannot both win
-        if (token.isEmpty() || db.deleteFrom(USER_TOKEN).where(USER_TOKEN.ID.eq(id)).execute() == 0) {
-            return Optional.empty();
-        }
-        return token.get().getExpiresAt().isAfter(SessionRepository.now())
-                ? Optional.of(token.get().getUserId())
-                : Optional.empty();
+        // the delete is the claim: concurrent consumers cannot both get the row back
+        return db
+            .deleteFrom(USER_TOKEN)
+            .where(USER_TOKEN.ID.eq(SessionRepository.hash(rawToken)), USER_TOKEN.PURPOSE.eq(purpose))
+            .returning(USER_TOKEN.USER_ID, USER_TOKEN.EXPIRES_AT)
+            .fetchOptional()
+            .filter(t -> t.getExpiresAt().isAfter(SessionRepository.now()))
+            .map(UserTokenRecord::getUserId);
     }
 }

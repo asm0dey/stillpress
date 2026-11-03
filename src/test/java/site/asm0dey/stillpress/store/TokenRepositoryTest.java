@@ -1,9 +1,11 @@
 package site.asm0dey.stillpress.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static site.asm0dey.stillpress.db.Tables.USER_TOKEN;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import module java.base;
+import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
@@ -17,6 +19,8 @@ class TokenRepositoryTest {
     AuthorRepository users;
     @Inject
     TokenRepository tokens;
+    @Inject
+    DSLContext db;
 
     @BeforeEach
     void reset() {
@@ -32,6 +36,7 @@ class TokenRepositoryTest {
         assertThat(tokens.consume(raw, "set_password")).isEmpty();
         var expired = tokens.create(u.getId(), "set_password", Duration.ofSeconds(-1));
         assertThat(tokens.consume(expired, "set_password")).isEmpty();
+        assertThat(db.fetchCount(USER_TOKEN)).isZero();
         assertThat(tokens.consume("unknown", "set_password")).isEmpty();
     }
 }

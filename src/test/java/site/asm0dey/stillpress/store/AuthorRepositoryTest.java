@@ -56,4 +56,23 @@ class AuthorRepositoryTest {
         assertThat(users.countAdministrators()).isZero();
         assertThat(users.anyAdministratorWithPassword()).isFalse();
     }
+
+    @Test
+    void loginBeatsAnotherUsersEmail() {
+        var byLogin = users.create("shared@example.org", "own@example.org", "Login", Role.AUTHOR);
+        users.create("other", "Shared@example.org", "Email", Role.AUTHOR);
+        assertThat(users.findByLoginOrEmail("shared@example.org"))
+            .map(r -> r.getId())
+            .contains(byLogin.getId());
+    }
+
+    @Test
+    void slugSkipsTakenSuffixes() {
+        users.create("john", "x@example.org", "X", Role.AUTHOR);
+        users.create("john-2", "y@example.org", "Y", Role.AUTHOR);
+        assertThat(users.create("John", "z@example.org", "Z", Role.AUTHOR).getSlug()).isEqualTo("john-3");
+        // "_" in the base is a literal, not a LIKE wildcard
+        users.create("axb 2", "w@example.org", "W", Role.AUTHOR);
+        assertThat(users.create("a_b", "v@example.org", "V", Role.AUTHOR).getSlug()).isEqualTo("a_b");
+    }
 }

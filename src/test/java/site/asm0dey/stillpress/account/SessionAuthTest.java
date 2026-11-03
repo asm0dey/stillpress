@@ -60,7 +60,7 @@ class SessionAuthTest {
     }
 
     @Test
-    void expiredSessionIs401AndDeleted() {
+    void expiredSessionIs401AndSweptOnCreate() {
         var u = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
         var raw = "expired-session-token";
         var now = LocalDateTime.now(ZoneOffset.UTC);
@@ -69,7 +69,9 @@ class SessionAuthTest {
             .values(SessionRepository.hash(raw), u.getId(), now.minusDays(15), now.minusDays(1))
             .execute();
         given().cookie("sp_session", raw).get("/admin/api/test/whoami").then().statusCode(401);
-        assertThat(db.fetchCount(SESSION)).isZero();
+        // the next login sweeps expired rows
+        sessions.create(u.getId());
+        assertThat(db.fetchCount(SESSION)).isOne();
     }
 
     @Test

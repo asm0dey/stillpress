@@ -1,5 +1,6 @@
 package site.asm0dey.stillpress.store;
 
+import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import static site.asm0dey.stillpress.db.Tables.SESSION;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -16,8 +17,6 @@ public class SessionRepository {
     private static final SecureRandom RANDOM = new SecureRandom();
     @Inject
     DSLContext db;
-    @Inject
-    AuthorRepository users;
 
     /**
      * @return the raw cookie value
@@ -25,6 +24,8 @@ public class SessionRepository {
     public String create(long userId) {
         var raw = randomToken(32);
         var now = now();
+        // housekeeping on login rather than on every authenticated request
+        db.deleteFrom(SESSION).where(SESSION.EXPIRES_AT.le(now)).execute();
         db
             .insertInto(SESSION, SESSION.ID, SESSION.USER_ID, SESSION.CREATED_AT, SESSION.EXPIRES_AT)
             .values(hash(raw), userId, now, now.plus(LIFETIME))
@@ -36,16 +37,11 @@ public class SessionRepository {
         if (rawToken == null) {
             return Optional.empty();
         }
-        var session = db.selectFrom(SESSION).where(SESSION.ID.eq(hash(rawToken))).fetchOptional();
-        if (session.isEmpty()) {
-            return Optional.empty();
-        }
-        var now = now();
-        if (!session.get().getExpiresAt().isAfter(now)) {
-            db.deleteFrom(SESSION).where(SESSION.EXPIRES_AT.le(now)).execute();
-            return Optional.empty();
-        }
-        return users.findById(session.get().getUserId());
+        return db
+            .select(AUTHOR.fields())
+            .from(SESSION.join(AUTHOR).on(AUTHOR.ID.eq(SESSION.USER_ID)))
+            .where(SESSION.ID.eq(hash(rawToken)), SESSION.EXPIRES_AT.gt(now()))
+            .fetchOptionalInto(AUTHOR);
     }
 
     public void delete(String rawToken) {
