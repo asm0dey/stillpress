@@ -32,4 +32,36 @@ class CommentSanitizerTest {
             .doesNotContain("onclick")
             .doesNotContain("<u>");
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "JAVASCRIPT:alert(1)",
+            "&#106;avascript:alert(1)",
+            "java&#x09;script:alert(1)",
+            " javascript:alert(1)",
+            "data:text/html;base64,PHNjcmlwdD4=",
+            "vbscript:x"
+    })
+    void bypassHrefsLoseTheHref(String href) {
+        assertThat(CommentSanitizer.clean("<a href=\"" + href + "\">x</a>")).doesNotContain("href");
+    }
+
+    @Test
+    void safeUrlOnlyKeepsHttpAndHttps() {
+        assertThat(CommentSanitizer.safeUrl("HTTPS://ok.example")).isEqualTo("HTTPS://ok.example");
+        assertThat(CommentSanitizer.safeUrl(" http://ok.example ")).isEqualTo("http://ok.example");
+        for (var bad :
+                new String[] {
+                "JAVASCRIPT:alert(1)",
+                "&#106;avascript:alert(1)",
+                "java\tscript:alert(1)",
+                " javascript:alert(1)",
+                "data:text/html;base64,PHNjcmlwdD4=",
+                "vbscript:x",
+                "//evil.example",
+                "ftp://x"
+        }) {
+            assertThat(CommentSanitizer.safeUrl(bad)).as(bad).isNull();
+        }
+    }
 }
