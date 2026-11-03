@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"
+  xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:wp="http://wordpress.org/export/1.2/">
+<channel>
+  <title>Блог</title>
+  <link>https://blog.example.ru</link>
+  <description>Семейный блог</description>
+  <language>ru-RU</language>
+  <wp:wxr_version>1.2</wp:wxr_version>
+  <wp:base_site_url>https://blog.example.ru</wp:base_site_url>
+  <wp:base_blog_url>https://blog.example.ru</wp:base_blog_url>
+  <wp:author><wp:author_id>1</wp:author_id><wp:author_login><![CDATA[mama]]></wp:author_login><wp:author_email><![CDATA[mama@example.ru]]></wp:author_email><wp:author_display_name><![CDATA[Мама]]></wp:author_display_name></wp:author>
+  <wp:author><wp:author_id>2</wp:author_id><wp:author_login><![CDATA[papa]]></wp:author_login><wp:author_email><![CDATA[papa@example.ru]]></wp:author_email><wp:author_display_name><![CDATA[Папа]]></wp:author_display_name></wp:author>
+  <wp:category><wp:term_id>10</wp:term_id><wp:category_nicename><![CDATA[travel]]></wp:category_nicename><wp:category_parent><![CDATA[]]></wp:category_parent><wp:cat_name><![CDATA[Путешествия]]></wp:cat_name></wp:category>
+  <wp:category><wp:term_id>11</wp:term_id><wp:category_nicename><![CDATA[europe]]></wp:category_nicename><wp:category_parent><![CDATA[travel]]></wp:category_parent><wp:cat_name><![CDATA[Европа]]></wp:cat_name></wp:category>
+  <wp:tag><wp:term_id>20</wp:term_id><wp:tag_slug><![CDATA[kids]]></wp:tag_slug><wp:tag_name><![CDATA[Дети]]></wp:tag_name></wp:tag>
+  <item>
+    <title><![CDATA[Месяц ноябрь, год 2022]]></title>
+    <link>https://blog.example.ru/2023/01/14/%d0%bc%d0%b5%d1%81%d1%8f%d1%86-%d0%bd%d0%be%d1%8f%d0%b1%d1%80%d1%8c-%d0%b3%d0%be%d0%b4-2022/</link>
+    <dc:creator><![CDATA[mama]]></dc:creator>
+    <guid isPermaLink="false">https://blog.example.ru/?p=5994</guid>
+    <content:encoded><![CDATA[<!-- wp:gallery {"linkTo":"none"} -->
+<figure class="wp-block-gallery has-nested-images columns-default is-cropped"><!-- wp:image {"id":11,"url":"https://blog.example.ru/wp-content/uploads/2023/01/a.jpg","sizeSlug":"large"} -->
+<figure class="wp-block-image size-large"><img src="https://blog.example.ru/wp-content/uploads/2023/01/a.jpg" srcset="https://blog.example.ru/wp-content/uploads/2023/01/a-300x200.jpg 300w, https://blog.example.ru/wp-content/uploads/2023/01/a.jpg 1024w" alt="" class="wp-image-11"/></figure>
+<!-- /wp:image -->
+
+<!-- wp:image {"id":12,"url":"https://blog.example.ru/wp-content/uploads/2023/01/a.jpg","sizeSlug":"large"} -->
+<figure class="wp-block-image size-large"><img src="https://blog.example.ru/wp-content/uploads/2023/01/a.jpg" srcset="https://blog.example.ru/wp-content/uploads/2023/01/a-300x200.jpg 300w" alt="" class="wp-image-12"/></figure>
+<!-- /wp:image --></figure>
+<!-- /wp:gallery -->
+
+<!-- wp:block {"ref":6001} /-->
+
+<!-- wp:embed {"url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","type":"video","providerNameSlug":"youtube"} -->
+<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube"><div class="wp-block-embed__wrapper">
+https://www.youtube.com/watch?v=dQw4w9WgXcQ
+</div></figure>
+<!-- /wp:embed -->]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:post_id>5994</wp:post_id>
+    <wp:post_date_gmt><![CDATA[2023-01-14 10:00:00]]></wp:post_date_gmt>
+    <wp:post_modified_gmt><![CDATA[2023-01-15 11:30:00]]></wp:post_modified_gmt>
+    <wp:comment_status><![CDATA[open]]></wp:comment_status>
+    <wp:post_name><![CDATA[месяц-ноябрь-год-2022]]></wp:post_name>
+    <wp:status><![CDATA[publish]]></wp:status>
+    <wp:post_parent>0</wp:post_parent>
+    <wp:menu_order>0</wp:menu_order>
+    <wp:post_type><![CDATA[post]]></wp:post_type>
+    <wp:post_password><![CDATA[]]></wp:post_password>
+    <category domain="category" nicename="travel"><![CDATA[Путешествия]]></category>
+    <category domain="category" nicename="europe"><![CDATA[Европа]]></category>
+    <category domain="post_tag" nicename="kids"><![CDATA[Дети]]></category>
+    <wp:postmeta><wp:meta_key><![CDATA[_thumbnail_id]]></wp:meta_key><wp:meta_value><![CDATA[11]]></wp:meta_value></wp:postmeta>
+    <wp:comment><wp:comment_id>1</wp:comment_id><wp:comment_author><![CDATA[Аня]]></wp:comment_author><wp:comment_author_email><![CDATA[anya@example.ru]]></wp:comment_author_email><wp:comment_author_url>https://anya.example.ru</wp:comment_author_url><wp:comment_date_gmt><![CDATA[2023-01-14 12:00:00]]></wp:comment_date_gmt><wp:comment_content><![CDATA[Классно!]]></wp:comment_content><wp:comment_approved><![CDATA[1]]></wp:comment_approved><wp:comment_parent>0</wp:comment_parent></wp:comment>
+    <wp:comment><wp:comment_id>2</wp:comment_id><wp:comment_author><![CDATA[Мама]]></wp:comment_author><wp:comment_author_email><![CDATA[mama@example.ru]]></wp:comment_author_email><wp:comment_author_url></wp:comment_author_url><wp:comment_date_gmt><![CDATA[2023-01-14 13:00:00]]></wp:comment_date_gmt><wp:comment_content><![CDATA[Спасибо!]]></wp:comment_content><wp:comment_approved><![CDATA[1]]></wp:comment_approved><wp:comment_parent>1</wp:comment_parent></wp:comment>
+    <wp:comment><wp:comment_id>3</wp:comment_id><wp:comment_author><![CDATA[Spammer]]></wp:comment_author><wp:comment_author_email><![CDATA[spam@example.com]]></wp:comment_author_email><wp:comment_author_url>http://spam.example.com</wp:comment_author_url><wp:comment_date_gmt><![CDATA[2023-01-14 14:00:00]]></wp:comment_date_gmt><wp:comment_content><![CDATA[Buy now]]></wp:comment_content><wp:comment_approved><![CDATA[spam]]></wp:comment_approved><wp:comment_parent>0</wp:comment_parent></wp:comment>
+  </item>
+  <item>
+    <title>Q&amp;A</title>
+    <link>https://blog.example.ru/2020/05/10/qa/</link>
+    <dc:creator><![CDATA[papa]]></dc:creator>
+    <guid isPermaLink="false">https://blog.example.ru/?p=100</guid>
+    <content:encoded><![CDATA[Line one
+
+Line two [caption id="attachment_7" width="300"]<img src="https://blog.example.ru/wp-content/uploads/2020/05/c.jpg" /> Подпись[/caption]]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:post_id>100</wp:post_id>
+    <wp:post_date_gmt><![CDATA[2020-05-10 08:00:00]]></wp:post_date_gmt>
+    <wp:post_modified_gmt><![CDATA[2020-05-10 08:00:00]]></wp:post_modified_gmt>
+    <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+    <wp:post_name><![CDATA[qa]]></wp:post_name>
+    <wp:status><![CDATA[publish]]></wp:status>
+    <wp:post_parent>0</wp:post_parent>
+    <wp:menu_order>0</wp:menu_order>
+    <wp:post_type><![CDATA[post]]></wp:post_type>
+    <wp:post_password><![CDATA[]]></wp:post_password>
+  </item>
+  <item>
+    <title><![CDATA[О нас]]></title>
+    <link>https://blog.example.ru/about/</link>
+    <dc:creator><![CDATA[mama]]></dc:creator>
+    <guid isPermaLink="false">https://blog.example.ru/?page_id=2</guid>
+    <content:encoded><![CDATA[Мы пишем про ]]]]><![CDATA[> путешествия.]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:post_id>2</wp:post_id>
+    <wp:post_date_gmt><![CDATA[2019-01-01 00:00:00]]></wp:post_date_gmt>
+    <wp:post_modified_gmt><![CDATA[2019-01-01 00:00:00]]></wp:post_modified_gmt>
+    <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+    <wp:post_name><![CDATA[about]]></wp:post_name>
+    <wp:status><![CDATA[publish]]></wp:status>
+    <wp:post_parent>0</wp:post_parent>
+    <wp:menu_order>1</wp:menu_order>
+    <wp:post_type><![CDATA[page]]></wp:post_type>
+    <wp:post_password><![CDATA[]]></wp:post_password>
+  </item>
+  <item>
+    <title><![CDATA[Черновик]]></title>
+    <link>https://blog.example.ru/?p=101</link>
+    <dc:creator><![CDATA[papa]]></dc:creator>
+    <guid isPermaLink="false">https://blog.example.ru/?p=101</guid>
+    <content:encoded><![CDATA[Скоро.]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:post_id>101</wp:post_id>
+    <wp:post_date_gmt><![CDATA[0000-00-00 00:00:00]]></wp:post_date_gmt>
+    <wp:post_modified_gmt><![CDATA[2021-02-01 00:00:00]]></wp:post_modified_gmt>
+    <wp:comment_status><![CDATA[open]]></wp:comment_status>
+    <wp:post_name><![CDATA[draft-post]]></wp:post_name>
+    <wp:status><![CDATA[draft]]></wp:status>
+    <wp:post_parent>0</wp:post_parent>
+    <wp:menu_order>0</wp:menu_order>
+    <wp:post_type><![CDATA[post]]></wp:post_type>
+    <wp:post_password><![CDATA[]]></wp:post_password>
+  </item>
+  <item>
+    <title><![CDATA[Секрет]]></title>
+    <link>https://blog.example.ru/2021/03/01/secret-post/</link>
+    <dc:creator><![CDATA[papa]]></dc:creator>
+    <guid isPermaLink="false">https://blog.example.ru/?p=102</guid>
+    <content:encoded><![CDATA[Только для своих.]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:post_id>102</wp:post_id>
+    <wp:post_date_gmt><![CDATA[2021-03-01 09:00:00]]></wp:post_date_gmt>
+    <wp:post_modified_gmt><![CDATA[2021-03-01 09:00:00]]></wp:post_modified_gmt>
+    <wp:comment_status><![CDATA[open]]></wp:comment_status>
+    <wp:post_name><![CDATA[secret-post]]></wp:post_name>
+    <wp:status><![CDATA[publish]]></wp:status>
+    <wp:post_parent>0</wp:post_parent>
+    <wp:menu_order>0</wp:menu_order>
+    <wp:post_type><![CDATA[post]]></wp:post_type>
+    <wp:post_password>secret</wp:post_password>
+  </item>
+  <item>
+    <title><![CDATA[c]]></title>
+    <link>https://blog.example.ru/2020/05/10/qa/c/</link>
+    <dc:creator><![CDATA[papa]]></dc:creator>
+    <guid isPermaLink="false">https://blog.example.ru/wp-content/uploads/2020/05/c.jpg</guid>
+    <content:encoded><![CDATA[]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:post_id>7</wp:post_id>
+    <wp:post_date_gmt><![CDATA[2020-05-10 08:00:00]]></wp:post_date_gmt>
+    <wp:post_modified_gmt><![CDATA[2020-05-10 08:00:00]]></wp:post_modified_gmt>
+    <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+    <wp:post_name><![CDATA[c]]></wp:post_name>
+    <wp:status><![CDATA[inherit]]></wp:status>
+    <wp:post_parent>100</wp:post_parent>
+    <wp:menu_order>0</wp:menu_order>
+    <wp:post_type><![CDATA[attachment]]></wp:post_type>
+    <wp:post_password><![CDATA[]]></wp:post_password>
+    <wp:attachment_url><![CDATA[https://blog.example.ru/wp-content/uploads/2020/05/c.jpg]]></wp:attachment_url>
+  </item>
+  <item>
+    <title><![CDATA[Подписка]]></title>
+    <link>https://blog.example.ru/?post_type=wp_block&amp;p=6001</link>
+    <dc:creator><![CDATA[mama]]></dc:creator>
+    <guid isPermaLink="false">https://blog.example.ru/?p=6001</guid>
+    <content:encoded><![CDATA[<!-- wp:paragraph --><p>Подпишитесь!</p><!-- /wp:paragraph -->]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:post_id>6001</wp:post_id>
+    <wp:post_date_gmt><![CDATA[2022-01-01 00:00:00]]></wp:post_date_gmt>
+    <wp:post_modified_gmt><![CDATA[2022-01-01 00:00:00]]></wp:post_modified_gmt>
+    <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+    <wp:post_name><![CDATA[subscribe]]></wp:post_name>
+    <wp:status><![CDATA[publish]]></wp:status>
+    <wp:post_parent>0</wp:post_parent>
+    <wp:menu_order>0</wp:menu_order>
+    <wp:post_type><![CDATA[wp_block]]></wp:post_type>
+    <wp:post_password><![CDATA[]]></wp:post_password>
+  </item>
+  <item>
+    <title><![CDATA[Меню]]></title>
+    <link>https://blog.example.ru/?p=9000</link>
+    <dc:creator><![CDATA[mama]]></dc:creator>
+    <guid isPermaLink="false">https://blog.example.ru/?p=9000</guid>
+    <content:encoded><![CDATA[]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:post_id>9000</wp:post_id>
+    <wp:post_date_gmt><![CDATA[2022-01-01 00:00:00]]></wp:post_date_gmt>
+    <wp:post_modified_gmt><![CDATA[2022-01-01 00:00:00]]></wp:post_modified_gmt>
+    <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+    <wp:post_name><![CDATA[menu-item]]></wp:post_name>
+    <wp:status><![CDATA[publish]]></wp:status>
+    <wp:post_parent>0</wp:post_parent>
+    <wp:menu_order>1</wp:menu_order>
+    <wp:post_type><![CDATA[nav_menu_item]]></wp:post_type>
+    <wp:post_password><![CDATA[]]></wp:post_password>
+  </item>
+</channel>
+</rss>
