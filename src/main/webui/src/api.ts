@@ -33,6 +33,11 @@ export interface ItemSummary {
   id: number; type: 'post' | 'page'; title: string; status: ItemStatus; author: string | null;
   date: string | null; modified: string; permalink: string | null;
 }
+/** One row of GET /blocks; GET, POST and PUT /blocks/{id} add content and autosave */
+export interface ReusableBlock {
+  id: number; title: string; content?: string | null; author: string | null; modifiedAt: string; usedBy: number;
+  canEdit: boolean; autosave?: { createdAt: string } | null;
+}
 /** GET /media/{id}, POST /media */
 export interface Media {
   id: number; url: string | null; mimeType: string | null; width: number | null; height: number | null; title: string | null; alt: string | null;

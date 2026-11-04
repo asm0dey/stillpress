@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { type Role, type SessionUser, type Site, api } from './api.ts';
 
 /**
- * The admin header: Posts for everyone; Pages, Categories and Tags for editors and administrators; the rest for
+ * The admin header: Posts and Reusable blocks for everyone; Pages, Categories and Tags for editors and administrators; the rest for
  * administrators only.
  */
 export default function Shell({ children }: { children: ReactNode }) {
@@ -27,6 +27,7 @@ export default function Shell({ children }: { children: ReactNode }) {
           <Link to="/" className="brand">Stillpress</Link>
           {role && <Link to="/posts">Posts</Link>}
           {(role === 'administrator' || role === 'editor') && <Link to="/pages">Pages</Link>}
+          {role && <Link to="/blocks">Reusable blocks</Link>}
           {(role === 'administrator' || role === 'editor') && <Link to="/categories">Categories</Link>}
           {(role === 'administrator' || role === 'editor') && <Link to="/tags">Tags</Link>}
           {role === 'administrator' && <Link to="/redirects">Redirects</Link>}

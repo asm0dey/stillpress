@@ -74,6 +74,19 @@ class ReusableBlocksResourceTest {
     }
 
     @Test
+    void listWithContentCarriesEachBlocksContent() {
+        var a = create(author1, "one");
+        var b = create(author2, "two");
+        as(author2)
+            .get("/admin/api/blocks?content=true")
+            .then()
+            .statusCode(200)
+            .body("id", equalTo(List.of(a.getInt("id"), b.getInt("id"))))
+            .body("content", equalTo(List.of("one", "two")))
+            .body("canEdit", equalTo(List.of(false, true)));
+    }
+
+    @Test
     void staleExpectedModifiedAtIs409() {
         var b = create(author1, "one");
         put(author1, b, "two").then().statusCode(200);

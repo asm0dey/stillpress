@@ -36,11 +36,11 @@ const WP_BLOCK = {
 };
 
 test('block list and one block are reshaped to wp_block records', async () => {
-  reply = (url) => json(url.endsWith('/blocks') ? [{ ...BLOCK, content: null }] : BLOCK);
-  // the list has no content, so each block is fetched for it
+  reply = (url) => json(url.endsWith('?content=true') ? [BLOCK] : BLOCK);
+  // one request for the list, content included
   expect(await call({ path: '/wp/v2/blocks?per_page=-1&context=edit' })).toEqual([WP_BLOCK]);
   expect(await call({ path: '/wp/v2/blocks/3?context=edit' })).toEqual(WP_BLOCK);
-  expect(calls.map((c) => c.method + ' ' + c.url)).toEqual(['GET /admin/api/blocks', 'GET /admin/api/blocks/3', 'GET /admin/api/blocks/3']);
+  expect(calls.map((c) => c.method + ' ' + c.url)).toEqual(['GET /admin/api/blocks?content=true', 'GET /admin/api/blocks/3']);
 });
 
 test('creating a block posts title and content with the CSRF header', async () => {
@@ -86,6 +86,14 @@ test('OPTIONS answers Allow from the role and the block\'s canEdit', async () =>
   installWordPressApi({ id: 8, login: 'con', displayName: 'Con', role: 'contributor' });
   expect(await allow('/wp/v2/blocks')).toEqual('GET');
   expect(calls.map((c) => c.url)).toEqual(['/admin/api/blocks/3', '/admin/api/blocks/3']);
+});
+
+test('a block\'s GET carries Allow too, since core-data reads canUser from it', async () => {
+  const allow = async () => ((await call({ path: '/wp/v2/blocks/3?context=edit', parse: false })) as Response).headers.get('allow');
+  reply = () => json({ ...BLOCK, canEdit: false });
+  expect(await allow()).toEqual('GET');
+  reply = () => json(BLOCK);
+  expect(await allow()).toEqual('GET, POST, PUT, PATCH');
 });
 
 test('types and the active theme are static', async () => {

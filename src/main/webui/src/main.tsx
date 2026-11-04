@@ -13,9 +13,11 @@ import Settings from './pages/Settings.tsx';
 import Terms from './pages/Terms.tsx';
 import Redirects from './pages/Redirects.tsx';
 import Items from './pages/Items.tsx';
+import Blocks from './pages/Blocks.tsx';
 
 // Gutenberg is large: only the editor route downloads it
 const Editor = lazy(() => import('./editor/Editor.tsx'));
+const BlockEditor = lazy(() => import('./editor/BlockEditor.tsx'));
 
 const PUBLIC = ['/setup', '/login', '/set-password'];
 
@@ -65,6 +67,8 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/posts" element={<Items type="post" />} />
           <Route path="/pages" element={<Items type="page" />} />
           <Route path="/edit/:id" element={<Suspense fallback={<p role="status">Loading the editor…</p>}><Editor /></Suspense>} />
+          <Route path="/blocks" element={<Blocks />} />
+          <Route path="/blocks/:id" element={<Suspense fallback={<p role="status">Loading the editor…</p>}><BlockEditor /></Suspense>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Gate>

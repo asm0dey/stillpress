@@ -8,6 +8,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Response;
 import module java.base;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
@@ -40,7 +41,18 @@ public class ReusableBlocksResource {
     @Inject
     SecurityIdentity identity;
 
-    public record BlockLine(long id, String title, String author, LocalDateTime modifiedAt, int usedBy, boolean canEdit) {}
+    /**
+     * {@code content} only with {@code ?content=true} (the editor's inserter); the list screen leaves it out.
+     */
+    public record BlockLine(
+            long id,
+            String title,
+            String content,
+            String author,
+            LocalDateTime modifiedAt,
+            int usedBy,
+            boolean canEdit
+    ) {}
 
     public record BlockView(
             long id,
@@ -67,7 +79,7 @@ public class ReusableBlocksResource {
     }
 
     @GET
-    public List<BlockLine> list() {
+    public List<BlockLine> list(@QueryParam("content") boolean content) {
         var a = actor();
         var all = blocks.all();
         var usedBy = usedBy(all.stream().map(ReusableBlockRecord::getSourceId).collect(Collectors.toSet()));
@@ -77,6 +89,7 @@ public class ReusableBlocksResource {
             .map(b -> new BlockLine(
                     b.getSourceId(),
                     b.getTitle(),
+                    content ? b.getContent() : null,
                     names.get(b.getAuthorId()),
                     b.getModifiedAt(),
                     usedBy.getOrDefault(b.getSourceId(), 0),

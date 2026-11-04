@@ -1,7 +1,7 @@
 import apiFetch, { type APIFetchOptions } from '@wordpress/api-fetch';
 import { type SessionUser, csrfToken } from '../api.ts';
 
-/** The admin API's reusable block (GET /blocks/{id}; the list leaves out content). */
+/** The admin API's reusable block (GET /blocks/{id}, or the list with ?content=true). */
 interface AdminBlock { id: number; title: string; content?: string | null; canEdit: boolean }
 interface AdminMedia { id: number; url: string; mimeType: string | null; width: number | null; height: number | null; title: string | null; alt: string | null }
 
@@ -51,6 +51,13 @@ async function reshape<T>(res: Promise<Response>, fn: (body: T) => unknown) {
   return r.ok ? json(fn(await r.json()), r.status) : r;
 }
 
+const allow = (b: AdminBlock) => ({ Allow: b.canEdit ? 'GET, POST, PUT, PATCH' : 'GET' });
+
+async function one(id: string, fn: (b: AdminBlock) => Response) {
+  const r = await admin('/blocks/' + id);
+  return r.ok ? fn(await r.json()) : r;
+}
+
 type Route = (m: RegExpMatchArray, query: URLSearchParams, data: Record<string, unknown>) => Promise<Response> | Response;
 
 function routes(session: SessionUser): Record<string, Record<string, Route>> {
@@ -59,27 +66,16 @@ function routes(session: SessionUser): Record<string, Record<string, Route>> {
   const update: Route = ([, id], _q, d) => reshape(admin('/blocks/' + id, 'PUT', save(d)), block);
   return {
     '/wp/v2/blocks': {
-      // shortcut: one request per block, because the list leaves out the content the inserter parses; a list
-      // with content would replace it if sites grow many reusable blocks
-      GET: async () => {
-        const r = await admin('/blocks');
-        if (!r.ok) return r;
-        const all = await Promise.all((await r.json() as AdminBlock[]).map((b) => admin('/blocks/' + b.id).then((x) => x.json())));
-        return json(all.map(block));
-      },
+      GET: () => reshape<AdminBlock[]>(admin('/blocks?content=true'), (all) => all.map(block)),
       POST: (_m, _q, d) => reshape(admin('/blocks', 'POST', save(d)), block),
       OPTIONS: () => json(null, 200, { Allow: session.role === 'contributor' ? 'GET' : 'GET, POST' }),
     },
     '/wp/v2/blocks/(\\d+)': {
-      GET: ([, id]) => reshape(admin('/blocks/' + id), block),
+      // core-data reads canUser from the Allow header of the record's GET too, so both carry it
+      GET: ([, id]) => one(id, (b) => json(block(b), 200, allow(b))),
       POST: update,
       PUT: update,
-      OPTIONS: async ([, id]) => {
-        const r = await admin('/blocks/' + id);
-        if (!r.ok) return r;
-        const b: AdminBlock = await r.json();
-        return json(null, 200, { Allow: b.canEdit ? 'GET, POST, PUT, PATCH' : 'GET' });
-      },
+      OPTIONS: ([, id]) => one(id, (b) => json(null, 200, allow(b))),
     },
     '/wp/v2/types': { GET: () => json(TYPES) },
     '/wp/v2/types/([\\w-]+)': { GET: ([, slug]) => (TYPES[slug] ? json(TYPES[slug]) : json(notFound(), 404)) },
