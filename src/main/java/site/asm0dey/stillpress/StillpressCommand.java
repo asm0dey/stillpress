@@ -19,7 +19,8 @@ import site.asm0dey.stillpress.verify.VerifyUrlsCommand;
         PublishCommand.class,
         VerifyUrlsCommand.class,
         UserCommand.class,
-        NginxConfigCommand.class
+        NginxConfigCommand.class,
+        ResetCommand.class
         }
 )
 public class StillpressCommand implements Runnable {

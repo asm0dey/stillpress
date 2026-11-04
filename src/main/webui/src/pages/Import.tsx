@@ -71,15 +71,15 @@ export default function Import() {
         <div role="alert">
           <p className="error">The import failed: {status!.error ?? 'see the server log.'}</p>
           {leftContent
-            ? <p>Content was already written. To start over, wipe the data directory and run setup again.</p>
+            ? <p>Content was already written. To start over, use Reset site at the bottom of <Link to="/settings">Settings</Link>.</p>
             : <p>Nothing was imported. Fix the file and try again.</p>}
           {status!.report && <pre className="report">{status!.report}</pre>}
         </div>
       )}
       {state === 'idle' && status!.contentLeft && (
         <p role="status">
-          This site already has content, and import works only into an empty site. To start over, wipe the data
-          directory and run setup again.
+          This site already has content, and import works only into an empty site. To start over, use Reset site at
+          the bottom of <Link to="/settings">Settings</Link>.
         </p>
       )}
       {(state === 'idle' || state === 'failed') && !status!.contentLeft && (

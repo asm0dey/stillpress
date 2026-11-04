@@ -1,4 +1,5 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { type ApiError, type SiteSettings, type TermView, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
@@ -32,10 +33,13 @@ export default function Settings() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // the saved title, which the reset confirmation must match, not the one being edited
+  const [siteTitle, setSiteTitle] = useState('');
 
   useEffect(() => {
     api<SiteSettings>('/settings').then((s) => {
       setForm(s);
+      setSiteTitle(s.title);
       setPreset(PRESETS.find((p) => p.value === s.permalinkStructure)?.value ?? CUSTOM);
     }, () => setMessage('Could not load the settings.'));
     api<TermView[]>('/terms?taxonomy=category').then(setCategories, () => {});
@@ -56,7 +60,9 @@ export default function Settings() {
     setErrors({});
     setSaved(false);
     try {
-      setForm(await api<SiteSettings>('/settings', { method: 'PUT', body: form }));
+      const s = await api<SiteSettings>('/settings', { method: 'PUT', body: form });
+      setForm(s);
+      setSiteTitle(s.title);
       setSaved(true);
     } catch (err) {
       const f = err as ApiError;
@@ -125,6 +131,57 @@ export default function Settings() {
         {saved && <p role="status">Saved. Changes that affect every page are being published.</p>}
         <button type="submit" className="primary">Save settings</button>
       </form>
+      <ResetSite title={siteTitle} />
     </Shell>
+  );
+}
+
+const RESET_MESSAGES: Record<string, string> = {
+  invalid_credentials: 'The password is wrong.',
+  rate_limited: 'Too many wrong passwords. Wait a few minutes and try again.',
+  import_running: 'An import is running. Reset after it ends.',
+  files: 'The site was reset, but some files could not be removed. See the server log.',
+};
+
+function ResetSite({ title }: { title: string }) {
+  const navigate = useNavigate();
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function reset(e: FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setBusy(true);
+    try {
+      await api('/reset', { method: 'POST', body: { password, confirm } });
+      navigate('/');
+    } catch (err) {
+      const f = err as ApiError;
+      setMessage(f.field === 'confirm' ? 'Type the site title exactly.'
+        : f.error === 'csrf' ? f.message! : RESET_MESSAGES[f.error ?? ''] ?? 'Could not reset the site.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="danger" aria-labelledby="reset-heading">
+      <hr />
+      <h2 id="reset-heading">Reset site</h2>
+      <p>
+        Deletes all posts, pages, media, users other than you, categories, redirects and settings. This cannot be
+        undone; copy the data directory first if you may want it back.
+      </p>
+      <form onSubmit={reset}>
+        <Field label="Your password" name="reset-password" type="password" autoComplete="current-password" required
+          value={password} onChange={(e) => setPassword(e.target.value)} />
+        <Field label={`Type the site title (${title}) to confirm`} name="reset-confirm" required autoComplete="off"
+          value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        {message && <p role="alert" className="error">{message}</p>}
+        <button type="submit" className="danger" disabled={busy || !password || confirm !== title}>Reset site</button>
+      </form>
+    </section>
   );
 }

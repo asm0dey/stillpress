@@ -103,7 +103,7 @@ public class ReleaseSwitcher {
         }
     }
 
-    static void deleteTree(Path dir) throws IOException {
+    public static void deleteTree(Path dir) throws IOException {
         try (var walk = Files.walk(dir)) {
             for (var p : walk.sorted(Comparator.reverseOrder()).toList()) {
                 Files.delete(p);

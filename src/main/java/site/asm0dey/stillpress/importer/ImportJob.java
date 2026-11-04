@@ -17,7 +17,9 @@ import site.asm0dey.stillpress.store.ItemRepository;
 @ApplicationScoped
 public class ImportJob {
     static final String NOT_RUNNING_HERE =
-            "No import is running in this server. If it stopped mid-way, wipe the data directory and run setup again.";
+            
+            "No import is running in this server. If it stopped mid-way, stop Stillpress, wipe the data directory and run"
+            + " setup again: Reset site refuses while an import is marked as running.";
     private static final Logger LOG = Logger.getLogger(ImportJob.class);
     @Inject
     ImportGuard guard;

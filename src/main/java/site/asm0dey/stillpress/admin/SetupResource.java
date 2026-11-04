@@ -15,6 +15,7 @@ import module java.base;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SessionAuthMechanism;
+import site.asm0dey.stillpress.content.SiteReset;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;
@@ -28,8 +29,6 @@ import site.asm0dey.stillpress.store.SettingRepository;
 @Path("/admin/api/setup")
 public class SetupResource {
     static final Pattern LANGUAGE = Pattern.compile("^[a-z]{2,3}(-[A-Z]{2})?$");
-    private static final Map<String, String> DEFAULTS =
-            Map.of("posts_per_page", "10", "posts_per_rss", "10", "category_base", "category", "tag_base", "tag");
     // one install = one process; held across the commit so a second caller sees the first administrator
     private static final ReentrantLock LOCK = new ReentrantLock();
     @Inject
@@ -123,7 +122,7 @@ public class SetupResource {
         if (settings.get("home_url").isEmpty()) {
             settings.put("home_url", home);
         }
-        DEFAULTS.forEach((k, v) -> {
+        SiteReset.SETUP_DEFAULTS.forEach((k, v) -> {
             if (settings.get(k).isEmpty()) {
                 settings.put(k, v);
             }

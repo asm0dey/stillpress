@@ -31,6 +31,7 @@ One install runs one site. Several sites means several installs.
   - A setup wizard on first start. It asks for the one-time setup token Stillpress prints to its log, creates the site and the first administrator, then offers **Start empty** or **Import from WordPress**.
   - WXR upload import: the file is uploaded from the admin and imported as a background job with live progress, then queued for publishing. A site is imported at most once, from the admin or the CLI: only into an empty site, and only when no import is running or done; a failed import that left nothing behind may be retried.
   - Users and roles (administrator, editor, author, contributor). Imported authors become accounts without a password; an administrator issues them a single-use set-password link, and `stillpress user reset-password <login>` prints one from the server.
+  - **Reset site** at the bottom of Settings (administrators, `POST /admin/api/reset` with `{"password","confirm"}`; `confirm` is the site title): deletes all content, media, users other than you, categories, redirects and settings except the title, language, site address and time zone, publishes the empty site and opens import again. This is how to redo a bad import. The password counts towards the login rate limit; it is refused while an import runs.
   - Password login (Argon2id) with rate limits: 5 failures per account and 20 per client IP in 15 minutes, then 429 with `Retry-After`.
   - CSRF protection by [quarkus-rest-csrf](https://quarkus.io/guides/security-csrf-prevention): every state-changing admin API call must echo the `csrf-token` cookie in `X-CSRF-TOKEN`.
   - `/wp-admin` and `/wp-login.php` redirect to `/admin/`, so WordPress bookmarks keep working.
@@ -74,6 +75,8 @@ stillpress publish                     # render a full release and make it live;
 stillpress serve                       # serve the live release on :8080 (also the default command)
 stillpress verify-urls --source https://old-blog.example --target http://localhost:8080
 stillpress user reset-password <login>  # print a single-use set-password link (valid 24 h); login or email
+stillpress reset                       # show what a reset would delete (row counts, data directory); exits 1
+stillpress reset --yes                 # delete everything, users and settings included; the next serve prints a setup token
 ```
 
 On first start, `serve` logs a setup token (`Setup token: …`); open `/admin`, enter it in the wizard and create the site there, empty or from a WXR upload. The token exists only until the first administrator has a password.
