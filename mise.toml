@@ -1,4 +1,4 @@
 [tools]
-java = "liberica-25.0.5.0.3+5"
+java = "liberica-27.0.1.0.3+5"
 maven = "3.9.16"
 bun = "1.4.4"
