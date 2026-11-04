@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'bun:test';
-import { Glob } from 'bun';
-import { readFileSync } from 'node:fs';
+import { describe, expect, test } from 'vitest';
+import { globSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { extractCalls } from './extract.ts';
 import ru from './ru.json';
 
@@ -9,8 +10,9 @@ import ru from './ru.json';
  * scan sees all of them. Exceptions (strings that reach __ through a variable), with the reason:
  * none.
  */
-const src = new URL('..', import.meta.url).pathname;
-const calls = [...new Glob('**/*.{ts,tsx}').scanSync(src)]
+// not new URL('..', import.meta.url): Vite rewrites that pattern as an asset reference
+const src = join(dirname(fileURLToPath(import.meta.url)), '../');
+const calls = globSync('**/*.{ts,tsx}', { cwd: src })
   .filter((f) => !/\.test\.tsx?$/.test(f) && !f.startsWith('i18n/'))
   .flatMap((f) => extractCalls(readFileSync(src + f, 'utf8')).map((c) => ({ ...c, file: f })));
 const keys = new Set(calls.map((c) => c.key));

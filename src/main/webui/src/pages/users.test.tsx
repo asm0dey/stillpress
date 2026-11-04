@@ -1,5 +1,4 @@
-/// <reference types="bun" />
-import { beforeAll, expect, test } from 'bun:test';
+import { beforeAll, expect, test } from 'vitest';
 import type { UserView } from '../api.ts';
 import { fakeApi, usePages } from '../testapi.ts';
 

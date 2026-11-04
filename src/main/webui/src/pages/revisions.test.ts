@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, test } from 'vitest';
 import { compare } from './Revisions.tsx';
 
 test('compare marks a changed word only', () => {

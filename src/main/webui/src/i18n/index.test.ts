@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, test } from 'vitest';
 import { __ } from '@wordpress/i18n';
 import { loadLocale, zoneOffset } from './index.ts';
 

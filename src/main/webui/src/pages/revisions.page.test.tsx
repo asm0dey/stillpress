@@ -1,5 +1,4 @@
-/// <reference types="bun" />
-import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, expect, test } from 'vitest';
 import { fakeApi, usePages } from '../testapi.ts';
 
 const t = usePages();
@@ -21,7 +20,7 @@ beforeAll(async () => {
   );
 });
 
-// Bun's own confirm reads the terminal
+// jsdom does not implement confirm
 const realConfirm = globalThis.confirm;
 let confirmed = true;
 beforeAll(() => { globalThis.confirm = () => confirmed; });
@@ -127,7 +126,7 @@ test('a refused restore says why and can be retried', async () => {
   const view = page('/edit/7/revisions');
   const button = (await view.findAllByRole('button', { name: /^Restore revision from / }))[0];
   await t.user.click(button);
-  expect((await view.findByRole('alert')).textContent).toStartWith('Someone else changed this post.');
+  expect((await view.findByRole('alert')).textContent).toMatch(/^Someone else changed this post\./);
   expect((button as HTMLButtonElement).disabled).toBe(false);
 });
 

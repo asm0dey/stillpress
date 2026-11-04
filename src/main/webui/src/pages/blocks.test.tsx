@@ -1,5 +1,4 @@
-/// <reference types="bun" />
-import { beforeAll, expect, test } from 'bun:test';
+import { beforeAll, expect, test } from 'vitest';
 import { fakeApi, usePages } from '../testapi.ts';
 
 const t = usePages();

@@ -1,6 +1,5 @@
-/// <reference types="bun" />
-import { beforeAll, expect, test } from 'bun:test';
-import { wxrBodies } from './testdom.ts';
+import { beforeAll, expect, test, vi } from 'vitest';
+import { wxrBodies } from './testwxr.ts';
 import { Edits } from './edits.ts';
 
 let c: typeof import('./classic.ts');
@@ -53,12 +52,17 @@ test('opening an unedited classic post leaves it clean, so nothing is saved', as
 });
 
 test('a failed TinyMCE download is retried, not cached', async () => {
-  // bun cannot load the Classic modal's CSS, so the install fails here as a lost chunk would in the browser
-  const first = c.installClassicEditor();
-  await expect(first).rejects.toBeDefined();
-  const second = c.installClassicEditor();
-  expect(second).not.toBe(first);
-  await expect(second).rejects.toBeDefined();
+  // the Classic modal's CSS fails to load, as a lost chunk would in the browser
+  vi.doMock('./classic.css', () => { throw new Error('lost chunk'); });
+  try {
+    const first = c.installClassicEditor();
+    await expect(first).rejects.toBeDefined();
+    const second = c.installClassicEditor();
+    expect(second).not.toBe(first);
+    await expect(second).rejects.toBeDefined();
+  } finally {
+    vi.doUnmock('./classic.css');
+  }
 });
 
 test('TinyMCE keeps markup the user never touched', async () => {

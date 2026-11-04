@@ -74,7 +74,7 @@ mise exec -- mvn spotless:apply
 
 ### Development
 
-Day to day, run the app in Quarkus dev mode through the quarkus-agent MCP server (`.mcp.json`): `quarkus_start` starts it, and its Dev MCP test tools (`devui-testing_runTests`, `devui-testing_runTest` with a class name) run the tests with hot reload. [AGENTS.md](AGENTS.md) has the workflow. Keep `mise exec -- mvn verify` for the full build before pushing. The admin UI's own commands run with `bun` in `src/main/webui`; `mise run test:ui` runs its unit tests (`bun test`), which the Maven build does not, and `mise run verify` runs `mvn -q verify` and then `test:ui`, the whole check before pushing.
+Day to day, run the app in Quarkus dev mode through the quarkus-agent MCP server (`.mcp.json`): `quarkus_start` starts it, and its Dev MCP test tools (`devui-testing_runTests`, `devui-testing_runTest` with a class name) run the tests with hot reload. [AGENTS.md](AGENTS.md) has the workflow. Keep `mise exec -- mvn verify` for the full build before pushing. The admin UI's own commands run with `bun` in `src/main/webui`; `mise run test:ui` runs its unit tests (Vitest, on Node), which the Maven build does not, `bun run mutation` runs mutation testing on them (Stryker), and `mise run verify` runs `mvn -q verify` and then `test:ui`, the whole check before pushing.
 
 ## Run
 

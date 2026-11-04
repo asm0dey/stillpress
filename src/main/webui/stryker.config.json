@@ -1,10 +1,10 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "testRunner": "bun",
-  "appendPlugins": [
-    "@hughescr/stryker-bun-runner"
-  ],
-  "_comment": "tsconfigFile points nowhere: TypeScript 7 has no JS compiler API for Stryker to rewrite tsconfig with, and bun runs the .ts directly. inPlace: the classic and fixture tests read the sample WXR from src/test, outside a sandbox copy. i18n/strings.test.ts is left out: it scans the source text, which the instrumentation rewrites.",
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.stryker.config.ts"
+  },
+  "_comment": "tsconfigFile points nowhere: TypeScript 7 has no JS compiler API for Stryker to rewrite tsconfig with, and Vite compiles the .ts itself. inPlace: the classic and fixture tests read the sample WXR from src/test, outside a sandbox copy. vitest.stryker.config.ts leaves out the strings scan, which reads the source text the instrumentation rewrites.",
   "tsconfigFile": "no-tsconfig.json",
   "inPlace": true,
   "coverageAnalysis": "perTest",
@@ -12,23 +12,13 @@
     "src/**/*.{ts,tsx}",
     "!src/**/*.test.{ts,tsx}",
     "!src/testapi.ts",
-    "!src/editor/testdom.ts"
+    "!src/editor/testwxr.ts"
   ],
+  "incremental": true,
   "reporters": [
     "clear-text",
     "progress",
     "html",
     "json"
-  ],
-  "bun": {
-    "timeout": 60000,
-    "testFiles": [
-      "src/shell.test.tsx",
-      "src/editor",
-      "src/i18n/index.test.ts",
-      "src/pages"
-    ]
-  },
-  "incremental": true,
-  "fileLogLevel": "debug"
+  ]
 }

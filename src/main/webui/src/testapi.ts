@@ -1,5 +1,4 @@
-/// <reference types="bun" />
-import { afterEach } from 'bun:test';
+import { afterEach } from 'vitest';
 import * as rtl from '@testing-library/react/pure';
 import { userEvent } from '@testing-library/user-event';
 import * as router from 'react-router';
@@ -37,7 +36,7 @@ export interface Pages {
 /**
  * What a page test renders with: Testing Library, user-event and the router. After each test the page unmounts and
  * fetch is real again. The pure entry, with its setup done here: the main one registers cleanup only where afterEach
- * is a global, which bun's is not.
+ * is a global, which vitest's is only with globals: true.
  */
 export function usePages(): Pages {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

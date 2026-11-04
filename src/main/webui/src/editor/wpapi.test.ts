@@ -1,5 +1,4 @@
-/// <reference types="bun" />
-import { afterEach, beforeAll, beforeEach, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import apiFetch from '@wordpress/api-fetch';
 import { installWordPressApi } from './wpapi.ts';
 
@@ -18,7 +17,7 @@ beforeAll(() => {
 beforeEach(() => {
   calls = [];
   reply = () => json({});
-  globalThis.fetch = mock(async (url: string, init: RequestInit = {}) => {
+  globalThis.fetch = vi.fn(async (url: string, init: RequestInit = {}) => {
     calls.push({
       url, method: init.method ?? 'GET', headers: (init.headers ?? {}) as Record<string, string>,
       body: init.body ? JSON.parse(init.body as string) : undefined,
@@ -28,7 +27,7 @@ beforeEach(() => {
   installWordPressApi({ id: 7, login: 'ann', email: 'u@example.org', displayName: 'Ann', role: 'author', locale: 'en' });
 });
 
-afterEach(() => mock.restore());
+afterEach(() => vi.restoreAllMocks());
 
 const BLOCK = { id: 3, title: 'Promo', content: '<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->', canEdit: true };
 const WP_BLOCK = {
@@ -122,7 +121,7 @@ test('the oEmbed proxy goes to /admin/api/oembed', async () => {
 });
 
 test('an unknown call warns and fails with rest_no_route', async () => {
-  const warn = spyOn(console, 'warn').mockImplementation(() => {});
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   await expect(call({ path: '/wp/v2/block-renderer/core/archives?context=edit', method: 'POST' })).rejects.toMatchObject({ code: 'rest_no_route' });
   expect(warn).toHaveBeenCalledWith('Unknown WordPress API call: POST /wp/v2/block-renderer/core/archives');
   expect(calls).toEqual([]);

@@ -1,5 +1,4 @@
-/// <reference types="bun" />
-import { expect, test } from 'bun:test';
+import { expect, test } from 'vitest';
 import { Edits } from './edits.ts';
 
 test('blocks that serialize like the loaded body are not an edit', () => {
