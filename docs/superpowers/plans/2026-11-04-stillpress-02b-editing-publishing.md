@@ -34,6 +34,7 @@
 
 - Optimistic concurrency: every item and reusable-block update carries `expectedModifiedAt`; a mismatch is **409** `{"error":"conflict"}` and changes nothing.
 - Permalinks of new items come from setting `permalink_structure` (WordPress tokens `%year% %monthnum% %day% %hour% %minute% %second% %postname% %post_id% %category% %author%`); default `/%year%/%monthnum%/%day%/%postname%/`. The import infers it from the imported posts. Pages are `/<ancestor slugs>/<slug>/`. An item gets its permalink when it is first published. When a published item's permalink changes, the old path gets a 301 to the new one in the redirect map.
+- A site's origin is decided once: imported, or never imported. Start empty, or any admin write (items, media, terms, reusable blocks, settings, redirects, users), sets `import_state` to `closed` in the same transaction via `ImportGuard.close()` (Task 1b). An import into a closed or non-empty site is refused (409 in the admin, exit 1 in the CLI).
 - Everything an import fills in can also be set in the admin, so a site started empty is a full peer of an imported one: site settings (Task 6b), users, categories and tags, redirects (Task 6c), item author, comment status and page order (Tasks 4, 7).
 - New items get a WordPress-style public id: `source_id` = `coalesce(max(source_id), 0) + 1` in the insert. It cannot collide with imported ids, whose `?p=N` redirects already exist. The id feeds `guid` = `<home_url>/?p=<source_id>` (set at creation, never changed, as WordPress does) and, on publish, the redirects `?p=<source_id>` (and `?page_id=<source_id>` for pages) → permalink.
 - Site time zone: setting `timezone` (IANA id). The wizard stores the browser's `Intl.DateTimeFormat().resolvedOptions().timeZone`; missing means `UTC`. `published_local` = `published_at` in that zone.
@@ -54,7 +55,8 @@
 2. **Two writers at once.** Two tabs or users saving the same item: the second gets 409, not a silent overwrite. Two publishes started together (server task and CLI): exactly one runs at a time and no change is lost. Tests in Tasks 3 and 4.
 3. **A save rolls back.** A save that fails after enqueuing (or after scheduling a go-live task) must leave no queue row and no task behind. Test `rolledBackSaveLeavesNoQueueRowOrTask` in Task 3.
 4. **Lower roles reaching past their rights through the WordPress slice or the items API.** A contributor publishes via `status: "publish"`, an author edits someone else's post or a page, an author saves someone else's reusable block after editing it inside a post. Each is 403 and changes nothing. Tests in Tasks 4 and 5.
-5. **Hostile uploads and the oEmbed proxy as an open fetcher.** An `.svg`/`.html` upload, a `../` file name, `oembed/1.0/proxy?url=http://169.254.169.254/` → refused, nothing written or fetched. Tests in Tasks 5 and 6.
+5. **Import sneaking into a site started empty.** A write path that forgets `ImportGuard.close()` reopens the import. `everyWritePathClosesImport` in Task 6c walks every admin write endpoint on a fresh site and then expects the import to be 409.
+6. **Hostile uploads and the oEmbed proxy as an open fetcher.** An `.svg`/`.html` upload, a `../` file name, `oembed/1.0/proxy?url=http://169.254.169.254/` → refused, nothing written or fetched. Tests in Tasks 5 and 6.
 
 ---
 
@@ -195,6 +197,49 @@ git add pom.xml src
 git commit -m "feat: editing schema, db-scheduler, slugs and permalink structure"
 git push
 ```
+
+---
+
+### Task 1b: A site started empty is closed to import
+
+Today `ImportGuard` refuses only when content tables are non-empty, and the wizard's "Start empty" card merely navigates. A site whose administrator chose Start empty, changed settings or added users, but has no posts yet, would still accept an import that overwrites them. The site's origin must be decided once: either it is imported, or it never is.
+
+**Files:**
+- Modify: `importer/ImportGuard.java`, `importer/AlreadyImportedException.java` (unchanged API), `admin/SetupResource.java` (new endpoint), `src/main/webui/src/pages/Setup.tsx` (the card calls it), `pages/Import.tsx`, `Shell.tsx`, `pages/Dashboard.tsx` (no import entry once closed), `admin/SiteResource.java` (`GET /site` gains `importAllowed`)
+- Test: `importer/ImportGuardTest.java`, `admin/SetupResourceTest.java`, `pg/PostgresImportGuardTest.java`
+
+**Interfaces:**
+- Consumes: `SettingRepository.compareAndSet`, `ImportGuard` (02a).
+- Produces:
+  - `import_state` gains the value `closed`. `ImportGuard.begin()` refuses `closed` with the message "this site was started without an import; import works only on a fresh install".
+  - `ImportGuard.close() throws ImportRunningException` (new unchecked exception → 409 `{"error":"import_running"}`): in the caller's transaction, `compareAndSet` from absent or `failed` to `closed`; no-op when already `closed` or `done`; throws when `running`. It works across processes (CLI import), because it is a compare-and-set on the row.
+  - `POST /admin/api/setup/start-empty` (`@RolesAllowed("administrator")`) → `close()`, 204. The wizard's Start empty card calls it, then goes to the dashboard.
+  - Every admin write path calls `close()` first, in its own transaction: item create and update, media upload, term create, update and delete, reusable-block create and update, settings save, redirect add and delete, user create and edit (Tasks 4, 5, 6, 6b, 6c and the 02a `UsersResource`). The first write decides the site's origin even if the administrator never pressed Start empty. Setup itself does not close import, so "Import from WordPress" stays possible right after the wizard's first step.
+  - `GET /admin/api/site` → `importAllowed` = state absent or `failed` and content empty; the Import nav entry, the dashboard's import card and the `/import` route exist only while it is true.
+- [ ] **Step 1: Write failing tests**
+
+```java
+// ImportGuardTest
+@Test void startEmptyClosesImport() throws Exception {
+  guard.close();
+  assertThatThrownBy(guard::begin).isInstanceOf(AlreadyImportedException.class).hasMessageContaining("fresh install");
+}
+@Test void closeDuringImportIsRefused() throws Exception {
+  guard.begin();
+  assertThatThrownBy(guard::close).isInstanceOf(ImportRunningException.class);
+}
+@Test void closeAfterFailedImportCloses() throws Exception { guard.begin(); guard.failed("x"); guard.close(); assertThat(guard.state()).contains("closed"); }
+// SetupResourceTest
+@Test void startEmptyThenImportIs409() { /* setup, POST /setup/start-empty → 204, POST /import → 409 already_imported */ }
+@Test void userCreatedBeforeImportClosesIt() { /* setup, POST /users → 201, POST /import → 409 */ }
+@Test void importStillAllowedRightAfterSetup() { /* setup only → GET /site importAllowed true, POST /import → 202 */ }
+// PostgresImportGuardTest: concurrent begin() and close() → exactly one succeeds
+```
+
+- [ ] **Step 2: Run, verify fail.**
+- [ ] **Step 3: Implement**, including the `close()` call in `UsersResource` create and the wizard card.
+- [ ] **Step 4: Run, verify pass**, plus `ImportResourceTest`, `ImportCommandTest`.
+- [ ] **Step 5: Commit and push** — `git commit -m "feat: a site started empty never accepts an import"`.
 
 ---
 
@@ -569,6 +614,7 @@ A site started empty in the wizard must work as a blog without any WordPress imp
   @Test void importAfterSetupStillAllowed() {
     // setup (no post written) → the import guard still accepts an import (no term was created)
   }
+  @Test void firstPostClosesImport() { /* setup, publish a post → POST /admin/api/import → 409, GET /site importAllowed false */ }
 }
 ```
 
@@ -586,7 +632,7 @@ Whatever an import sets must also be settable by hand, so a site started empty i
 **Files:**
 - Create: `admin/TermsResource.java`, `admin/RedirectsResource.java`, `src/main/webui/src/pages/Terms.tsx`, `pages/Redirects.tsx`
 - Modify: `admin/UsersResource.java` + `pages/Users.tsx` (edit display name and email), `store/TermRepository.java` (`update`, `delete`), `store/RedirectRepository.java` (`list`, `delete`), `main.tsx` + `Shell.tsx` (routes `/categories`, `/tags`, `/redirects`)
-- Test: `admin/TermsResourceTest.java`, `admin/RedirectsResourceTest.java`, `admin/UsersResourceTest.java`
+- Test: `admin/TermsResourceTest.java`, `admin/RedirectsResourceTest.java`, `admin/UsersResourceTest.java`, `admin/ImportClosedTest.java`
 
 **Interfaces:**
 - Consumes: `PublishQueue`, `Jobs.requestPublish()`, `Slugs`, `Capabilities`.
@@ -622,6 +668,11 @@ Whatever an import sets must also be settable by hand, so a site started empty i
   @Test void cannotShadowAPublishedItem() { /* 409 shadows_item */ }
   @Test void deleteRemovesIt() { }
   @Test void editorIs403() { }
+}
+@QuarkusTest class ImportClosedTest {
+  // one test per write path, each on a freshly reset site after setup: items POST, media POST, terms POST, blocks POST,
+  // settings PUT, redirects POST, users POST and PUT → then POST /admin/api/import → 409 already_imported
+  @ParameterizedTest @MethodSource("writes") void everyWritePathClosesImport(Consumer<RequestSpecification> write) { }
 }
 // UsersResourceTest: user edits own display name → 204 and author archive heading changes after publish;
 // author edits someone else → 403
@@ -847,6 +898,7 @@ test('no Russian entry is orphaned', () => { expect(orphansIn(ruJson, extracted(
 - Roadmap coverage for 02b: editor (T7), WP REST slice incl. method override, `canUser` and unknown-call logging (T5), classic block with on-demand conversion (T8), reusable blocks with the separate pattern editor and dirty-entity saving (T5, T7, T9), media library and upload (T6, T7), statuses and scheduling (T3, T4), incremental and background republish with dependency tracking and the fragment/hard-link design (T2, T3), preview (T4), revisions and autosave with compare, restore and 25 kept (T4, T10), admin i18n (T11), every 02a item labelled 02b (T6 nginx split and body-limit exclusion, T12 the rest).
 - Decided with the user at plan time: db-scheduler for publishing jobs (replicas on PostgreSQL stay possible; H2 means single node; static output is synced between replicas by external tools).
 - Calls made here (reviewable): `@wordpress/block-editor` hosted by our own screen rather than `@wordpress/editor` (the spike's proven path; `@wordpress/editor` would need most of the WordPress posts, settings, taxonomies and statuses REST API). Reusable blocks have owners: authors create and edit their own, editors and administrators edit any, contributors only insert (WordPress maps `wp_block` to post capabilities the same way). A slug change on a published item moves its permalink and leaves a 301, as WordPress's old-slug redirect does.
+- Import closed for sites started empty (user request at plan review): Task 1b, the Global Constraint, Review Focus 5, `ImportClosedTest` in Task 6c.
 - Back office parity (user request at plan review): Task 6c plus the item fields in Tasks 4 and 7, and the public-id rule in Global Constraints.
 - From scratch (user request at plan review): Task 6b (settings screen, lazy default category, automatic excerpts) and Task 13 Step 0.
 - Left for later: theme and appearance settings (plan 03), layout/global-styles CSS generator (plan 03; T7 only passes layout settings to the editor), episodes in the editor (plan 05), comment moderation (plan 04), email "pending review" notifications (02c).
