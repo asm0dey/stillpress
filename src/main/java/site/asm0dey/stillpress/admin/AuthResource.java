@@ -29,6 +29,7 @@ import site.asm0dey.stillpress.store.TokenRepository;
 public class AuthResource {
     // an unknown login is verified against this, so it costs the same as a wrong password
     private static final String DUMMY_HASH = Passwords.hash("no such user, same Argon2id cost");
+    private static final int MAX_LOGIN = 100;
     private static final Map<String, String> INVALID_CREDENTIALS = Map.of("error", "invalid_credentials");
     @Inject
     LoginLimiter limiter;
@@ -60,6 +61,13 @@ public class AuthResource {
         var wait = limiter.blockedIp(ip);
         if (wait.isPresent()) {
             return rateLimited(wait.get());
+        }
+        // no real login or password is this long: refuse before it becomes a limiter key or Argon2 input, counting
+        // it against the IP only so oversized spam still runs into the IP limit
+        if (c.login().length() > MAX_LOGIN
+                || c.password().codePointCount(0, c.password().length()) > Passwords.MAX_LENGTH) {
+            limiter.ipFailure(ip);
+            return Response.status(401).entity(INVALID_CREDENTIALS).build();
         }
         var user = users.findByLoginOrEmail(c.login());
         // the account bucket follows the user, so login and email share it; unknown names get their own

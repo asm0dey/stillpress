@@ -57,6 +57,16 @@ public class LoginLimiter {
             .addLast(now);
     }
 
+    /**
+     * A failure that names no real account (an oversized login); only the IP bucket counts it.
+     */
+    public synchronized void ipFailure(String ip) {
+        prune();
+        byIp
+            .computeIfAbsent(ip, _ -> new ArrayDeque<>())
+            .addLast(clock.instant());
+    }
+
     public synchronized void success(String account) {
         byLogin.remove(key(account));
     }

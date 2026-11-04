@@ -76,6 +76,31 @@ class AuthResourceTest {
     }
 
     @Test
+    void oversizedCredentialsAre401AndCountAgainstTheIpOnly() {
+        var longPassword = "😀".repeat(1025);
+        for (int i = 0; i < 6; i++) {
+            login("admin", longPassword).then().statusCode(401).body("error", equalTo("invalid_credentials"));
+        }
+        // six failures would have locked the account; these did not touch it
+        login("admin", "correct horse battery").then().statusCode(204);
+        for (int i = 0; i < 14; i++) {
+            login("a".repeat(101), "x").then().statusCode(401).body("error", equalTo("invalid_credentials"));
+        }
+        // twenty from this IP
+        login("admin", "correct horse battery").then().statusCode(429);
+    }
+
+    @Test
+    void passwordAtTheLengthLimitTakesTheNormalPath() {
+        login("a".repeat(100), "x").then().statusCode(401);
+        for (int i = 0; i < 5; i++) {
+            login("admin", "😀".repeat(1024)).then().statusCode(401);
+        }
+        // counted against the account like any wrong password
+        login("admin", "correct horse battery").then().statusCode(429);
+    }
+
+    @Test
     void malformedStoredHashIs401() {
         users.setPassword(adminId, "not-a-hash");
         login("admin", "correct horse battery").then().statusCode(401);

@@ -11,7 +11,7 @@ public final class Passwords {
     // OWASP minimum for Argon2id: 19 MiB memory, 2 iterations, 1 lane
     private static final Argon2Function ARGON2 = Argon2Function.getInstance(19456, 2, 1, 32, Argon2.ID);
     private static final int MIN_LENGTH = 12;
-    private static final int MAX_LENGTH = 1024;
+    public static final int MAX_LENGTH = 1024;
 
     private Passwords() {
     }
