@@ -1,7 +1,7 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { __, sprintf } from '@wordpress/i18n';
-import { type ApiError, type SiteSettings, type TermView, api } from '../api.ts';
+import { asApiError, type ApiError, type SiteSettings, type TermView, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
 
@@ -38,12 +38,15 @@ export default function Settings() {
   const [siteTitle, setSiteTitle] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     api<SiteSettings>('/settings').then((s) => {
+      if (cancelled) return;
       setForm(s);
       setSiteTitle(s.title);
       setPreset(presets().find((p) => p.value === s.permalinkStructure)?.value ?? CUSTOM);
-    }, () => setMessage(__('Could not load the settings.', 'stillpress')));
-    api<TermView[]>('/terms?taxonomy=category').then(setCategories, () => {});
+    }, () => !cancelled && setMessage(__('Could not load the settings.', 'stillpress')));
+    api<TermView[]>('/terms?taxonomy=category').then((c) => !cancelled && setCategories(c), () => {});
+    return () => { cancelled = true; };
   }, []);
 
   if (!form) {
@@ -66,7 +69,7 @@ export default function Settings() {
       setSiteTitle(s.title);
       setSaved(true);
     } catch (err) {
-      const f = err as ApiError;
+      const f = asApiError(err);
       if (f.field) setErrors({ [f.field]: messages()[f.field] ?? __('Check this field.', 'stillpress') });
       else setMessage(f.error === 'csrf' ? f.message! : __('Could not save the settings.', 'stillpress'));
     }
@@ -159,7 +162,7 @@ function ResetSite({ title }: { title: string }) {
       await api('/reset', { method: 'POST', body: { password, confirm } });
       navigate('/');
     } catch (err) {
-      const f = err as ApiError;
+      const f = asApiError(err);
       setMessage(f.field === 'confirm' ? __('Type the site title exactly.', 'stillpress')
         : f.error === 'csrf' ? f.message! : resetMessages()[f.error ?? ''] ?? __('Could not reset the site.', 'stillpress'));
     } finally {

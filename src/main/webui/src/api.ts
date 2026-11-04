@@ -3,6 +3,17 @@ import { type Locale } from './i18n/index.ts';
 
 export type Role = 'administrator' | 'editor' | 'author' | 'contributor';
 
+const ADMINISTRATOR: Role[] = ['administrator'];
+const EDITORS: Role[] = ['administrator', 'editor'];
+/** Screens only some roles may use, by first path segment, as Capabilities decides on the server. */
+const SCREEN_ROLES: Record<string, Role[]> = {
+  users: ADMINISTRATOR, settings: ADMINISTRATOR, import: ADMINISTRATOR, redirects: ADMINISTRATOR,
+  pages: EDITORS, categories: EDITORS, tags: EDITORS,
+};
+
+/** Whether the role may open the admin screen at this path; the gate sends it to the dashboard otherwise. */
+export const mayOpen = (role: Role, path: string): boolean => SCREEN_ROLES[path.split('/')[1]]?.includes(role) ?? true;
+
 /** The body of a non-2xx response, plus its status. */
 /** Shown when the server refuses a call for a missing or stale CSRF token. */
 export const CSRF_MESSAGE = () => __('Your session token has expired. Reload the page and try again.', 'stillpress');
@@ -16,8 +27,16 @@ export interface ApiError {
   violations?: string[];
 }
 
+/** Whether a thrown value is the ApiError {@link api} throws, not a network failure or a bug. */
+export function isApiError(e: unknown): e is ApiError {
+  return typeof e === 'object' && e !== null && typeof (e as { status?: unknown }).status === 'number';
+}
+
+/** The ApiError, or status 0 for anything else thrown (a network failure), which callers show as a generic failure. */
+export const asApiError = (e: unknown): ApiError => (isApiError(e) ? e : { status: 0 });
+
 /** GET /session */
-export interface SessionUser { id: number; login: string; displayName: string; role: Role; locale: Locale }
+export interface SessionUser { id: number; login: string; displayName: string; email: string; role: Role; locale: Locale }
 /** GET /site */
 export interface Site {
   title: string; homeUrl: string; language: string; items: number; comments: number; importAllowed: boolean;

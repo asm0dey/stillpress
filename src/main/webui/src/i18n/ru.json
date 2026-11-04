@@ -255,6 +255,9 @@
  "Could not load the media library.": [
   "Не удалось загрузить библиотеку файлов."
  ],
+ "Could not load the profile.": [
+  "Не удалось загрузить профиль."
+ ],
  "Could not load the publish state.": [
   "Не удалось загрузить состояние публикации."
  ],
@@ -617,6 +620,12 @@
  ],
  "Private": [
   "Личное"
+ ],
+ "Profile": [
+  "Профиль"
+ ],
+ "Profile saved.": [
+  "Профиль сохранён."
  ],
  "Public": [
   "Открыто"
@@ -990,6 +999,9 @@
  ],
  "Use one word or slug.": [
   "Используйте одно слово или ярлык."
+ ],
+ "Use up to 60 letters, digits, spaces and the characters _ . - @": [
+  "Не более 60 символов: буквы, цифры, пробелы и знаки _ . - @"
  ],
  "Used by": [
   "Используется в"

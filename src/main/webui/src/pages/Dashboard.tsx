@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { __, sprintf } from '@wordpress/i18n';
 import { formatInstant } from '../i18n/index.ts';
-import { type ApiError, type PublishState, type Role, type SessionUser, type Site, api } from '../api.ts';
+import { asApiError, type PublishState, type Role, type SessionUser, type Site, api } from '../api.ts';
 import Shell from '../Shell.tsx';
 
 export default function Dashboard() {
@@ -11,7 +11,13 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api<Site>('/site').then(setSite, (e: ApiError) => (e.status === 401 ? navigate('/login') : setError(__('Could not load the site.', 'stillpress'))));
+    let cancelled = false;
+    api<Site>('/site').then((s) => !cancelled && setSite(s), (e: unknown) => {
+      if (cancelled) return;
+      if (asApiError(e).status === 401) navigate('/login?next=' + encodeURIComponent('/'));
+      else setError(__('Could not load the site.', 'stillpress'));
+    });
+    return () => { cancelled = true; };
   }, []);
 
   return (
@@ -40,8 +46,10 @@ function PublishCard({ timeZone }: { timeZone: string }) {
 
   const load = () => api<PublishState>('/publish').then(setState, () => setMessage(__('Could not load the publish state.', 'stillpress')));
   useEffect(() => {
+    let cancelled = false;
     load();
-    api<SessionUser>('/session').then((s) => setRole(s.role), () => {});
+    api<SessionUser>('/session').then((s) => !cancelled && setRole(s.role), () => {});
+    return () => { cancelled = true; };
   }, []);
   useEffect(() => {
     if (state?.state !== 'running' && state?.state !== 'queued') return undefined;
@@ -54,13 +62,12 @@ function PublishCard({ timeZone }: { timeZone: string }) {
     try {
       setState(await api<PublishState>('/publish', { method: 'POST' }));
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       setMessage(err.error === 'csrf' ? err.message! : __('Could not start the republish.', 'stillpress'));
     }
   }
 
   if (!state) return message ? <p role="alert" className="error">{message}</p> : null;
-  const busy = state.state === 'running' || state.state === 'queued';
   return (
     <section className="publish" aria-labelledby="publish-heading">
       <h2 id="publish-heading">{__('Publishing', 'stillpress')}</h2>
@@ -80,7 +87,8 @@ function PublishCard({ timeZone }: { timeZone: string }) {
       </p>
       {message && <p role="alert" className="error">{message}</p>}
       {role === 'administrator' && (
-        <button type="button" onClick={republish} disabled={busy}>{__('Republish site', 'stillpress')}</button>
+        // never disabled: a run that died would keep it stuck, and a second request just waits for the publish lock
+        <button type="button" onClick={republish}>{__('Republish site', 'stillpress')}</button>
       )}
     </section>
   );

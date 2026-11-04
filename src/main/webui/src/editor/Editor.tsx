@@ -9,7 +9,7 @@ import { store as coreStore } from '@wordpress/core-data';
 import { useDispatch, useRegistry } from '@wordpress/data';
 import { isInTheFuture } from '@wordpress/date';
 import { __, sprintf } from '@wordpress/i18n';
-import { type ApiError, type Item, type ItemSummary, type SessionUser, type TermView, type UserView, api } from '../api.ts';
+import { asApiError, type ApiError, type Item, type ItemSummary, type SessionUser, type TermView, type UserView, api } from '../api.ts';
 import { UNSAFE_HTML, saveError } from './errors.ts';
 import Sidebar, { type Draft } from './Sidebar.tsx';
 import { bodyFormatOf, bodyOf, installClassicEditor, toBlocks } from './classic.ts';
@@ -85,16 +85,20 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   });
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const [it, cats, tagList] = await Promise.all([
           api<Item>(`/items/${id}`), api<TermView[]>('/terms?taxonomy=category'), api<TermView[]>('/terms?taxonomy=post_tag'),
         ]);
+        if (cancelled) return;
         setCategories(cats);
         setTags(tagList);
         const parsed = toBlocks(it.body, it.bodyFormat);
         // the Classic block's edit modal needs TinyMCE the moment it opens
         if (it.bodyFormat === 'classic' || hasClassic(parsed)) await installClassicEditor();
+        // another item was opened meanwhile
+        if (cancelled) return;
         load(it, tagList, parsed);
         if (notice) setMessage({ kind: 'status', text: notice });
         setAutosaveAt(it.autosave?.createdAt ?? null);
@@ -102,9 +106,10 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
         if (role === 'administrator') api<UserView[]>('/users').then(setUsers, () => {});
         api<unknown[]>(`/items/${id}/revisions`).then((r) => setRevisions(r.length), () => {});
       } catch (e) {
-        setMessage({ kind: 'alert', text: (e as ApiError).status === 403 ? __('You cannot edit this item.', 'stillpress') : __('Could not load this item.', 'stillpress') });
+        if (!cancelled) setMessage({ kind: 'alert', text: asApiError(e).status === 403 ? __('You cannot edit this item.', 'stillpress') : __('Could not load this item.', 'stillpress') });
       }
     })();
+    return () => { cancelled = true; };
   }, [id]);
 
   function load(it: Item, tagList: TermView[], parsed: BlockInstance[]) {
@@ -127,7 +132,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     try {
       await autosave(true);
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       // the preview would show the older version; other failures open it as before
       if (err.error === 'unsafe_html') {
         tab?.close();
@@ -197,7 +202,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
       setRevisions((n) => n + 1);
       setMessage({ kind: 'status', text: savedText(saved.status) });
     } catch (e) {
-      setMessage(saveError(e as ApiError, 'post'));
+      setMessage(saveError(asApiError(e), 'post'));
     } finally { setBusy(false); }
   }
 

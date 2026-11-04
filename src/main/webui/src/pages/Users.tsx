@@ -1,8 +1,9 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
-import { type ApiError, type Role, type UserView, api } from '../api.ts';
+import { asApiError, type ApiError, type Role, type UserView, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
+import { useLatest } from '../useLatest.ts';
 
 interface NewUser { login: string; email: string; displayName: string; role: Role }
 
@@ -21,8 +22,10 @@ export default function Users() {
   const [form, setForm] = useState(EMPTY);
   const [editing, setEditing] = useState<{ id: number; displayName: string; email: string } | null>(null);
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [addErrors, setAddErrors] = useState<Record<string, string>>({});
 
-  const load = () => api<UserView[]>('/users').then(setUsers, () => setMessage(__('Could not load the users.', 'stillpress')));
+  const latest = useLatest();
+  const load = () => latest(api<UserView[]>('/users')).then(setUsers, () => setMessage(__('Could not load the users.', 'stillpress')));
   useEffect(() => { load(); }, []);
 
   async function changeRole(u: UserView, role: Role) {
@@ -30,7 +33,7 @@ export default function Users() {
     try {
       await api(`/users/${u.id}/role`, { method: 'PUT', body: { role } });
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       setMessage(err.error === 'csrf' ? err.message! : err.error === 'last_administrator'
         ? __('There must be at least one administrator with a password.', 'stillpress') : __('Could not change the role.', 'stillpress'));
     }
@@ -47,7 +50,7 @@ export default function Users() {
       setEditing(null);
       load();
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       if (err.error === 'email_taken') setEditErrors({ email: __('Another user has this email.', 'stillpress') });
       else if (err.field === 'email') setEditErrors({ email: __('Use an email address of at most 100 characters.', 'stillpress') });
       else if (err.field === 'displayName') setEditErrors({ displayName: __('Enter a name of at most 250 characters.', 'stillpress') });
@@ -61,7 +64,7 @@ export default function Users() {
       const { url } = await api<{ url: string }>(`/users/${u.id}/password-link`, { method: 'POST' });
       await copy(u.login, url);
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       setMessage(err.error === 'csrf' ? err.message! : __('Could not create the link.', 'stillpress'));
     }
   }
@@ -75,14 +78,20 @@ export default function Users() {
   async function add(e: FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setAddErrors({});
     try {
       const { setPasswordUrl } = await api<{ setPasswordUrl: string }>('/users', { method: 'POST', body: form });
       await copy(form.login, setPasswordUrl);
       setForm(EMPTY);
       load();
     } catch (e) {
-      const err = e as ApiError;
-      setMessage(err.error === 'csrf' ? err.message! : err.error === 'login_taken' ? __('That login is already taken.', 'stillpress') : __('Check the fields and try again.', 'stillpress'));
+      const err = asApiError(e);
+      if (err.error === 'login_taken') setAddErrors({ login: __('That login is already taken.', 'stillpress') });
+      else if (err.error === 'email_taken') setAddErrors({ email: __('Another user has this email.', 'stillpress') });
+      else if (err.field === 'login') setAddErrors({ login: __('Use up to 60 letters, digits, spaces and the characters _ . - @', 'stillpress') });
+      else if (err.field === 'email') setAddErrors({ email: __('Use an email address of at most 100 characters.', 'stillpress') });
+      else if (err.field === 'displayName') setAddErrors({ displayName: __('Enter a name of at most 250 characters.', 'stillpress') });
+      else setMessage(err.error === 'csrf' ? err.message! : __('Check the fields and try again.', 'stillpress'));
     }
   }
 
@@ -137,9 +146,9 @@ export default function Users() {
       )}
       <h2>{__('Add user', 'stillpress')}</h2>
       <form onSubmit={add}>
-        <Field label={__('Login', 'stillpress')} name="login" required value={form.login} onChange={set('login')} />
-        <Field label={__('Email', 'stillpress')} name="email" type="email" required value={form.email} onChange={set('email')} />
-        <Field label={__('Display name', 'stillpress')} name="displayName" required value={form.displayName} onChange={set('displayName')} />
+        <Field label={__('Login', 'stillpress')} name="login" required value={form.login} error={addErrors.login} onChange={set('login')} />
+        <Field label={__('Email', 'stillpress')} name="email" type="email" required value={form.email} error={addErrors.email} onChange={set('email')} />
+        <Field label={__('Display name', 'stillpress')} name="displayName" required value={form.displayName} error={addErrors.displayName} onChange={set('displayName')} />
         <div className="field">
           <label htmlFor="new-role">{__('Role', 'stillpress')}</label>
           <select id="new-role" value={form.role} onChange={set('role')}>

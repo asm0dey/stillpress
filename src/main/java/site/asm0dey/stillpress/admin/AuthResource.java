@@ -52,7 +52,7 @@ public class AuthResource {
 
     public record NewPassword(String token, String password) {}
 
-    public record SessionUser(long id, String login, String displayName, String role, String locale) {}
+    public record SessionUser(long id, String login, String displayName, String email, String role, String locale) {}
 
     public record NewLocale(String locale) {}
 
@@ -121,7 +121,7 @@ public class AuthResource {
         var locale = u.getLocale() != null
                 ? u.getLocale()
                 : settings.get("language").filter(l -> l.startsWith("ru")).map(l -> "ru").orElse("en");
-        return new SessionUser(u.getId(), u.getLogin(), u.getDisplayName(), u.getRole(), locale);
+        return new SessionUser(u.getId(), u.getLogin(), u.getDisplayName(), u.getEmail(), u.getRole(), locale);
     }
 
     /**

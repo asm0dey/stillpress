@@ -90,6 +90,62 @@ class UsersResourceTest {
     }
 
     @Test
+    void login61CharactersIs400NotA500() {
+        create("x".repeat(61), "author").then().statusCode(400).body("field", equalTo("login"));
+        create("bad/login", "author").then().statusCode(400).body("field", equalTo("login"));
+        assertThat(settings.get("import_state")).isNotPresent();
+    }
+
+    @Test
+    void createTrimsAndValidatesEmailAndDisplayName() {
+        asAdmin()
+            .body(Map.of("login", "e1", "email", "x".repeat(95) + "@e.org", "displayName", "E", "role", "editor"))
+            .post("/admin/api/users")
+            .then()
+            .statusCode(400)
+            .body("field", equalTo("email"));
+        asAdmin()
+            .body(Map.of("login", "e1", "email", "e1@example.org", "displayName", "x".repeat(251), "role", "editor"))
+            .post("/admin/api/users")
+            .then()
+            .statusCode(400)
+            .body("field", equalTo("displayName"));
+        var id = asAdmin()
+            .body(Map.of("login", " e1 ", "email", " e1@example.org ", "displayName", " E ", "role", "editor"))
+            .post("/admin/api/users")
+            .then()
+            .statusCode(201)
+            .extract()
+            .<Integer>path("id");
+        var u = users.findById(id).orElseThrow();
+        assertThat(List.of(u.getLogin(), u.getEmail(), u.getDisplayName())).containsExactly("e1", "e1@example.org", "E");
+    }
+
+    @Test
+    void duplicateEmailIs409() {
+        asAdmin()
+            .body(Map.of("login", "other", "email", "WRITER@example.org", "displayName", "O", "role", "author"))
+            .post("/admin/api/users")
+            .then()
+            .statusCode(409)
+            .body("error", equalTo("email_taken"));
+        assertThat(settings.get("import_state")).isNotPresent();
+    }
+
+    @Test
+    void concurrentSameLoginGivesOne201AndOtherwise409() {
+        var codes = IntStream
+            .range(0, 8)
+            .parallel()
+            .mapToObj(i -> asAdmin()
+                .body(Map.of("login", "dup", "email", "dup" + i + "@example.org", "displayName", "D", "role", "author"))
+                .post("/admin/api/users")
+                .statusCode())
+            .toList();
+        assertThat(codes).containsOnlyOnce(201).containsOnly(201, 409);
+    }
+
+    @Test
     void unknownRoleIs400() {
         create("editor1", "king").then().statusCode(400);
     }

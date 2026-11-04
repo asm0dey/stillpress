@@ -1,8 +1,9 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { __, _n, sprintf } from '@wordpress/i18n';
-import { type ApiError, type RedirectView, api } from '../api.ts';
+import { asApiError, type ApiError, type RedirectView, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
+import { useLatest } from '../useLatest.ts';
 
 const PER_PAGE = 50;
 const EMPTY: RedirectView = { from: '', to: '', status: 301 };
@@ -21,8 +22,9 @@ export default function Redirects() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
 
+  const latest = useLatest();
   const load = (q = search, p = page) =>
-    api<{ items: RedirectView[]; total: number }>(`/redirects?search=${encodeURIComponent(q)}&page=${p}`)
+    latest(api<{ items: RedirectView[]; total: number }>(`/redirects?search=${encodeURIComponent(q)}&page=${p}`))
       .then(setList, () => setMessage(__('Could not load the redirects.', 'stillpress')));
   useEffect(() => { load(); }, []);
 
@@ -35,7 +37,7 @@ export default function Redirects() {
       setForm(EMPTY);
       load();
     } catch (err) {
-      const f = err as ApiError;
+      const f = asApiError(err);
       if (f.error === 'shadows_item') setErrors({ from: __('A published post or page lives at this address.', 'stillpress') });
       else if (f.field) setErrors({ [f.field]: messages()[f.field] ?? __('Check this field.', 'stillpress') });
       else setMessage(f.error === 'csrf' ? f.message! : __('Could not add the redirect.', 'stillpress'));
@@ -48,7 +50,7 @@ export default function Redirects() {
       await api(`/redirects?from=${encodeURIComponent(r.from)}`, { method: 'DELETE' });
       load();
     } catch (err) {
-      const f = err as ApiError;
+      const f = asApiError(err);
       setMessage(f.error === 'csrf' ? f.message! : __('Could not delete the redirect.', 'stillpress'));
     }
   }

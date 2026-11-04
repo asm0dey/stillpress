@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { __ } from '@wordpress/i18n';
-import { type ApiError, type SessionUser, api } from '../api.ts';
+import { asApiError, type ApiError, type SessionUser, api } from '../api.ts';
 import { loadLocale } from '../i18n/index.ts';
 import { Field } from '../Field.tsx';
 
@@ -25,7 +25,7 @@ export default function Login() {
       // only a path inside the admin; anything else could leave the site
       navigate(next?.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true });
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       setError(err.error === 'csrf' ? err.message : err.status === 429 ? __('Too many attempts. Wait a few minutes and try again.', 'stillpress')
         : err.status === 401 ? __('The login or password is incorrect.', 'stillpress') : __('Login failed. Try again.', 'stillpress'));
     } finally {

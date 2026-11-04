@@ -1,9 +1,10 @@
 import { Link, Navigate } from 'react-router';
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
-import { type ApiError, type ImportStatus, api } from '../api.ts';
+import { asApiError, type ApiError, type ImportStatus, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
+import { useLatest } from '../useLatest.ts';
 
 const DEFAULTS = { postsPerPage: '10', postsPerRss: '10', categoryBase: 'category', tagBase: 'tag' };
 
@@ -15,10 +16,12 @@ export default function Import() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = () => api<ImportStatus>('/import').then(setStatus, () => setMessage(__('Could not load the import status.', 'stillpress')));
+  const latest = useLatest();
+  const load = () => latest(api<ImportStatus>('/import')).then(setStatus, () => setMessage(__('Could not load the import status.', 'stillpress')));
   useEffect(() => { load(); }, []);
+  // keeps polling while running, also when the import runs in another process (the CLI) and error says so
   useEffect(() => {
-    if (status?.state !== 'running' || status.error) return undefined;
+    if (status?.state !== 'running') return undefined;
     const timer = setTimeout(load, 1000);
     return () => clearTimeout(timer);
   }, [status]);
@@ -37,7 +40,7 @@ export default function Import() {
     try {
       setStatus(await api<ImportStatus>('/import', { method: 'POST', body }));
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       setMessage(err.error === 'csrf' ? err.message! : err.status === 409 ? err.message ?? __('This site has already been imported.', 'stillpress')
         : err.status === 400 ? err.error ?? __('Check the settings.', 'stillpress') : __('The upload failed. Try again.', 'stillpress'));
     } finally {
@@ -46,10 +49,14 @@ export default function Import() {
   }
 
   const set = (k: keyof typeof DEFAULTS) => (e: ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
-  const state = status?.state;
-  const leftContent = state === 'failed' && status!.contentLeft;
+  const s = status;
+  if (!s) {
+    return <Shell><h1>{__('Import from WordPress', 'stillpress')}</h1>{message && <p role="alert" className="error">{message}</p>}</Shell>;
+  }
+  const state = s.state;
+  const leftContent = state === 'failed' && s.contentLeft;
   // persisted as running, but no import thread in this server: it died, or the CLI runs one elsewhere
-  const stalled = state === 'running' && status!.error;
+  const stalled = state === 'running' && s.error;
 
   // started empty, or edited before any import: the site's origin is decided
   if (state === 'closed') return <Navigate to="/" replace />;
@@ -58,32 +65,32 @@ export default function Import() {
     <Shell>
       <h1>{__('Import from WordPress', 'stillpress')}</h1>
       {message && <p role="alert" className="error">{message}</p>}
-      {stalled && <p role="alert" className="error">{status!.error}</p>}
+      {stalled && <p role="alert" className="error">{s.error}</p>}
       {state === 'running' && !stalled && (
-        <p role="status">{sprintf(__('Importing… %1$d posts, pages and attachments, %2$d media files so far.', 'stillpress'), status!.items, status!.media)}</p>
+        <p role="status">{sprintf(__('Importing… %1$d posts, pages and attachments, %2$d media files so far.', 'stillpress'), s.items, s.media)}</p>
       )}
       {state === 'done' && (
         <>
           <p role="status">{__('The import is done. The site is publishing in the background.', 'stillpress')} <Link to="/">{__('Follow its progress on the dashboard', 'stillpress')}</Link></p>
-          {status!.report && <pre className="report">{status!.report}</pre>}
+          {s.report && <pre className="report">{s.report}</pre>}
         </>
       )}
       {state === 'failed' && (
         <div role="alert">
-          <p className="error">{sprintf(__('The import failed: %s', 'stillpress'), status!.error ?? __('see the server log.', 'stillpress'))}</p>
+          <p className="error">{sprintf(__('The import failed: %s', 'stillpress'), s.error ?? __('see the server log.', 'stillpress'))}</p>
           {leftContent
             ? <p>{__('Content was already written. To start over, use Reset site at the bottom of Settings.', 'stillpress')} <Link to="/settings">{__('Open Settings', 'stillpress')}</Link></p>
             : <p>{__('Nothing was imported. Fix the file and try again.', 'stillpress')}</p>}
-          {status!.report && <pre className="report">{status!.report}</pre>}
+          {s.report && <pre className="report">{s.report}</pre>}
         </div>
       )}
-      {state === 'idle' && status!.contentLeft && (
+      {state === 'idle' && s.contentLeft && (
         <p role="status">
           {__('This site already has content, and import works only into an empty site. To start over, use Reset site at the bottom of Settings.', 'stillpress')}{' '}
           <Link to="/settings">{__('Open Settings', 'stillpress')}</Link>
         </p>
       )}
-      {(state === 'idle' || state === 'failed') && !status!.contentLeft && (
+      {(state === 'idle' || state === 'failed') && !s.contentLeft && (
         <form onSubmit={submit}>
           <p className="muted">
             {__('Export your site in WordPress under Tools → Export → All content. The import replaces this site’s title and language with the export’s, and can run only once.', 'stillpress')}

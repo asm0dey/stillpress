@@ -24,7 +24,7 @@ beforeEach(() => {
     });
     return reply(url);
   }) as unknown as typeof fetch;
-  installWordPressApi({ id: 7, login: 'ann', displayName: 'Ann', role: 'author', locale: 'en' });
+  installWordPressApi({ id: 7, login: 'ann', email: 'u@example.org', displayName: 'Ann', role: 'author', locale: 'en' });
 });
 
 afterEach(() => mock.restore());
@@ -72,7 +72,7 @@ test('OPTIONS answers Allow from the role and the block\'s canEdit', async () =>
   expect(await allow('/wp/v2/blocks/3')).toEqual('GET');
   reply = () => json(BLOCK);
   expect(await allow('/wp/v2/blocks/3')).toEqual('GET, POST, PUT, PATCH');
-  installWordPressApi({ id: 8, login: 'con', displayName: 'Con', role: 'contributor', locale: 'en' });
+  installWordPressApi({ id: 8, login: 'con', email: 'u@example.org', displayName: 'Con', role: 'contributor', locale: 'en' });
   expect(await allow('/wp/v2/blocks')).toEqual('GET');
   expect(calls.map((c) => c.url)).toEqual(['/admin/api/blocks/3', '/admin/api/blocks/3']);
 });
@@ -108,7 +108,7 @@ test('media is reshaped and a 404 passes through', async () => {
 });
 
 test('users/me comes from the session', async () => {
-  reply = () => json({ id: 7, login: 'ann', displayName: 'Ann', role: 'author', locale: 'en' });
+  reply = () => json({ id: 7, login: 'ann', email: 'u@example.org', displayName: 'Ann', role: 'author', locale: 'en' });
   expect(await call({ path: '/wp/v2/users/me' })).toEqual({ id: 7, name: 'Ann', slug: 'ann', roles: ['author'] });
   expect(calls.map((c) => c.url)).toEqual(['/admin/api/session']);
 });

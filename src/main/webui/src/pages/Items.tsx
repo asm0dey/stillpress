@@ -2,9 +2,10 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { __, _n, _x, sprintf } from '@wordpress/i18n';
 import { formatInstant, formatLocal } from '../i18n/index.ts';
-import { type ApiError, type Item, type ItemStatus, type ItemSummary, type Site, api } from '../api.ts';
+import { asApiError, type ApiError, type Item, type ItemStatus, type ItemSummary, type Site, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
+import { useLatest } from '../useLatest.ts';
 
 const PER_PAGE = 20;
 const tabs = (): { status: ItemStatus | ''; label: string }[] => [
@@ -33,10 +34,15 @@ export default function Items({ type }: { type: 'post' | 'page' }) {
   const [list, setList] = useState<List | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [timeZone, setTimeZone] = useState('UTC');
-  useEffect(() => { api<Site>('/site').then((s) => setTimeZone(s.timezone), () => {}); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    api<Site>('/site').then((s) => !cancelled && setTimeZone(s.timezone), () => {});
+    return () => { cancelled = true; };
+  }, []);
 
+  const latest = useLatest();
   const load = (s = status, q = search, p = page) =>
-    api<List>(`/items?type=${type}&status=${s}&search=${encodeURIComponent(q)}&page=${p}`)
+    latest(api<List>(`/items?type=${type}&status=${s}&search=${encodeURIComponent(q)}&page=${p}`))
       .then(setList, () => setMessage(__('Could not load the list.', 'stillpress')));
   useEffect(() => { setStatus(''); setSearch(''); setPage(1); load('', '', 1); }, [type]);
 
@@ -52,7 +58,7 @@ export default function Items({ type }: { type: 'post' | 'page' }) {
       const it = await api<Item>('/items', { method: 'POST', body: { type } });
       navigate(`/edit/${it.id}`);
     } catch (e) {
-      setMessage((e as ApiError).status === 403 ? __('You cannot add one.', 'stillpress') : __('Could not add one.', 'stillpress'));
+      setMessage(asApiError(e).status === 403 ? __('You cannot add one.', 'stillpress') : __('Could not add one.', 'stillpress'));
     }
   }
 
@@ -62,7 +68,7 @@ export default function Items({ type }: { type: 'post' | 'page' }) {
       await api(restore ? `/items/${it.id}/restore` : `/items/${it.id}`, { method: restore ? 'POST' : 'DELETE' });
       load();
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       setMessage(err.error === 'csrf' ? err.message! : err.status === 403 ? __('You cannot change this one.', 'stillpress') : __('Could not save the change.', 'stillpress'));
     }
   }

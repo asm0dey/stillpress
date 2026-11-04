@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { __ } from '@wordpress/i18n';
-import { type ApiError, CSRF_MESSAGE, api } from '../api.ts';
+import { asApiError, type ApiError, CSRF_MESSAGE, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 
 export default function SetPassword() {
@@ -22,7 +22,7 @@ export default function SetPassword() {
       await api('/set-password', { method: 'POST', body: { token: params.get('token'), password } });
       setState('done');
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       if (err.error === 'csrf') setState('csrf');
       else if (err.status === 400) setErrors({ password: __('Use 12 to 1024 characters.', 'stillpress') });
       else setState(err.status === 410 ? 'expired' : 'failed');

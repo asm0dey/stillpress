@@ -111,6 +111,14 @@ class SetupResourceTest {
     }
 
     @Test
+    void upgradeKeepsTypedEmailAndDisplayName() {
+        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).getId();
+        setup(token.current().orElseThrow()).then().statusCode(201);
+        var u = users.findById(id).orElseThrow();
+        assertThat(List.of(u.getEmail(), u.getDisplayName())).containsExactly("admin0@example.org", "Admin");
+    }
+
+    @Test
     void wrongTokenIs403() {
         setup("not-the-token").then().statusCode(403).body("error", equalTo("bad_token"));
     }

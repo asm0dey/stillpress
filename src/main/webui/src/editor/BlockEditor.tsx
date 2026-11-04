@@ -6,7 +6,7 @@ import { Button } from '@wordpress/components';
 import { store as coreStore } from '@wordpress/core-data';
 import { dispatch as wpDispatch } from '@wordpress/data';
 import { __, _n, sprintf } from '@wordpress/i18n';
-import { type ApiError, type ReusableBlock, api } from '../api.ts';
+import { asApiError, type ApiError, type ReusableBlock, api } from '../api.ts';
 import { saveError } from './errors.ts';
 import { bodyOf, installClassicEditor, toBlocks } from './classic.ts';
 import {
@@ -45,12 +45,15 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
     : null);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const b = await api<ReusableBlock>(`/blocks/${id}`);
         const parsed = toBlocks(b.content ?? '', 'blocks');
         // the Classic block's edit modal needs TinyMCE the moment it opens
         if (hasClassic(parsed)) await installClassicEditor();
+        // another block was opened meanwhile
+        if (cancelled) return;
         setBlock(b);
         setTitle(b.title);
         setBlocks(parsed);
@@ -60,9 +63,10 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
         setAutosaveAt(b.canEdit ? b.autosave?.createdAt ?? null : null);
         api<unknown[]>(`/blocks/${id}/revisions`).then((r) => setRevisions(r.length), () => {});
       } catch (e) {
-        setMessage({ kind: 'alert', text: (e as ApiError).status === 404 ? __('This block does not exist.', 'stillpress') : __('Could not load this block.', 'stillpress') });
+        if (!cancelled) setMessage({ kind: 'alert', text: asApiError(e).status === 404 ? __('This block does not exist.', 'stillpress') : __('Could not load this block.', 'stillpress') });
       }
     })();
+    return () => { cancelled = true; };
   }, [id]);
 
   const changeBlocks = useCallback((b: BlockInstance[]) => {
@@ -93,7 +97,7 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
       const n = saved.republished ?? 0;
       setMessage({ kind: 'status', text: sprintf(_n('Saved. %d item will be republished.', 'Saved. %d items will be republished.', n, 'stillpress'), n) });
     } catch (e) {
-      setMessage(saveError(e as ApiError, 'block'));
+      setMessage(saveError(asApiError(e), 'block'));
     } finally { setBusy(false); }
   }
 

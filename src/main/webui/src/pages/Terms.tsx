@@ -1,8 +1,9 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
-import { type ApiError, type TermView, api } from '../api.ts';
+import { asApiError, type ApiError, type TermView, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
+import { useLatest } from '../useLatest.ts';
 
 type Taxonomy = 'category' | 'post_tag';
 
@@ -25,11 +26,13 @@ export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
 
-  const load = () => api<TermView[]>(`/terms?taxonomy=${taxonomy}`).then(setTerms, () => setMessage(__('Could not load the list.', 'stillpress')));
+  const latest = useLatest();
+  const load = () => latest(api<TermView[]>(`/terms?taxonomy=${taxonomy}`))
+    .then(setTerms, () => setMessage(__('Could not load the list.', 'stillpress')));
   useEffect(() => { setEditing(null); load(); }, [taxonomy]);
 
   function fail(e: unknown) {
-    const err = e as ApiError;
+    const err = asApiError(e);
     if (err.error === 'slug_taken') setErrors({ slug: messages().slug });
     else if (err.field) setErrors({ [err.field]: messages()[err.field] ?? __('Check this field.', 'stillpress') });
     else setMessage(err.error === 'csrf' ? err.message! : err.error === 'default_category'

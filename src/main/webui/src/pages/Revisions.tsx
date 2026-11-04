@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { type Change, diffLines, diffWords } from 'diff';
 import { __, _n, _x, sprintf } from '@wordpress/i18n';
 import { formatInstant } from '../i18n/index.ts';
-import { type ApiError, type Site, api } from '../api.ts';
+import { asApiError, type ApiError, type Site, api } from '../api.ts';
 import Shell from '../Shell.tsx';
 import { type Message, saveError } from '../editor/errors.ts';
 
@@ -46,7 +46,11 @@ export default function Revisions({ kind }: { kind: 'items' | 'blocks' }) {
   const [message, setMessage] = useState<Message | null>(null);
   const [busy, setBusy] = useState(false);
   const [timeZone, setTimeZone] = useState('UTC');
-  useEffect(() => { api<Site>('/site').then((s) => setTimeZone(s.timezone), () => {}); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    api<Site>('/site').then((s) => !cancelled && setTimeZone(s.timezone), () => {});
+    return () => { cancelled = true; };
+  }, []);
   const base = `/${kind}/${id}`;
   const back = kind === 'items' ? `/edit/${id}` : `/blocks/${id}`;
   const noun = kind === 'items' ? 'post' : 'block';
@@ -72,7 +76,7 @@ export default function Revisions({ kind }: { kind: 'items' | 'blocks' }) {
         setTo(t ?? null);
         setFrom(f ?? null);
       } catch (e) {
-        if (!cancelled) setMessage({ kind: 'alert', text: (e as ApiError).status === 403 ? __('You cannot see these revisions.', 'stillpress') : __('Could not load the revisions.', 'stillpress') });
+        if (!cancelled) setMessage({ kind: 'alert', text: asApiError(e).status === 403 ? __('You cannot see these revisions.', 'stillpress') : __('Could not load the revisions.', 'stillpress') });
       }
     })();
     return () => { cancelled = true; };
@@ -97,7 +101,7 @@ export default function Revisions({ kind }: { kind: 'items' | 'blocks' }) {
         : r.status === 'publish' ? __('Restored. The site updates in a few seconds.', 'stillpress') : __('Restored.', 'stillpress');
       navigate(back, { state: { notice } });
     } catch (e) {
-      setMessage(saveError(e as ApiError, noun));
+      setMessage(saveError(asApiError(e), noun));
       setBusy(false);
     }
   }

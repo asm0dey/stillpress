@@ -10,8 +10,10 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import module java.base;
+import org.jooq.exception.DataAccessException;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SetPasswordLink;
 import site.asm0dey.stillpress.account.UserFields;
@@ -74,25 +76,39 @@ public class UsersResource {
     @POST
     @Transactional
     public Response create(NewUser n) {
-        if (n == null
-                || blank(n.login())
-                || blank(n.email())
-                || n.email().indexOf('@') < 1
-                || blank(n.displayName())) {
-            return error(400, "invalid");
+        var login = UserFields.trim(n == null ? null : n.login());
+        var email = UserFields.trim(n == null ? null : n.email());
+        var name = UserFields.trim(n == null ? null : n.displayName());
+        if (!UserFields.validLogin(login)) {
+            return invalid("login");
+        }
+        if (!UserFields.validEmail(email)) {
+            return invalid("email");
+        }
+        if (!UserFields.validDisplayName(name)) {
+            return invalid("displayName");
         }
         var role = role(n.role());
         if (role == null) {
             return error(400, "invalid_role");
         }
-        if (users
-            .findByLoginOrEmail(n.login())
-            .filter(u -> u.getLogin().equals(n.login()))
-            .isPresent()) {
+        if (users.findByLogin(login).isPresent()) {
             return error(409, "login_taken");
         }
+        if (users.emailTaken(email, -1)) {
+            return error(409, "email_taken");
+        }
         guard.close();
-        var id = users.create(n.login(), n.email(), n.displayName(), role).getId();
+        long id;
+        try {
+            id = users.create(login, email, name, role).getId();
+        } catch (DataAccessException e) {
+            if (!"23505".equals(e.sqlState())) {
+                throw e;
+            }
+            // a concurrent create took the login; thrown, so the transaction rolls back
+            throw new WebApplicationException(error(409, "login_taken"));
+        }
         return Response.status(201).entity(Map.of("id", id, "setPasswordUrl", links.issue(id))).build();
     }
 
@@ -171,10 +187,6 @@ public class UsersResource {
         } catch (IllegalArgumentException e) {
             return null;
         }
-    }
-
-    private static boolean blank(String v) {
-        return v == null || v.isBlank();
     }
 
     private static Response invalid(String field) {

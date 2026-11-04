@@ -167,6 +167,7 @@ class AuthResourceTest {
             .body("id", equalTo((int) adminId))
             .body("login", equalTo("admin"))
             .body("displayName", equalTo("Admin"))
+            .body("email", equalTo("a@example.org"))
             .body("role", equalTo("administrator"));
         given().get("/admin/api/session").then().statusCode(401);
     }

@@ -1,7 +1,7 @@
 import { type ChangeEvent, type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { __ } from '@wordpress/i18n';
-import { type ApiError, api } from '../api.ts';
+import { asApiError, type ApiError, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 
 interface Form {
@@ -42,7 +42,7 @@ export default function Setup() {
       await api('/setup/start-empty', { method: 'POST' });
       navigate('/');
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       setProblem(err.error === 'csrf' ? err.message! : __('Could not start an empty site. Try again.', 'stillpress'));
     }
   }
@@ -56,7 +56,7 @@ export default function Setup() {
       await api('/setup', { method: 'POST', body: { ...form, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } });
       setDone(true);
     } catch (e) {
-      const err = e as ApiError;
+      const err = asApiError(e);
       if (err.error === 'csrf') setProblem(err.message!);
       else if (err.status === 403) setErrors({ token: __('That token does not match the one in the server log.', 'stillpress') });
       else if (err.status === 400) setErrors({ [err.field!]: messages()[err.field!] ?? __('Check this value.', 'stillpress') });

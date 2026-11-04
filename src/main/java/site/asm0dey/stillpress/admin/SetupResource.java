@@ -133,6 +133,7 @@ public class SetupResource {
             .filter(u -> u.getLogin().equals(s.login()))
             .map(u -> {
                 users.setRole(u.getId(), Role.ADMINISTRATOR);
+                users.setProfile(u.getId(), s.displayName(), s.email());
                 return u.getId();
             })
             .orElseGet(() -> users.create(s.login(), s.email(), s.displayName(), Role.ADMINISTRATOR).getId());

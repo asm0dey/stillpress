@@ -2,7 +2,8 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { Button, FormFileUpload, Modal, Notice, Spinner, TextControl } from '@wordpress/components';
 import { addFilter } from '@wordpress/hooks';
 import { __, sprintf } from '@wordpress/i18n';
-import { type ApiError, type Media, api } from '../api.ts';
+import { asApiError, type ApiError, type Media, api } from '../api.ts';
+import { useLatest } from '../useLatest.ts';
 
 /** What the block library's media blocks expect from a pick. */
 export interface Picked { id: number; url: string; alt: string; mime: string; type: string; width?: number; height?: number }
@@ -23,7 +24,7 @@ export async function upload(files: File[]): Promise<Media[]> {
 }
 
 export function uploadError(e: unknown): string {
-  const err = e as ApiError;
+  const err = asApiError(e);
   if (err.error === 'type_not_allowed') return __('This file type cannot be uploaded.', 'stillpress');
   if (err.status === 403) return __('You cannot upload files.', 'stillpress');
   if (err.status === 413) return __('The file is too large.', 'stillpress');
@@ -71,8 +72,9 @@ function Library({ allowedTypes, multiple, value, title, onClose, onSelect }: {
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<{ title: string; alt: string }>({ title: '', alt: '' });
 
+  const latest = useLatest();
   const load = (p = page, q = search) =>
-    api<{ items: Media[]; total: number }>(`/media?type=${type}&search=${encodeURIComponent(q)}&page=${p}&perPage=${PER_PAGE}`)
+    latest(api<{ items: Media[]; total: number }>(`/media?type=${type}&search=${encodeURIComponent(q)}&page=${p}&perPage=${PER_PAGE}`))
       .then(setList, () => setError(__('Could not load the media library.', 'stillpress')));
   useEffect(() => { load(); }, []);
 
@@ -93,7 +95,7 @@ function Library({ allowedTypes, multiple, value, title, onClose, onSelect }: {
       const added = await upload(Array.from(files));
       setSelected(multiple ? [...selected, ...added.map((m) => m.id)] : [added[added.length - 1].id]);
       setPage(1);
-      await load(1, search);
+      load(1, search);
     } catch (e) { setError(uploadError(e)); }
     setBusy(false);
   }
