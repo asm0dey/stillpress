@@ -6,9 +6,10 @@ import { Button } from '@wordpress/components';
 import { store as coreStore } from '@wordpress/core-data';
 import { dispatch as wpDispatch } from '@wordpress/data';
 import { type ApiError, type ReusableBlock, api } from '../api.ts';
+import { saveError } from './errors.ts';
 import { bodyOf, installClassicEditor, toBlocks } from './classic.ts';
 import {
-  EditorContent, EditorFrame, EditorHeader, EditorNotices, hasClassic, saveError, useEditing, useEditorSession,
+  EditorContent, EditorFrame, EditorHeader, EditorNotices, hasClassic, useEditing, useEditorSession,
   useEditorSettings,
 } from './workspace.tsx';
 

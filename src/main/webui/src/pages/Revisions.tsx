@@ -18,17 +18,16 @@ export function compare(a: Rev, b: Rev): { title: Change[]; body: Change[] } {
 function Side({ changes, side, block }: { changes: Change[]; side: 'from' | 'to'; block: boolean }) {
   const hide = side === 'from' ? 'added' : 'removed';
   const mark = side === 'from' ? 'removed' : 'added';
+  const word = mark === 'added' ? 'Added: ' : 'Removed: ';
   return (
     <>
       {changes.filter((c) => !c[hide]).map((c, i) => {
-        const cls = c[mark] ? `diff-${mark}` : undefined;
-        const sign = c[mark] ? (side === 'from' ? '−' : '+') : undefined;
-        if (!block) {
-          return <span key={i} className={cls}>{sign && <span aria-label={mark} className="diff-sign">{sign}</span>}{c.value}</span>;
-        }
-        return c.value.replace(/\n$/, '').split('\n').map((l, j) => (
-          <div key={`${i}.${j}`} className={cls}><span aria-label={mark === 'added' ? 'added' : 'removed'} className="diff-sign">{sign ?? ' '}</span>{l}</div>
-        ));
+        const changed = !!c[mark];
+        const cls = changed ? `diff-${mark}` : undefined;
+        const sign = changed ? <><span aria-hidden="true" className="diff-sign">{mark === 'added' ? '+' : '−'}</span><span className="visually-hidden">{word}</span></>
+          : block ? <span aria-hidden="true" className="diff-sign"> </span> : null;
+        if (!block) return <span key={i} className={cls}>{sign}{c.value}</span>;
+        return c.value.replace(/\n$/, '').split('\n').map((l, j) => <div key={`${i}.${j}`} className={cls}>{sign}{l}</div>);
       })}
     </>
   );
@@ -41,19 +40,33 @@ export default function Revisions({ kind }: { kind: 'items' | 'blocks' }) {
   const [list, setList] = useState<Line[] | null>(null);
   const [from, setFrom] = useState<Full | null>(null);
   const [to, setTo] = useState<Full | null>(null);
+  const [canEdit, setCanEdit] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
+  const [busy, setBusy] = useState(false);
   const base = `/${kind}/${id}`;
   const back = kind === 'items' ? `/edit/${id}` : `/blocks/${id}`;
   const noun = kind === 'items' ? 'post' : 'block';
 
   const load = (rid: number) => api<Full>(`${base}/revisions/${rid}`);
   useEffect(() => {
-    api<Line[]>(`${base}/revisions`).then(async (l) => {
-      setList(l);
-      // newest on top: compare the one before the newest with the newest
-      if (l[0]) setTo(await load(l[0].id));
-      if (l[1] ?? l[0]) setFrom(await load((l[1] ?? l[0]).id));
-    }, () => setMessage({ kind: 'alert', text: 'Could not load the revisions.' }));
+    let cancelled = false;
+    (async () => {
+      try {
+        // the object says whether this user may restore into it (Capabilities decides on the server)
+        const [l, obj] = await Promise.all([api<Line[]>(`${base}/revisions`), api<{ canEdit: boolean }>(base)]);
+        const [t, f] = await Promise.all([l[0] && load(l[0].id), (l[1] ?? l[0]) && load((l[1] ?? l[0]).id)]);
+        if (cancelled) return;
+        setMessage(null);
+        setList(l);
+        setCanEdit(obj.canEdit);
+        // newest on top: compare the one before the newest with the newest
+        setTo(t ?? null);
+        setFrom(f ?? null);
+      } catch (e) {
+        if (!cancelled) setMessage({ kind: 'alert', text: (e as ApiError).status === 403 ? 'You cannot see these revisions.' : 'Could not load the revisions.' });
+      }
+    })();
+    return () => { cancelled = true; };
   }, [id, kind]);
 
   async function pick(side: 'from' | 'to', rid: number) {
@@ -64,11 +77,19 @@ export default function Revisions({ kind }: { kind: 'items' | 'blocks' }) {
   }
 
   async function restore(rid: number) {
+    if (busy || !confirm('Restore this revision? The current version stays in the history.')) return;
+    setBusy(true);
     setMessage(null);
     try {
-      const r = await api<{ status?: string }>(`${base}/revisions/${rid}/restore`, { method: 'POST' });
-      navigate(back, { state: { notice: r.status === 'publish' || kind === 'blocks' ? 'Restored. The site updates in a few seconds.' : 'Restored.' } });
-    } catch (e) { setMessage(saveError(e as ApiError, noun)); }
+      const r = await api<{ status?: string; republished?: number }>(`${base}/revisions/${rid}/restore`, { method: 'POST' });
+      const notice = kind === 'blocks'
+        ? (r.republished ? `Restored. ${r.republished} ${r.republished === 1 ? 'item' : 'items'} will be republished.` : 'Restored. No published items use this block.')
+        : r.status === 'publish' ? 'Restored. The site updates in a few seconds.' : 'Restored.';
+      navigate(back, { state: { notice } });
+    } catch (e) {
+      setMessage(saveError(e as ApiError, noun));
+      setBusy(false);
+    }
   }
 
   const diff = from && to ? compare(from, to) : null;
@@ -88,14 +109,14 @@ export default function Revisions({ kind }: { kind: 'items' | 'blocks' }) {
       {list && (list.length === 0 ? <p className="muted">No revisions yet.</p> : (
         <>
           <table className="table">
-            <thead><tr><th>From</th><th>To</th><th>Saved</th><th /></tr></thead>
+            <thead><tr><th>From</th><th>To</th><th>Saved</th>{canEdit && <th />}</tr></thead>
             <tbody>
               {list.map((l) => (
                 <tr key={l.id}>
                   <td><input type="radio" name="from" aria-label={`Compare from ${when(l)}`} checked={from?.id === l.id} onChange={() => pick('from', l.id)} /></td>
                   <td><input type="radio" name="to" aria-label={`Compare to ${when(l)}`} checked={to?.id === l.id} onChange={() => pick('to', l.id)} /></td>
                   <td>{when(l)}</td>
-                  <td><button type="button" onClick={() => restore(l.id)}>Restore this revision</button></td>
+                  {canEdit && <td><button type="button" disabled={busy} aria-label={`Restore revision from ${new Date(l.createdAt).toLocaleString()}`} onClick={() => restore(l.id)}>Restore this revision</button></td>}
                 </tr>
               ))}
             </tbody>

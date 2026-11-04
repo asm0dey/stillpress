@@ -96,12 +96,12 @@ public class ReusableBlockService {
      * An ordinary {@link #save} with the revision's title and content.
      */
     @Transactional
-    public ReusableBlockRecord restoreRevision(long ref, long revisionId, ItemService.Actor a) {
+    public Saved restoreRevision(long ref, long revisionId, ItemService.Actor a) {
         var rev = revisions
             .find(revisionId)
             .filter(v -> OBJECT_TYPE.equals(v.getObjectType()) && v.getObjectId() == ref && !v.getAutosave())
             .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
-        return update(ref, rev.getTitle(), rev.getBody(), null, a).block();
+        return update(ref, rev.getTitle(), rev.getBody(), null, a);
     }
 
     private ReusableBlockRecord create(String title, String content, ItemService.Actor a) {

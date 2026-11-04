@@ -178,7 +178,8 @@ public class ReusableBlocksResource {
     @Path("{id}/revisions/{rid}/restore")
     public BlockView restoreRevision(@PathParam("id") long id, @PathParam("rid") long rid) {
         var a = actor();
-        return view(service.restoreRevision(id, rid, a), a);
+        var saved = service.restoreRevision(id, rid, a);
+        return view(saved.block(), a, saved.republished());
     }
 
     private ReusableBlockRecord find(long id) {

@@ -160,10 +160,12 @@ class ReusableBlocksResourceTest {
         var revs = as(author1).get(path + "/revisions").then().statusCode(200).extract().jsonPath();
         var first = revs.getList("id", Long.class).getLast();
         as(author1).get(path + "/revisions/" + first).then().statusCode(200).body("content", equalTo("one"));
-        as(author1).post(path + "/revisions/" + first + "/restore").then().statusCode(200).body(
-                "content",
-                equalTo("one")
-        );
+        as(author1)
+            .post(path + "/revisions/" + first + "/restore")
+            .then()
+            .statusCode(200)
+            .body("content", equalTo("one"))
+            .body("republished", equalTo(0));
         as(author2).post(path + "/revisions/" + first + "/restore").then().statusCode(403);
         assertThat(as(author1).get(path + "/revisions").then().extract().jsonPath().getList("id")).hasSize(3);
     }

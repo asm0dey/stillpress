@@ -9,10 +9,11 @@ import { store as coreStore } from '@wordpress/core-data';
 import { useDispatch, useRegistry } from '@wordpress/data';
 import { isInTheFuture } from '@wordpress/date';
 import { type ApiError, type Item, type ItemSummary, type SessionUser, type TermView, type UserView, api } from '../api.ts';
+import { UNSAFE_HTML, saveError } from './errors.ts';
 import Sidebar, { type Draft } from './Sidebar.tsx';
 import { bodyFormatOf, bodyOf, installClassicEditor, toBlocks } from './classic.ts';
 import {
-  EditorContent, EditorFrame, EditorHeader, EditorNotices, UNSAFE_HTML, hasClassic, saveError, useEditing,
+  EditorContent, EditorFrame, EditorHeader, EditorNotices, hasClassic, useEditing,
   useEditorSession, useEditorSettings,
 } from './workspace.tsx';
 

@@ -10,6 +10,7 @@ import { useDispatch, useSelect } from '@wordpress/data';
 import { store as noticesStore } from '@wordpress/notices';
 import { getSettings, setSettings } from '@wordpress/date';
 import { type ApiError, type ItemSummary, type SessionUser, type Site, api } from '../api.ts';
+import { type Message } from './errors.ts';
 import { installWordPressApi } from './wpapi.ts';
 import { picked, upload, uploadError } from './MediaLibrary.tsx';
 import { Edits } from './edits.ts';
@@ -35,9 +36,6 @@ const AUTOSAVE_MS = 60_000;
 
 export const hasClassic = (blocks: BlockInstance[]): boolean =>
   blocks.some((b) => b.name === 'core/freeform' || hasClassic(b.innerBlocks));
-
-export { type Message, UNSAFE_HTML, saveError } from './errors.ts';
-import type { Message } from './errors.ts';
 
 let installedFor: number | null = null;
 

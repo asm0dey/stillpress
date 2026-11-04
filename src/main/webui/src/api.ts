@@ -26,7 +26,7 @@ export interface Item {
   id: number; type: 'post' | 'page'; title: string; slug: string | null; status: ItemStatus; body: string;
   bodyFormat: 'blocks' | 'classic'; excerpt: string; date: string | null; permalink: string | null;
   categories: number[]; tags: number[]; authorId: number | null; author: string | null; parentId: number | null;
-  commentStatus: 'open' | 'closed'; menuOrder: number | null; modifiedAt: string; autosave: { createdAt: string } | null;
+  commentStatus: 'open' | 'closed'; menuOrder: number | null; modifiedAt: string; autosave: { createdAt: string } | null; canEdit: boolean;
 }
 /** One row of GET /items */
 export interface ItemSummary {

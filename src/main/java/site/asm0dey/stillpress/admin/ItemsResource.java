@@ -68,7 +68,8 @@ public class ItemsResource {
             String commentStatus,
             Integer menuOrder,
             LocalDateTime modifiedAt,
-            AutosaveRef autosave
+            AutosaveRef autosave,
+            boolean canEdit
     ) {}
 
     public record AutosaveRef(LocalDateTime createdAt) {}
@@ -272,7 +273,8 @@ public class ItemsResource {
                 r.getCommentStatus(),
                 r.getMenuOrder(),
                 r.getModifiedAt(),
-                autosave
+                autosave,
+                Capabilities.canEdit(a.role(), a.userId(), r)
         );
     }
 

@@ -14,6 +14,10 @@
   --color-input-border: #737373; /* 3:1 against white for form-control boundaries */
   --color-destructive: #dc2626;
   --color-ring: #171717;
+  --color-success-bg: #dcfce7;
+  --color-success-fg: #14532d;
+  --color-danger-bg: #fee2e2;
+  --color-danger-fg: #7f1d1d;
 
   --font-sans: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --text-sm: 0.875rem;
@@ -123,5 +127,6 @@ section.danger { margin-top: var(--space-6); }
 .diff section { min-width: 0; }
 .diff pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-sm); }
 .diff-sign { display: inline-block; width: 1.5ch; font-weight: 700; }
-.diff-added { background: #dcfce7; color: #14532d; }
-.diff-removed { background: #fee2e2; color: #7f1d1d; }
+.diff-added { background: var(--color-success-bg); color: var(--color-success-fg); }
+.diff-removed { background: var(--color-danger-bg); color: var(--color-danger-fg); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
