@@ -17,7 +17,7 @@ public class SetPasswordLink {
 
     public String issue(long userId) {
         var token = tokens.create(userId, TokenRepository.SET_PASSWORD, TokenRepository.SET_PASSWORD_TTL);
-        var home = settings.get("home_url").orElse("").replaceAll("/+$", "");
+        var home = settings.get("home_url").orElse("").replaceAll("(?<!/)/+$", "");
         return home + "/admin/set-password?token=" + token;
     }
 }

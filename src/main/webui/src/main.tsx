@@ -65,7 +65,9 @@ function Gate({ children }: { children: ReactNode }) {
 }
 
 // the signed-in user's language, or the browser's before anyone has signed in; loaded before anything renders
-api<SessionUser>('/session').then((s) => s.locale, () => browserLocale()).then(loadLocale).then(() => createRoot(document.getElementById('root')!).render(
+api<SessionUser>('/session').then((s) => s.locale, () => browserLocale()).then(loadLocale)
+  // a translation chunk that fails to load leaves English, not a blank admin
+  .catch(() => {}).then(() => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter basename="/admin">
       <Gate>

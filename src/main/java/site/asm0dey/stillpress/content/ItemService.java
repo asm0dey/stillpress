@@ -127,7 +127,7 @@ public class ItemService {
      */
     private Optional<ItemRecord> insertNew(String type, long authorId) {
         var next = DSL.<Long>coalesce(max(ITEM.SOURCE_ID), 0L).plus(1);
-        var home = settings.get("home_url").orElse("").replaceAll("/+$", "");
+        var home = settings.get("home_url").orElse("").replaceAll("(?<!/)/+$", "");
         var commentStatus = settings.get("default_comment_status").orElse("open");
         return db
             .insertInto(

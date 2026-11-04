@@ -27,7 +27,7 @@ jobs:
       - name: Admin UI tests
         working-directory: src/main/webui
         run: |
-          bun install --frozen-lockfile
+          bun install --frozen-lockfile --ignore-scripts
           bun test --coverage --coverage-reporter=lcov
       - name: Cache SonarQube packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

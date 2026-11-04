@@ -83,7 +83,7 @@ public class SettingsResource {
         // only a save that goes ahead settles the site's origin; a refused one must leave import open
         guard.close();
         var before = get();
-        var home = s.homeUrl().replaceAll("/+$", "");
+        var home = s.homeUrl().replaceAll("(?<!/)/+$", "");
         settings.put("title", s.title());
         settings.put("description", Objects.requireNonNullElse(s.description(), ""));
         settings.put("language", s.language());

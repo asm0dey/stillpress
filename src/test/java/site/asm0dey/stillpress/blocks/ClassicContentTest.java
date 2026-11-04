@@ -72,6 +72,11 @@ class ClassicContentTest {
     }
 
     @Test
+    void captionWithManySlashesDoesNotOverflowTheStack() {
+        assertThat(ClassicContent.toHtml("[caption x" + "/a".repeat(200_000) + "]")).contains("[caption x/a/a");
+    }
+
+    @Test
     void attrEscapesSingleQuote() {
         assertThat(ClassicContent.attr("a'b\"<>&")).isEqualTo("a&#039;b&quot;&lt;&gt;&amp;");
     }

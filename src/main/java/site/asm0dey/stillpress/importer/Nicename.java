@@ -25,6 +25,6 @@ public final class Nicename {
         // sanitize_title -> sanitize_title_with_dashes('save'); strict mode left only ASCII, so its octet rules are no-ops
         s = s.toLowerCase(Locale.ROOT).replace('.', '-');
         s = s.replaceAll("[^%a-z0-9 _-]", "").replaceAll("\\s+", "-").replaceAll("-+", "-");
-        return s.replaceAll("^-+|-+$", "");
+        return s.replaceFirst("^-+", "").replaceFirst("(?<!-)-+$", "");
     }
 }

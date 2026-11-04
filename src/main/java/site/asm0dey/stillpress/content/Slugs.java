@@ -57,6 +57,6 @@ public final class Slugs {
         s = s.replaceAll("&.+?;", "").replace('.', '-');
         s = s.replaceAll("[^\\p{L}\\p{N}\\p{M} _\\-]", "");
         s = s.replaceAll("\\s+", "-").replaceAll("-+", "-");
-        return s.replaceAll("^-+|-+$", "");
+        return s.replaceFirst("^-+", "").replaceFirst("(?<!-)-+$", "");
     }
 }

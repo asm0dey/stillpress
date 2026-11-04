@@ -30,7 +30,7 @@ public final class ClassicContent {
     private static final Pattern UNAUTOP = Pattern.compile(
             "<p>"
             + SP
-            + "*+(\\[(caption)(?![\\w-])[^\\]/]*(?:/(?!\\])[^\\]/]*)*?(?:/\\]|\\](?:[^\\[]*+(?:\\[(?!/\\2\\])[^\\[]*+)*+\\[/\\2\\])?))"
+            + "*+(\\[(caption)(?![\\w-])[^\\]/]*(?:/(?!\\])[^\\]/]*+)*+(?:/\\]|\\](?:[^\\[]*+(?:\\[(?!/\\2\\])[^\\[]*+)*+\\[/\\2\\])?))"
             + SP
             + "*+</p>"
     );
@@ -38,7 +38,7 @@ public final class ClassicContent {
             "((?:<a [^>]+>\\s*)?<img [^>]+>(?:\\s*</a>)?)(.*)",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL
     );
-    private static final Pattern ATTR = Pattern.compile("(\\w+)=(?:\"([^\"]*)\"|'([^']*)')");
+    private static final Pattern ATTR = Pattern.compile("(?<!\\w)(\\w+)=(?:\"([^\"]*)\"|'([^']*)')");
 
     private static String htmlClass(String s) {
         return s.replaceAll("[^A-Za-z0-9_-]", "");
@@ -155,11 +155,11 @@ public final class ClassicContent {
             .replaceAll(m -> Matcher.quoteReplacement(m.group().replace("\n", " <!-- wpnl --> ")));
         if (text.contains("<source") || text.contains("<track")) {
             text = text.replaceAll("([<\\[](?:audio|video)[^>\\]]*[>\\]])\\s*", "$1");
-            text = text.replaceAll("\\s*([<\\[]/(?:audio|video)[>\\]])", "$1");
-            text = text.replaceAll("\\s*(<(?:source|track)[^>]*>)\\s*", "$1");
+            text = text.replaceAll("(?<!\\s)\\s*([<\\[]/(?:audio|video)[>\\]])", "$1");
+            text = text.replaceAll("(?<!\\s)\\s*(<(?:source|track)[^>]*>)\\s*", "$1");
         }
         if (text.contains("<figcaption")) {
-            text = text.replaceAll("\\s*(<figcaption[^>]*>)", "$1");
+            text = text.replaceAll("(?<!\\s)\\s*(<figcaption[^>]*>)", "$1");
             text = text.replaceAll("</figcaption>\\s*", "</figcaption>");
         }
         text = text.replaceAll("\n\n+", "\n\n");
@@ -168,7 +168,7 @@ public final class ClassicContent {
             if (t.isEmpty()) {
                 continue;
             }
-            sb.append("<p>").append(t.replaceAll("^\n+|\n+$", "")).append("</p>\n");
+            sb.append("<p>").append(t.replaceFirst("^\n+", "").replaceFirst("(?<!\n)\n+$", "")).append("</p>\n");
         }
         text = sb.toString();
         text = text.replaceAll("<p>\\s*</p>", "");

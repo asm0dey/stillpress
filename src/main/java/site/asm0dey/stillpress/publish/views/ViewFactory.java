@@ -69,7 +69,7 @@ public class ViewFactory {
     }
 
     private String homeUrl() {
-        return settings.get("home_url").orElse("").replaceAll("/+$", "");
+        return settings.get("home_url").orElse("").replaceAll("(?<!/)/+$", "");
     }
 
     private String html(String content, String format) {

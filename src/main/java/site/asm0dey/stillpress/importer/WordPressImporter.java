@@ -113,9 +113,11 @@ public class WordPressImporter {
 
         @Override
         public void site(WxrSite site) {
-            var home = Objects.requireNonNullElse(site.link(), "").replaceFirst("/+$", "");
+            var home = Objects.requireNonNullElse(site.link(), "").replaceFirst("(?<!/)/+$", "");
             var homeUri = URI.create(home);
-            var siteUri = URI.create(Objects.requireNonNullElse(site.baseSiteUrl(), home).replaceFirst("/+$", ""));
+            var siteUri = URI.create(Objects
+                .requireNonNullElse(site.baseSiteUrl(), home)
+                .replaceFirst("(?<!/)/+$", ""));
             homeScheme = Objects.requireNonNullElse(homeUri.getScheme(), "https");
             homeAuth = Objects.requireNonNullElse(homeUri.getRawAuthority(), "");
             siteAuth = Objects.requireNonNullElse(siteUri.getRawAuthority(), homeAuth);
@@ -370,7 +372,7 @@ public class WordPressImporter {
                     var m = uploadUrl.matcher(text);
                     while (m.find()) {
                         // the Photon query goes; MediaRewriter matches it again when rewriting
-                        var raw = m.group().replaceFirst("[.,;:!]+$", "").replaceFirst("\\?.*$", "");
+                        var raw = m.group().replaceFirst("(?<![.,;:!])[.,;:!]+$", "").replaceFirst("\\?.*$", "");
                         var key = SIZE_VARIANT.matcher(raw).replaceFirst("");
                         var local = ensureMedia(sourceKey(key));
                         if (local == null && !key.equals(raw) && !skippedMedia.contains(sourceKey(key))) {
@@ -395,7 +397,7 @@ public class WordPressImporter {
                 if (text != null) {
                     var m = ANY_UPLOAD.matcher(text);
                     while (m.find()) {
-                        var url = m.group().replaceFirst("[.,;:!]+$", "");
+                        var url = m.group().replaceFirst("(?<![.,;:!])[.,;:!]+$", "");
                         if (!skippedMedia.contains(sourceKey(url))
                                 && !skippedMedia.contains(sourceKey(SIZE_VARIANT.matcher(url).replaceFirst("")))) {
                             missingMedia.add(url);
