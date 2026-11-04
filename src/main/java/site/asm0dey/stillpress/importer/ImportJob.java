@@ -2,16 +2,20 @@ package site.asm0dey.stillpress.importer;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import javax.xml.stream.XMLStreamException;
 import module java.base;
 import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.publish.SitePublisher;
+import site.asm0dey.stillpress.store.ItemRepository;
 
 /**
  * Runs an uploaded WXR import and the first publish on a background thread, tracking progress for the admin.
  */
 @ApplicationScoped
 public class ImportJob {
+    static final String NOT_RUNNING_HERE =
+            "No import is running in this server. If it stopped mid-way, wipe the data directory and run setup again.";
     private static final Logger LOG = Logger.getLogger(ImportJob.class);
     @Inject
     ImportGuard guard;
@@ -21,20 +25,30 @@ public class ImportJob {
     SitePublisher publisher;
     @Inject
     DataDir dataDir;
+    @Inject
+    ItemRepository store;
+    // true from begin() until the outcome is persisted, so "running" without it means a dead import (or the CLI)
+    private volatile boolean live;
     private volatile int items, media;
     private volatile String report, error;
 
     /**
-     * @param state {@code idle}, {@code running}, {@code done} or {@code failed}; a failure with a {@code report}
-     *        happened after the import wrote content
+     * @param state {@code idle}, {@code running}, {@code done} or {@code failed}
+     * @param contentLeft the store holds content, so a failed import cannot be retried
      */
-    public record Status(String state, int items, int media, String report, String error) {}
+    public record Status(String state, int items, int media, String report, String error, boolean contentLeft) {}
 
     /**
      * Moves {@code wxr} into the data directory and starts the import; returns at once.
      */
     public void start(Path wxr, ImportOptions options) throws AlreadyImportedException {
-        guard.begin();
+        live = true;
+        try {
+            guard.begin();
+        } catch (AlreadyImportedException e) {
+            live = false;
+            throw e;
+        }
         items = 0;
         media = 0;
         report = null;
@@ -45,6 +59,7 @@ public class ImportJob {
             file = Files.move(wxr, dir.resolve(System.currentTimeMillis() + ".xml"));
         } catch (IOException e) {
             fail(e);
+            live = false;
             throw new UncheckedIOException(e);
         }
         // a plain thread: no request context or transaction leaks in; the importer opens its own
@@ -70,9 +85,13 @@ public class ImportJob {
             report = importer.importWxr(in, Integer.MAX_VALUE, options, listener).toText();
             publisher.publishAll();
             guard.done();
-        } catch (Exception e) {
+        } catch (Throwable e) {
             fail(e);
+            if (e instanceof VirtualMachineError vm) {
+                throw vm;
+            }
         } finally {
+            live = false;
             try {
                 Files.deleteIfExists(file);
             } catch (IOException e) {
@@ -81,12 +100,26 @@ public class ImportJob {
         }
     }
 
-    private void fail(Exception e) {
-        LOG.error("WXR import failed", e);
-        error = report == null
-                ? Objects.requireNonNullElse(e.getMessage(), e.toString())
-                : "Publishing failed after the import: " + Objects.requireNonNullElse(e.getMessage(), e.toString());
+    private void fail(Throwable e) {
+        var message = Objects.requireNonNullElse(e.getMessage(), e.toString());
+        if (report == null && malformed(e)) {
+            // the uploaded file is the user's input, not a server fault
+            LOG.warn("WXR import failed: " + message);
+            error = message;
+        } else {
+            LOG.error("WXR import failed", e);
+            error = report == null ? message : "Publishing failed after the import: " + message;
+        }
         guard.failed(error);
+    }
+
+    private static boolean malformed(Throwable e) {
+        for (var t = e; t != null; t = t.getCause()) {
+            if (t instanceof XMLStreamException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -94,6 +127,7 @@ public class ImportJob {
      */
     public Status status() {
         var state = guard.state().orElse("idle");
-        return new Status(state, items, media, report, error);
+        var problem = state.equals("running") && !live ? NOT_RUNNING_HERE : error;
+        return new Status(state, items, media, report, problem, !store.contentEmpty());
     }
 }

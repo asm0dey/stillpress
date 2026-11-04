@@ -16,7 +16,7 @@ export default function Import() {
   const load = () => api('/import').then(setStatus, () => setMessage('Could not load the import status.'));
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    if (status?.state !== 'running') return undefined;
+    if (status?.state !== 'running' || status.error) return undefined;
     const timer = setTimeout(load, 1000);
     return () => clearTimeout(timer);
   }, [status]);
@@ -44,14 +44,16 @@ export default function Import() {
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const state = status?.state;
-  // a failure with a report happened after the import had written content: no retry into a non-empty site
-  const leftContent = state === 'failed' && status.report;
+  const leftContent = state === 'failed' && status.contentLeft;
+  // persisted as running, but no import thread in this server: it died, or the CLI runs one elsewhere
+  const stalled = state === 'running' && status.error;
 
   return (
     <Shell>
       <h1>Import from WordPress</h1>
       {message && <p role="alert" className="error">{message}</p>}
-      {state === 'running' && (
+      {stalled && <p role="alert" className="error">{status.error}</p>}
+      {state === 'running' && !stalled && (
         <p role="status">Importing… {status.items} posts, pages and attachments, {status.media} media files so far.</p>
       )}
       {state === 'done' && (

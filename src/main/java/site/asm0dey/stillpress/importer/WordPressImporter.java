@@ -11,6 +11,7 @@ import site.asm0dey.stillpress.blocks.Block;
 import site.asm0dey.stillpress.blocks.BlockParser;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.publish.Permalinks;
+import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.MediaRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
@@ -43,6 +44,8 @@ public class WordPressImporter {
     MediaRepository media;
     @Inject
     SettingRepository settings;
+    @Inject
+    AuthorRepository authors;
 
     // a multi-GB export with downloads runs far past Narayana's 60 s default
     public ImportReport importWxr(InputStream in) throws AlreadyImportedException {
@@ -88,7 +91,7 @@ public class WordPressImporter {
             this.options = options;
             this.listener = listener;
             // users created before the import (the wizard's administrator) keep their slugs
-            authorSlugs.addAll(db.select(AUTHOR.SLUG).from(AUTHOR).fetch(AUTHOR.SLUG));
+            authorSlugs.addAll(authors.slugs());
         }
 
         private String homeScheme = "https", homeAuth = "", siteAuth = "";
@@ -140,12 +143,12 @@ public class WordPressImporter {
         @Override
         public void author(WxrAuthor a) {
             // an existing user with this login (the wizard's administrator) is the same person: keep role and password
-            var r = db.fetchOne(AUTHOR, AUTHOR.LOGIN.eq(a.login()));
-            if (r == null) {
-                r = db.newRecord(AUTHOR);
-                r.setLogin(a.login());
-                r.setSlug(uniqueAuthorSlug(a));
-            }
+            var r = authors.findByLogin(a.login()).orElseGet(() -> {
+                var n = db.newRecord(AUTHOR);
+                n.setLogin(a.login());
+                n.setSlug(uniqueAuthorSlug(a));
+                return n;
+            });
             if (r.getDisplayName() == null) {
                 r.setDisplayName(a.displayName());
             }

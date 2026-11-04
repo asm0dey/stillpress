@@ -20,20 +20,19 @@ public class ImportGuard {
     SettingRepository settings;
 
     /**
-     * Synchronized for callers in this process; the persisted state and the emptiness check, written in one
-     * transaction, cover a CLI import in a second process.
+     * Claims the import: the state moves to {@code running} by compare-and-set, so of two processes starting at once
+     * only one wins; the emptiness check runs in the same transaction.
      */
     public synchronized void begin() throws AlreadyImportedException {
         var refusal = QuarkusTransaction.requiringNew().call(() -> {
-            var state = settings.get(STATE);
-            if (state.isPresent() && !state.get().equals("failed")) {
-                return "an import is already " + (state.get().equals("running") ? "running" : "done");
+            var state = settings.get(STATE).orElse(null);
+            if (state != null && !state.equals("failed")) {
+                return "an import is already " + (state.equals("running") ? "running" : "done");
             }
             if (!items.contentEmpty()) {
                 return "the site already has content; import works only into an empty site";
             }
-            settings.put(STATE, "running");
-            return null;
+            return settings.compareAndSet(STATE, state, "running") ? null : "an import is already running";
         });
         if (refusal != null) {
             throw new AlreadyImportedException(refusal);

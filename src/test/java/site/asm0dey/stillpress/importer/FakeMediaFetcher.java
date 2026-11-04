@@ -14,12 +14,20 @@ import module java.base;
 @ApplicationScoped
 public class FakeMediaFetcher implements MediaFetcher {
     private volatile String failOn;
+    private volatile String errorOn;
     private final Set<String> missing = ConcurrentHashMap.newKeySet();
     private final List<String> fetched = new CopyOnWriteArrayList<>();
 
     // methods, not fields: field writes land on the CDI client proxy
     public void failOn(String suffix) {
         failOn = suffix;
+    }
+
+    /**
+     * Throws an {@link Error}, not an exception, for this suffix.
+     */
+    public void errorOn(String suffix) {
+        errorOn = suffix;
     }
 
     public void missing(String suffix) {
@@ -32,6 +40,7 @@ public class FakeMediaFetcher implements MediaFetcher {
 
     public void reset() {
         failOn = null;
+        errorOn = null;
         missing.clear();
         fetched.clear();
     }
@@ -42,6 +51,9 @@ public class FakeMediaFetcher implements MediaFetcher {
         fetched.add(s);
         if (failOn != null && s.endsWith(failOn)) {
             throw new UncheckedIOException(new IOException("boom: " + s));
+        }
+        if (errorOn != null && s.endsWith(errorOn)) {
+            throw new AssertionError("fetcher error: " + s);
         }
         if (s.endsWith("/2020/05/c.jpg") || missing.stream().anyMatch(s::endsWith)) {
             return Optional.empty();

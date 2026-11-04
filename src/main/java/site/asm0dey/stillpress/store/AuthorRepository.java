@@ -24,6 +24,14 @@ public class AuthorRepository {
         return db.selectFrom(AUTHOR).where(AUTHOR.ID.eq(id)).fetchOptional();
     }
 
+    public Optional<AuthorRecord> findByLogin(String login) {
+        return db.selectFrom(AUTHOR).where(AUTHOR.LOGIN.eq(login)).fetchOptional();
+    }
+
+    public Set<String> slugs() {
+        return new HashSet<>(db.select(AUTHOR.SLUG).from(AUTHOR).fetch(AUTHOR.SLUG));
+    }
+
     public List<AuthorRecord> all() {
         return db.selectFrom(AUTHOR).fetch();
     }

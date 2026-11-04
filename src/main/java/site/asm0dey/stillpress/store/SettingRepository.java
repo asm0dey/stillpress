@@ -21,6 +21,25 @@ public class SettingRepository {
         }
     }
 
+    /**
+     * Sets {@code key} to {@code value} only if it currently holds {@code expected} ({@code null}: absent), in one
+     * statement; false when another writer got there first.
+     */
+    public boolean compareAndSet(String key, String expected, String value) {
+        if (expected == null) {
+            return db
+                .insertInto(SETTING, SETTING.KEY, SETTING.VALUE)
+                .values(key, value)
+                .onConflictDoNothing()
+                .execute() == 1;
+        }
+        return db
+            .update(SETTING)
+            .set(SETTING.VALUE, value)
+            .where(SETTING.KEY.eq(key), SETTING.VALUE.eq(expected))
+            .execute() == 1;
+    }
+
     public void delete(String key) {
         db.deleteFrom(SETTING).where(SETTING.KEY.eq(key)).execute();
     }

@@ -3,7 +3,9 @@ package site.asm0dey.stillpress.importer;
 import jakarta.inject.Inject;
 import module java.base;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
+import picocli.CommandLine.Spec;
 
 @Command(name = "import", description = "Import a WordPress WXR export (one-shot)")
 public class ImportCommand implements Callable<Integer> {
@@ -30,6 +32,8 @@ public class ImportCommand implements Callable<Integer> {
     String categoryBase;
     @Option(names = "--tag-base", defaultValue = "tag", description = "Tag URL base (default: ${DEFAULT-VALUE})")
     String tagBase;
+    @Spec
+    CommandSpec spec;
     @Inject
     WordPressImporter importer;
     @Inject
@@ -42,21 +46,21 @@ public class ImportCommand implements Callable<Integer> {
     @Override
     public Integer call() throws IOException {
         if (mediaLimit != null && mediaLimit < 0) {
-            System.err.println("--media-limit must be 0 or more, got " + mediaLimit);
+            spec.commandLine().getErr().println("--media-limit must be 0 or more, got " + mediaLimit);
             return 2;
         }
         ImportOptions options;
         try {
             options = options();
         } catch (IllegalArgumentException e) {
-            System.err.println(e.getMessage());
+            spec.commandLine().getErr().println(e.getMessage());
             return 2;
         }
         try (var in = new BufferedInputStream(Files.newInputStream(wxr))) {
             try {
                 guard.begin();
             } catch (AlreadyImportedException e) {
-                System.err.println(e.getMessage());
+                spec.commandLine().getErr().println(e.getMessage());
                 return 1;
             }
             ImportReport report;
@@ -64,14 +68,16 @@ public class ImportCommand implements Callable<Integer> {
                 report = importer.importWxr(in, mediaLimit == null ? Integer.MAX_VALUE : mediaLimit, options);
             } catch (AlreadyImportedException e) {
                 guard.failed(e.getMessage());
-                System.err.println(e.getMessage());
+                spec.commandLine().getErr().println(e.getMessage());
                 return 1;
             } catch (RuntimeException e) {
                 guard.failed(e.getMessage());
                 throw e;
             }
             guard.done();
-            System.out.print(report.toText(mediaLimit));
+            var out = spec.commandLine().getOut();
+            out.print(report.toText(mediaLimit));
+            out.flush();
             return 0;
         }
     }

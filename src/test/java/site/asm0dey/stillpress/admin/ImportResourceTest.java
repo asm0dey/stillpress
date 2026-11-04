@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import jakarta.inject.Inject;
@@ -17,8 +18,11 @@ import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.importer.FakeMediaFetcher;
+import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
+import site.asm0dey.stillpress.store.SettingRepository;
 
 @QuarkusTest
 class ImportResourceTest {
@@ -30,6 +34,10 @@ class ImportResourceTest {
     SessionRepository sessions;
     @Inject
     DataDir dataDir;
+    @Inject
+    SettingRepository settings;
+    @Inject
+    FakeMediaFetcher fetcher;
     String adminCookie;
     String writerCookie;
 
@@ -43,7 +51,8 @@ class ImportResourceTest {
     @AfterEach
     void settle() {
         // the next test's reset must not race a background import
-        awaitStatus(s -> !s.equals("running"));
+        poll(s -> !s.getString("state").equals("running") || s.getString("error") != null);
+        fetcher.reset();
     }
 
     @Test
@@ -82,8 +91,47 @@ class ImportResourceTest {
     void malformedFileFailsAndAllowsRetry() {
         upload("<rss><not-closed>".getBytes(UTF_8)).then().statusCode(202);
         awaitStatus("failed"::equals);
+        as(adminCookie)
+            .get("/admin/api/import")
+            .then()
+            .body("error", containsString("Invalid WXR"))
+            .body("contentLeft", equalTo(false));
         upload(sampleBytes()).then().statusCode(202);
         awaitStatus("done"::equals);
+    }
+
+    @Test
+    void errorDuringImportMarksItFailed() {
+        fetcher.errorOn("/2023/01/a.jpg");
+        upload(sampleBytes()).then().statusCode(202);
+        awaitStatus("failed"::equals);
+        as(adminCookie)
+            .get("/admin/api/import")
+            .then()
+            .body("error", containsString("fetcher error"))
+            .body("contentLeft", equalTo(false));
+    }
+
+    @Test
+    void runningStateWithoutAJobHereSaysSo() {
+        settings.put(ImportGuard.STATE, "running");
+        as(adminCookie)
+            .get("/admin/api/import")
+            .then()
+            .body("state", equalTo("running"))
+            .body("error", containsString("No import is running in this server"));
+    }
+
+    @Test
+    void contentLeftComesFromTheStore() throws Exception {
+        // as after a restart: a failure persisted, no report in memory, content in the store
+        store.importSample();
+        settings.put(ImportGuard.STATE, "failed");
+        as(adminCookie).get("/admin/api/import").then().body("state", equalTo("failed")).body(
+                "contentLeft",
+                equalTo(true)
+        );
+        upload(sampleBytes()).then().statusCode(409);
     }
 
     @Test
@@ -119,11 +167,15 @@ class ImportResourceTest {
     }
 
     private void awaitStatus(Predicate<String> wanted) {
+        poll(s -> wanted.test(s.getString("state")));
+    }
+
+    private void poll(Predicate<JsonPath> wanted) {
         var deadline = Instant.now().plusSeconds(30);
-        String state;
-        while (!wanted.test(state = as(adminCookie).get("/admin/api/import").then().extract().path("state"))) {
+        JsonPath status;
+        while (!wanted.test(status = as(adminCookie).get("/admin/api/import").then().extract().jsonPath())) {
             if (Instant.now().isAfter(deadline)) {
-                throw new AssertionError("import still " + state + " after 30 s");
+                throw new AssertionError("import still " + status.prettify() + " after 30 s");
             }
             try {
                 Thread.sleep(100);

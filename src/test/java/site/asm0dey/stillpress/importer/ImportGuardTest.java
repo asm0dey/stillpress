@@ -46,6 +46,16 @@ class ImportGuardTest {
     }
 
     @Test
+    void claimIsCompareAndSet() {
+        assertThat(settings.compareAndSet(ImportGuard.STATE, null, "running")).isTrue();
+        assertThat(settings.compareAndSet(ImportGuard.STATE, null, "running")).as("already present").isFalse();
+        settings.put(ImportGuard.STATE, "failed");
+        assertThat(settings.compareAndSet(ImportGuard.STATE, "failed", "running")).isTrue();
+        assertThat(settings.compareAndSet(ImportGuard.STATE, "failed", "running")).as("another writer won").isFalse();
+        assertThat(guard.state()).contains("running");
+    }
+
+    @Test
     void refusedWhenContentExistsEvenWithoutState() throws Exception {
         store.importSample();
         settings.delete(ImportGuard.STATE);
