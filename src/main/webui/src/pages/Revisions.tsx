@@ -47,7 +47,12 @@ export default function Revisions({ kind }: { kind: 'items' | 'blocks' }) {
   const back = kind === 'items' ? `/edit/${id}` : `/blocks/${id}`;
   const noun = kind === 'items' ? 'post' : 'block';
 
-  const load = (rid: number) => api<Full>(`${base}/revisions/${rid}`);
+  // an item's revision is read at /revisions/{rid} and carries `body`; a block's lives under the block and carries `content`
+  const load = async (rid: number): Promise<Full> => {
+    if (kind === 'items') return api<Full>(`/revisions/${rid}`);
+    const { content, ...r } = await api<Omit<Full, 'body'> & { content: string }>(`${base}/revisions/${rid}`);
+    return { ...r, body: content };
+  };
   useEffect(() => {
     let cancelled = false;
     (async () => {
