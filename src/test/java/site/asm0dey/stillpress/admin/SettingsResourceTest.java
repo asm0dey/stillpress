@@ -119,6 +119,22 @@ class SettingsResourceTest {
     }
 
     @Test
+    void rejectedSaveLeavesImportOpen() {
+        var body = current();
+        body.put("postsPerPage", 0);
+        put(admin, body).then().statusCode(400);
+        as(admin).get("/admin/api/site").then().body("importAllowed", org.hamcrest.Matchers.is(true));
+        assertThat(settings.get("import_state")).isNotPresent();
+    }
+
+    @Test
+    void missingCommentStatusIs400NotAnError() {
+        var body = current();
+        body.remove("defaultCommentStatus");
+        put(admin, body).then().statusCode(400).body("field", equalTo("defaultCommentStatus"));
+    }
+
+    @Test
     void structureNeedsSlashesAtBothEnds() {
         var body = current();
         body.put("permalinkStructure", "%postname%/");

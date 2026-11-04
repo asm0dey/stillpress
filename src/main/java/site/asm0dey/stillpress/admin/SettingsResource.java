@@ -76,11 +76,12 @@ public class SettingsResource {
     @PUT
     @Transactional
     public Response put(Settings s) {
-        guard.close();
         var field = invalidField(s);
         if (field != null) {
             return Response.status(400).entity(Map.of("error", "invalid", "field", field)).build();
         }
+        // only a save that goes ahead settles the site's origin; a refused one must leave import open
+        guard.close();
         var before = get();
         var home = s.homeUrl().replaceAll("/+$", "");
         settings.put("title", s.title());
@@ -172,7 +173,7 @@ public class SettingsResource {
                 && terms.findById(s.defaultCategory()).filter(t -> "category".equals(t.getTaxonomy())).isEmpty()) {
             return "defaultCategory";
         }
-        if (!Set.of("open", "closed").contains(s.defaultCommentStatus())) {
+        if (!"open".equals(s.defaultCommentStatus()) && !"closed".equals(s.defaultCommentStatus())) {
             return "defaultCommentStatus";
         }
         return null;
