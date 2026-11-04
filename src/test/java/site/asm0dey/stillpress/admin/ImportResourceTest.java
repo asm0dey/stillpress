@@ -66,6 +66,8 @@ class ImportResourceTest {
             .then()
             .body("items", equalTo(9))
             .body("report", containsString("Imported 9"));
+        // the dashboard counts the 5 posts and 1 page, not the 3 attachments
+        as(adminCookie).get("/admin/api/site").then().body("items", equalTo(6));
         var post = dataDir.current().resolve("2023/01/14/месяц-ноябрь-год-2022/index.html");
         TestStore.await(() -> Files.exists(post), 20);
         assertThat(post).exists();

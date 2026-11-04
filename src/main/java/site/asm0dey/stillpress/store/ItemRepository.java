@@ -49,6 +49,13 @@ public class ItemRepository {
     }
 
     /**
+     * Posts and pages outside the trash, as the Posts and Pages screens count them (attachments are items too).
+     */
+    public int countPostsAndPages() {
+        return db.fetchCount(ITEM, ITEM.TYPE.in("post", "page"), ITEM.STATUS.ne("trash"));
+    }
+
+    /**
      * No items, comments, media, terms or reusable blocks: nothing an import would collide with.
      */
     public boolean contentEmpty() {

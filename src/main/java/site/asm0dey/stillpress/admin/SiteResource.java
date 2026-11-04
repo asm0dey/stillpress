@@ -42,7 +42,7 @@ public class SiteResource {
                 settings.get("title").orElse(""),
                 settings.get("home_url").orElse(""),
                 settings.get("language").orElse("en"),
-                items.count(),
+                items.countPostsAndPages(),
                 comments.count(),
                 guard.importable(),
                 settings.get("timezone").orElse("UTC"),
