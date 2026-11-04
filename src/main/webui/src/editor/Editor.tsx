@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { type Block as BlockInstance, createBlock, serialize } from '@wordpress/blocks';
 import {
   BlockEditorKeyboardShortcuts, BlockEditorProvider, BlockSettingsMenuControls, store as blockEditorStore,
@@ -53,6 +53,7 @@ export default function Editor() {
 
 function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   const navigate = useNavigate();
+  const notice = (useLocation().state as { notice?: string } | null)?.notice;
   const [item, setItem] = useState<Item | null>(null);
   const [title, setTitle] = useState('');
   const [blocks, setBlocks] = useState<BlockInstance[]>([]);
@@ -93,6 +94,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
         // the Classic block's edit modal needs TinyMCE the moment it opens
         if (it.bodyFormat === 'classic' || hasClassic(parsed)) await installClassicEditor();
         load(it, tagList, parsed);
+        if (notice) setMessage({ kind: 'status', text: notice });
         setAutosaveAt(it.autosave?.createdAt ?? null);
         if (it.type === 'page') allPages().then(setPages, () => {});
         if (role === 'administrator') api<UserView[]>('/users').then(setUsers, () => {});

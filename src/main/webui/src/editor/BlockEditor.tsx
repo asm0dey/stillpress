@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { type Block as BlockInstance, serialize } from '@wordpress/blocks';
 import { BlockEditorKeyboardShortcuts, BlockEditorProvider } from '@wordpress/block-editor';
 import { Button } from '@wordpress/components';
@@ -22,6 +22,7 @@ export default function BlockEditor() {
 
 function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) {
   const navigate = useNavigate();
+  const notice = (useLocation().state as { notice?: string } | null)?.notice;
   const [block, setBlock] = useState<ReusableBlock | null>(null);
   const [title, setTitle] = useState('');
   const [blocks, setBlocks] = useState<BlockInstance[]>([]);
@@ -53,6 +54,7 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
         setBlocks(parsed);
         opened.current = { serialized: serialize(parsed), body: b.content ?? '' };
         reset(opened.current.serialized);
+        if (notice) setMessage({ kind: 'status', text: notice });
         setAutosaveAt(b.canEdit ? b.autosave?.createdAt ?? null : null);
         api<unknown[]>(`/blocks/${id}/revisions`).then((r) => setRevisions(r.length), () => {});
       } catch (e) {
