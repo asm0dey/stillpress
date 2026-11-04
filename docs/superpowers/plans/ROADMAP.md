@@ -58,6 +58,22 @@ Split into three plans (agreed 2026-11-04):
 - 02b: an author who opens `/admin/users` directly sees "Could not load the users." and the Add user form; hide screens the role cannot use.
 - 02c: set-password links are built from the imported site URL, so before cutover they point at the live WordPress host; invites and email reset reuse the same builder and should use the admin's own host until cutover.
 
+### Carried over from 02a (code reviews)
+
+- 02b: in Mode 2 nginx's `^~ /admin` keeps `client_max_body_size 1g`, so nginx spools large anonymous bodies to disk before Stillpress answers 413; split it per location (1g only for `/admin/api/import` and the media upload).
+- 02b: new upload endpoints under `/admin/api/` must be added to `BodyLimitFilter`'s exclusions or they get 413.
+- 02b: admin shell: the route gate's `ready` stays true across navigation; the dashboard's 401 goes to `/login` without `next`; no cancellation of stale responses; field errors are not announced (no focus move, no `aria-live`).
+- 02b: users screen: create lacks trim and length checks (a 61-character login gives 500); a duplicate-login race gives 500, not 409; duplicate emails are accepted; setup's upgrade path ignores the typed email and display name.
+- 02b: the import screen stops polling while a CLI import runs in another process (reload needed).
+- 02b: `Import.tsx` uses `status!` where a local alias would narrow; `catch` blocks cast `e as ApiError` instead of a type guard.
+- 02c: possible HTTP/2 cleartext (h2c, prior knowledge) bodies without `Content-Length` bypass `BodyLimitFilter`; check with `curl --http2-prior-knowledge`, or set `quarkus.http.http2=false`.
+- 02c: set-password hashes the new password before consuming the token, so an invalid token still costs an Argon2 hash on an anonymous endpoint.
+- 02c: issuing a set-password link leaves the user's earlier links valid.
+- 02c: `LoginLimiter.prune()` walks both maps on every call under one lock.
+- 02c: setup returns 500 on a request without a `Host` header; IPv6 brackets in `home_url` are unchecked.
+- Docs: behind a CDN or load balancer, overwriting `X-Forwarded-For` with `$remote_addr` makes every client share one address; the README needs a line when that setup is supported.
+- Docs: `open_file_cache` at http level delays the release swap until `open_file_cache_valid` expires.
+
 ## Plan 03: Themes & Site Editor
 
 - Style generator for layout support, global styles and block-supports CSS, shared by the editor canvas and the static site (§6.2 item 6).
@@ -147,6 +163,10 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - CLI: `--help` is not wired; `nginx-config --help` prints "Unknown option" before the usage.
 - Build: the schema test covers only the `setting` table; some dependency versions are inline instead of properties; nothing enforces that runtime jOOQ equals the code-generation jOOQ; the dialect test checks the Quarkus mapping, not the property expansion.
 - Licence: `LICENSE` was reflowed and carries no explicit "or later" statement.
+- Accounts (02a): `findByLoginOrEmail` lower-cases in Java and SQL separately (non-ASCII emails may disagree); `setRoleKeepingAdministrator` locks without `ORDER BY` and has no concurrency test; `PasswordsTest` lacks the 11-character case; a CSRF test asserts only "not 403"; only `AuthResourceTest` resets the shared login limiter; no rollback test for the set-password transaction; no test that no setup token is printed when an administrator already exists.
+- Import (02a): an old job's `finally` can briefly race a fast retry's `start()`; the upload file stays in `<data>/import` if the thread fails to start; no test for a publish failing after content was written; the admin media cap rejects a negative value only when an import starts and its test proves only a cap of 0.
+- nginx (02a): the `root` path is unquoted in the template; HEAD is untested through nginx; small Mode 1/Mode 2 differences (POST to a static file gives 405, `%2F` is decoded by nginx, a bare `?p` is served by nginx).
+- Tests (02a): `PostgresAccountsTest` waits on futures without a timeout; `postgres:18` is written both in the test and in the codegen config; every `@QuarkusTest` augmentation runs `bun install` and a Vite build.
 
 ## Not in scope
 
