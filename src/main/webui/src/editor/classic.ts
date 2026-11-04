@@ -33,16 +33,19 @@ export function bodyFormatOf(blocks: BlockInstance[]): BodyFormat {
 }
 
 // WordPress's classic-editor toolbars without its PHP-shipped wp* buttons
-const SETTINGS = {
+export const SETTINGS = {
   skin: false,
   menubar: false,
   branding: false,
-  plugins: 'charmap colorpicker hr lists media paste tabfocus textcolor fullscreen',
-  toolbar1: 'formatselect bold italic bullist numlist blockquote alignleft aligncenter alignright fullscreen',
+  plugins: 'charmap colorpicker hr link lists media paste tabfocus textcolor fullscreen',
+  toolbar1: 'formatselect bold italic bullist numlist blockquote alignleft aligncenter alignright link unlink fullscreen',
   toolbar2: 'strikethrough hr forecolor pastetext removeformat charmap outdent indent undo redo',
   relative_urls: false,
   convert_urls: false,
   entity_encoding: 'raw',
+  // old posts carry iframes, embeds, scripts and event attributes; TinyMCE's schema would drop what the user never
+  // touched (inside the editor TinyMCE keeps scripts inert)
+  valid_elements: '*[*]',
 };
 
 declare global {
@@ -57,46 +60,54 @@ let installed: Promise<void> | null = null;
 
 /** Loads TinyMCE 4 and the globals core/freeform's edit modal reads; only classic items pay for the download. */
 export function installClassicEditor(): Promise<void> {
-  return installed ??= (async () => {
-    // tinymce.js sets window.tinymce itself; the theme and plugins resolve it as a global, so they come after
-    const tinymce = (await import('tinymce')).default;
-    const [{ default: contentCss }] = await Promise.all([
-      import('tinymce/skins/lightgray/content.min.css?inline'),
-      // skin: false plus the bundled skin CSS: Vite hashes its fonts, nothing is fetched from a TinyMCE base URL
-      import('tinymce/skins/lightgray/skin.min.css'),
-      import('@wordpress/block-library/build-style/freeform/editor.css'),
-      import('tinymce/themes/modern/theme'),
-      import('tinymce/plugins/charmap/plugin'),
-      import('tinymce/plugins/colorpicker/plugin'),
-      import('tinymce/plugins/hr/plugin'),
-      import('tinymce/plugins/lists/plugin'),
-      import('tinymce/plugins/media/plugin'),
-      import('tinymce/plugins/paste/plugin'),
-      import('tinymce/plugins/tabfocus/plugin'),
-      import('tinymce/plugins/textcolor/plugin'),
-      import('tinymce/plugins/fullscreen/plugin'),
-    ]) as [{ default: string }, ...unknown[]];
-    const settings = { ...SETTINGS, content_style: contentCss };
-    // freeform/modal: EditorManager.overrideDefaults({ base_url: wpEditorL10n.tinymce.baseURL, suffix }), then
-    // initialize(id, { tinymce: { ...wpEditorL10n.tinymce.settings, setup } })
-    window.wpEditorL10n = { tinymce: { baseURL: `${import.meta.env.BASE_URL}tinymce`, suffix: '.min', settings } };
-    window.wp = {
-      ...window.wp,
-      oldEditor: {
-        // not called by core/freeform 12.1; kept because WordPress's wp.oldEditor has it
-        getDefaultSettings: () => ({ tinymce: settings }),
-        // freeform/modal ClassicEdit effect: initialize(`editor-${clientId}`, { tinymce }) on the modal's textarea
-        initialize(id: string, { tinymce: own }: { tinymce: Record<string, unknown> }) {
-          const target = document.getElementById(id);
-          // the block's content already has its paragraphs (toBlocks); bodyOf removes them on save
-          if (target) tinymce.init({ ...own, target });
-        },
-        // freeform/modal ClassicEdit effect cleanup: remove(id) when the modal closes
-        remove: (id: string) => tinymce.get(id)?.remove(),
-        // freeform/modal Save button: setAttributes({ content: getContent(id) })
-        getContent: (id: string) => tinymce.get(id)?.getContent()
-          ?? (document.getElementById(id) as HTMLTextAreaElement | null)?.value ?? '',
+  // a failed download is retried by the next call
+  return installed ??= load().catch((e: unknown) => {
+    installed = null;
+    throw e;
+  });
+}
+
+async function load(): Promise<void> {
+  // tinymce.js sets window.tinymce itself; the theme and plugins resolve it as a global, so they come after
+  const tinymce = (await import('tinymce')).default;
+  const [{ default: contentCss }] = await Promise.all([
+    import('tinymce/skins/lightgray/content.min.css?inline'),
+    // skin: false plus the bundled skin CSS: Vite hashes its fonts, nothing is fetched from a TinyMCE base URL
+    import('tinymce/skins/lightgray/skin.min.css'),
+    import('@wordpress/block-library/build-style/freeform/editor.css'),
+    import('./classic.css'),
+    import('tinymce/themes/modern/theme'),
+    import('tinymce/plugins/charmap/plugin'),
+    import('tinymce/plugins/colorpicker/plugin'),
+    import('tinymce/plugins/hr/plugin'),
+    import('tinymce/plugins/link/plugin'),
+    import('tinymce/plugins/lists/plugin'),
+    import('tinymce/plugins/media/plugin'),
+    import('tinymce/plugins/paste/plugin'),
+    import('tinymce/plugins/tabfocus/plugin'),
+    import('tinymce/plugins/textcolor/plugin'),
+    import('tinymce/plugins/fullscreen/plugin'),
+  ]) as [{ default: string }, ...unknown[]];
+  const settings = { ...SETTINGS, content_style: contentCss };
+  // freeform/modal: EditorManager.overrideDefaults({ base_url: wpEditorL10n.tinymce.baseURL, suffix }), then
+  // initialize(id, { tinymce: { ...wpEditorL10n.tinymce.settings, setup } })
+  window.wpEditorL10n = { tinymce: { baseURL: `${import.meta.env.BASE_URL}tinymce`, suffix: '.min', settings } };
+  window.wp = {
+    ...window.wp,
+    oldEditor: {
+      // not called by core/freeform 12.1; kept because WordPress's wp.oldEditor has it
+      getDefaultSettings: () => ({ tinymce: settings }),
+      // freeform/modal ClassicEdit effect: initialize(`editor-${clientId}`, { tinymce }) on the modal's textarea
+      initialize(id: string, { tinymce: own }: { tinymce: Record<string, unknown> }) {
+        const target = document.getElementById(id);
+        // the block's content already has its paragraphs (toBlocks); bodyOf removes them on save
+        if (target) tinymce.init({ ...own, target });
       },
-    };
-  })();
+      // freeform/modal ClassicEdit effect cleanup: remove(id) when the modal closes
+      remove: (id: string) => tinymce.get(id)?.remove(),
+      // freeform/modal Save button: setAttributes({ content: getContent(id) })
+      getContent: (id: string) => tinymce.get(id)?.getContent()
+        ?? (document.getElementById(id) as HTMLTextAreaElement | null)?.value ?? '',
+    },
+  };
 }

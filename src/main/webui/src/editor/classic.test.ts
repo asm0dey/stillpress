@@ -51,3 +51,32 @@ test('opening an unedited classic post leaves it clean, so nothing is saved', as
   edits.blocks(b.serialize(blocks));
   expect([edits.dirty, edits.needsAutosave]).toEqual([false, false]);
 });
+
+test('a failed TinyMCE download is retried, not cached', async () => {
+  // bun cannot load the skin CSS, so the install fails here as a lost chunk would in the browser
+  const first = c.installClassicEditor();
+  await expect(first).rejects.toBeDefined();
+  const second = c.installClassicEditor();
+  expect(second).not.toBe(first);
+  await expect(second).rejects.toBeDefined();
+});
+
+test('TinyMCE keeps markup the user never touched', async () => {
+  await import('tinymce');
+  const t = (window as unknown as { tinymce: TinyHtml }).tinymce;
+  const html = '<p>Hi <span style="color:red;font-weight:bold">x</span></p>'
+    + '<iframe src="https://www.youtube.com/embed/x" width="560" height="315" frameborder="0" allowfullscreen=""></iframe>'
+    + '<object data="a.swf"><param name="movie" value="a.swf" /><embed src="a.swf" type="application/x-shockwave-flash" /></object>'
+    + '<script>var widget = 1;</script><div onclick="go()" data-x="1">d</div>';
+  const schema = new t.html.Schema(c.SETTINGS);
+  const parsed = new t.html.DomParser(c.SETTINGS, schema).parse(html);
+  expect(new t.html.Serializer(c.SETTINGS, schema).serialize(parsed)).toBe(html);
+});
+
+interface TinyHtml {
+  html: {
+    Schema: new (s: object) => object;
+    DomParser: new (s: object, schema: object) => { parse(html: string): object };
+    Serializer: new (s: object, schema: object) => { serialize(node: object): string };
+  };
+}

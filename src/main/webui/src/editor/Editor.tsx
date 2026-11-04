@@ -135,9 +135,10 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
         ]);
         setCategories(cats);
         setTags(tagList);
+        const parsed = toBlocks(it.body, it.bodyFormat);
         // the Classic block's edit modal needs TinyMCE the moment it opens
-        if (it.bodyFormat === 'classic') await installClassicEditor();
-        load(it, tagList);
+        if (it.bodyFormat === 'classic' || hasClassic(parsed)) await installClassicEditor();
+        load(it, tagList, parsed);
         setAutosaveAt(it.autosave?.createdAt ?? null);
         if (it.type === 'page') allPages().then(setPages, () => {});
         if (role === 'administrator') api<UserView[]>('/users').then(setUsers, () => {});
@@ -148,10 +149,9 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     })();
   }, [id]);
 
-  function load(it: Item, tagList: TermView[]) {
+  function load(it: Item, tagList: TermView[], parsed: BlockInstance[]) {
     setItem(it);
     setTitle(it.title);
-    const parsed = toBlocks(it.body, it.bodyFormat);
     setBlocks(parsed);
     setDraft(draftOf(it, tagList));
     opened.current = { serialized: serialize(parsed), body: it.body };
