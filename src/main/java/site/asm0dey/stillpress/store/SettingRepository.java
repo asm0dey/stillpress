@@ -5,6 +5,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.exception.DataAccessException;
+import org.jooq.exception.SQLStateClass;
 
 @ApplicationScoped
 public class SettingRepository {
@@ -27,11 +29,20 @@ public class SettingRepository {
      */
     public boolean compareAndSet(String key, String expected, String value) {
         if (expected == null) {
-            return db
-                .insertInto(SETTING, SETTING.KEY, SETTING.VALUE)
-                .values(key, value)
-                .onConflictDoNothing()
-                .execute() == 1;
+            try {
+                return db
+                    .insertInto(SETTING, SETTING.KEY, SETTING.VALUE)
+                    .values(key, value)
+                    .onConflictDoNothing()
+                    .execute() == 1;
+            } catch (DataAccessException e) {
+                // H2 emulates the conflict clause with MERGE, which throws when a concurrent insert wins. PostgreSQL
+                // renders a native ON CONFLICT DO NOTHING and never reaches this catch (it would abort the transaction)
+                if (e.sqlStateClass() == SQLStateClass.C23_INTEGRITY_CONSTRAINT_VIOLATION) {
+                    return false;
+                }
+                throw e;
+            }
         }
         return db
             .update(SETTING)

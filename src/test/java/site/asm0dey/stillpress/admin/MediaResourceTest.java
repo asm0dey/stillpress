@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.store.AuthorRepository;
@@ -34,6 +35,8 @@ class MediaResourceTest {
     DataDir dataDir;
     @Inject
     SettingRepository settings;
+    @Inject
+    ItemService items;
     String contributor;
     String author;
 
@@ -117,8 +120,6 @@ class MediaResourceTest {
 
     @Test
     void parallelUploadsOfOneNameKeepTheirOwnBytes() throws Exception {
-        // the first-ever concurrent write races inside ImportGuard.close(); settle it so this test is about names
-        settings.put(ImportGuard.STATE, "closed");
         int n = 6;
         var pool = Executors.newFixedThreadPool(n);
         try {
@@ -140,6 +141,33 @@ class MediaResourceTest {
         } finally {
             pool.shutdown();
         }
+    }
+
+    @Test
+    void firstConcurrentWritesOnAFreshSiteAllSucceed() throws Exception {
+        assertThat(settings.get(ImportGuard.STATE)).isEmpty();
+        long userId = users.create("w", "w@example.org", "W", Role.AUTHOR).getId();
+        int n = 6;
+        var pool = Executors.newFixedThreadPool(n);
+        try {
+            var futures = new ArrayList<Future<Integer>>();
+            for (int i = 0; i < n; i++) {
+                int k = i;
+                futures.add(pool.submit(() -> {
+                    if (k % 2 == 0) {
+                        return upload(author, "p" + k + ".png", new byte[] {1}).statusCode();
+                    }
+                    items.create("post", userId);
+                    return 201;
+                }));
+            }
+            for (var f : futures) {
+                assertThat(f.get(60, TimeUnit.SECONDS)).isEqualTo(201);
+            }
+        } finally {
+            pool.shutdown();
+        }
+        assertThat(settings.get(ImportGuard.STATE)).contains("closed");
     }
 
     @Test
