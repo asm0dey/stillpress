@@ -43,6 +43,17 @@ class AdminBodyLimitTest {
             .isEqualTo(401);
     }
 
+    @Test
+    void anonymousMediaUploadIs401() throws IOException {
+        assertThat(
+                status(
+                        "/admin/api/media",
+                        "Content-Type: multipart/form-data; boundary=x\r\nContent-Length: " + HUNDRED_MB
+                )
+        )
+            .isEqualTo(401);
+    }
+
     private int status(String path, String headers) throws IOException {
         try (var s = new Socket(app.getHost(), app.getPort())) {
             s.setSoTimeout(5000);

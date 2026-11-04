@@ -7,7 +7,7 @@ import jakarta.enterprise.event.Observes;
 import module java.base;
 
 /**
- * The 1 GiB body limit is for the WXR upload only: every other admin API request is small JSON, so a larger body is
+ * The 1 GiB body limit is for the WXR and media uploads only: every other admin API request is small JSON, so a larger body is
  * refused before anything reads it. A chunked body has no length to check and is refused too; browsers send one.
  */
 @ApplicationScoped
@@ -18,7 +18,10 @@ public class BodyLimitFilter {
         filters.register(ctx -> {
             var req = ctx.request();
             var path = ctx.normalizedPath();
-            if (path != null && path.startsWith("/admin/api/") && !path.equals("/admin/api/import")) {
+            if (path != null
+                    && path.startsWith("/admin/api/")
+                    && !path.equals("/admin/api/import")
+                    && !path.equals("/admin/api/media")) {
                 if (req.getHeader("Transfer-Encoding") != null) {
                     refuse(ctx.response(), 411, "Content-Length required");
                     return;

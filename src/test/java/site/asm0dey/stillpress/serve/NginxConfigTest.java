@@ -23,4 +23,13 @@ class NginxConfigTest {
             .contains("proxy_set_header X-Forwarded-Host $http_host;")
             .doesNotContain("$uri/ ");
     }
+
+    @Test
+    void uploadSizeIsPerLocation() {
+        var c = NginxConfig.render(Path.of("/srv/sp/output/current"), "127.0.0.1:8080");
+        assertThat(c)
+            .containsPattern("location = /admin/api/media \\{[^}]*client_max_body_size 1g;")
+            .containsPattern("location = /admin/api/import \\{[^}]*client_max_body_size 1g;")
+            .containsPattern("location \\^~ /admin \\{[^}]*client_max_body_size 1m;");
+    }
 }

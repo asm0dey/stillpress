@@ -1,15 +1,19 @@
 package site.asm0dey.stillpress.admin;
 
 import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static site.asm0dey.stillpress.Csrf.csrf;
 import static site.asm0dey.stillpress.db.Tables.MEDIA;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import module java.base;
+import javax.imageio.ImageIO;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
+import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
@@ -24,12 +28,124 @@ class MediaResourceTest {
     SessionRepository sessions;
     @Inject
     DSLContext db;
+    @Inject
+    DataDir dataDir;
     String contributor;
+    String author;
 
     @BeforeEach
     void reset() {
         store.reset();
         contributor = sessions.create(users.create("c", "c@example.org", "C", Role.CONTRIBUTOR).getId());
+        author = sessions.create(users.create("a", "a@example.org", "A", Role.AUTHOR).getId());
+    }
+
+    @Test
+    void uploadIsStoredListedAndPublished() throws IOException {
+        var folder = LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy/MM"));
+        int id = upload(author, "My Photo.PNG", png(3, 2))
+            .then()
+            .statusCode(201)
+            .body("url", equalTo("/media/" + folder + "/my-photo.png"))
+            .body("mimeType", equalTo("image/png"))
+            .body("width", equalTo(3))
+            .body("height", equalTo(2))
+            .extract()
+            .path("id");
+        var published = dataDir.current().resolve("media/" + folder + "/my-photo.png");
+        TestStore.await(() -> Files.exists(published), 30);
+        assertThat(published).exists();
+        given()
+            .cookie("sp_session", contributor)
+            .get("/admin/api/media")
+            .then()
+            .statusCode(200)
+            .body("total", equalTo(1))
+            .body("items[0].id", equalTo(id));
+        given().cookie("sp_session", contributor).get("/admin/api/media?type=audio").then().body("total", equalTo(0));
+        given().cookie("sp_session", contributor).get("/admin/api/media?search=photo").then().body("total", equalTo(1));
+        csrf()
+            .cookie("sp_session", author)
+            .contentType("application/json")
+            .body(Map.of("title", "T", "alt", "an a"))
+            .put("/admin/api/media/" + id)
+            .then()
+            .statusCode(200)
+            .body("title", equalTo("T"))
+            .body("alt", equalTo("an a"));
+        csrf()
+            .cookie("sp_session", author)
+            .contentType("application/json")
+            .body(Map.of("title", "T"))
+            .put("/admin/api/media/" + (id + 1))
+            .then()
+            .statusCode(404);
+    }
+
+    @Test
+    void svgAndHtmlRefused() throws IOException {
+        for (var name : List.of("x.svg", "x.html", "noextension")) {
+            upload(author, name, new byte[] {1}).then().statusCode(400).body("error", equalTo("type_not_allowed"));
+        }
+        try (var files = Files.walk(dataDir.media())) {
+            assertThat(files.filter(Files::isRegularFile)).isEmpty();
+        }
+    }
+
+    @Test
+    void traversalNameIsFlattened() throws IOException {
+        var folder = LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy/MM"));
+        upload(author, "../../evil.png", png(1, 1))
+            .then()
+            .statusCode(201)
+            .body("url", equalTo("/media/" + folder + "/evil.png"));
+        assertThat(dataDir.media().resolve(folder).resolve("evil.png")).exists();
+    }
+
+    @Test
+    void clashGetsSuffix() throws IOException {
+        upload(author, "a.png", png(1, 1)).then().statusCode(201).body("url", org.hamcrest.Matchers.endsWith("/a.png"));
+        upload(author, "a.png", png(1, 1)).then().statusCode(201).body(
+                "url",
+                org.hamcrest.Matchers.endsWith("/a-2.png")
+        );
+    }
+
+    @Test
+    void contributorIs403() throws IOException {
+        upload(contributor, "a.png", png(1, 1)).then().statusCode(403);
+        assertThat(db.fetchCount(MEDIA)).isZero();
+    }
+
+    @Test
+    void uploadAboveJsonLimitIsAccepted() {
+        upload(author, "big.mp3", new byte[2 * 1024 * 1024]).then().statusCode(201).body(
+                "mimeType",
+                equalTo("audio/mpeg")
+        );
+    }
+
+    @Test
+    void uploadClosesImport() throws IOException {
+        upload(author, "a.png", png(1, 1)).then().statusCode(201);
+        assertThat(db.fetchValue(
+                site.asm0dey.stillpress.db.Tables.SETTING.VALUE,
+                site.asm0dey.stillpress.db.Tables.SETTING.KEY.eq("import_state")
+        ))
+            .isEqualTo("closed");
+    }
+
+    private io.restassured.response.Response upload(String session, String name, byte[] bytes) {
+        return csrf()
+            .cookie("sp_session", session)
+            .multiPart("file", name, bytes, "application/octet-stream")
+            .post("/admin/api/media");
+    }
+
+    private static byte[] png(int w, int h) throws IOException {
+        var out = new ByteArrayOutputStream();
+        ImageIO.write(new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", out);
+        return out.toByteArray();
     }
 
     @Test

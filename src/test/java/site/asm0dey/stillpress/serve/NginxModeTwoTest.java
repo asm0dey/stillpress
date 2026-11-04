@@ -146,6 +146,20 @@ class NginxModeTwoTest {
     }
 
     @Test
+    void twoMegabytesToAnAdminApiIs413FromNginx() {
+        // a 413 from nginx, not Stillpress's own 401/413: the body never reaches the app (it would answer 401 here)
+        given()
+            .baseUri("http://" + nginx.getHost())
+            .port(nginx.getMappedPort(80))
+            .contentType("application/octet-stream")
+            .body(new byte[2 * 1024 * 1024])
+            .post("/admin/api/users")
+            .then()
+            .statusCode(413)
+            .header("Server", startsWith("nginx"));
+    }
+
+    @Test
     void publishSwapIsPickedUpWithoutReload() throws Exception {
         var old = dataDir.current().toRealPath();
         publisher.publishAll();
