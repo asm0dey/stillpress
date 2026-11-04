@@ -24,6 +24,16 @@
         "bump"
       ],
       "groupName": "all non-major dependencies"
+    },
+    {
+      "description": "Bun is pinned twice, in mise.toml (mise manager) and in application.properties for Quinoa (custom manager); BunVersionPinTest fails if they differ, so both always move in one PR, majors included.",
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "matchPackageNames": [
+        "oven-sh/bun"
+      ],
+      "groupName": "bun"
     }
   ],
   "customManagers": [
@@ -51,6 +61,20 @@
       ],
       "depNameTemplate": "io.github.agustafson.princeofspace:prince-of-space-core",
       "datasourceTemplate": "maven"
+    },
+    {
+      "description": "Quinoa's Bun pin in application.properties. Same datasource, package and version extraction as Renovate's mise manager uses for mise.toml's bun, so both propose the same versions.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^src/main/resources/application\\.properties$/"
+      ],
+      "matchStrings": [
+        "quarkus\\.quinoa\\.package-manager-install\\.bun-version=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "bun",
+      "packageNameTemplate": "oven-sh/bun",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^bun-v(?<version>\\S+)"
     }
   ],
   "customDatasources": {
