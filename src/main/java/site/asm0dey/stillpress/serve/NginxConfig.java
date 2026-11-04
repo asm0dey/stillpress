@@ -11,7 +11,7 @@ public final class NginxConfig {
     /**
      * Paths always answered by Stillpress; a path with a file extension is matched exactly, the rest as prefixes.
      */
-    static final List<String> DYNAMIC_PREFIXES = List.of("/admin", "/wp-admin", "/wp-login.php");
+    static final List<String> DYNAMIC_PREFIXES = List.of("/admin", "/wp-admin", "/wp-login.php", "/wp-json");
 
     private NginxConfig() {
     }

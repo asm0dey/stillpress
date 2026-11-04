@@ -7,7 +7,7 @@ import module java.base;
 
 @ApplicationScoped
 public class BlockRenderer {
-    static final int MAX_DEPTH = 5;
+    public static final int MAX_DEPTH = 5;
     @Inject
     Instance<DynamicBlockRenderer> dynamic;
     private volatile Map<String, DynamicBlockRenderer> byName;

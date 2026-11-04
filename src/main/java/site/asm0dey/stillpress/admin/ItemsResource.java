@@ -323,7 +323,7 @@ public class ItemsResource {
         return actor(identity);
     }
 
-    static ItemService.Actor actor(SecurityIdentity identity) {
+    public static ItemService.Actor actor(SecurityIdentity identity) {
         long id = identity.getAttribute(SessionIdentityProvider.USER_ID);
         return new ItemService.Actor(id, Role.of(identity.getRoles().iterator().next()));
     }

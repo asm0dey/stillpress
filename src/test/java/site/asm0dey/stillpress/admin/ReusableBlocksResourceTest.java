@@ -1,0 +1,125 @@
+package site.asm0dey.stillpress.admin;
+
+import static io.restassured.http.ContentType.JSON;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
+import static site.asm0dey.stillpress.Csrf.csrf;
+import static site.asm0dey.stillpress.db.Tables.ITEM;
+import static site.asm0dey.stillpress.db.Tables.SCHEDULED_TASKS;
+import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.path.json.JsonPath;
+import io.restassured.specification.RequestSpecification;
+import jakarta.inject.Inject;
+import module java.base;
+import org.jooq.DSLContext;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import site.asm0dey.stillpress.TestStore;
+import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.publish.Jobs;
+import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.SessionRepository;
+
+@QuarkusTest
+class ReusableBlocksResourceTest {
+    @Inject
+    TestStore store;
+    @Inject
+    AuthorRepository users;
+    @Inject
+    SessionRepository sessions;
+    @Inject
+    DSLContext db;
+    String author1;
+    String author2;
+    long author1Id;
+
+    @BeforeEach
+    void reset() {
+        store.reset();
+        author1Id = users.create("author1", "a1@example.org", "Author One", Role.AUTHOR).getId();
+        author1 = sessions.create(author1Id);
+        author2 = sessions.create(users.create("author2", "a2@example.org", "Author Two", Role.AUTHOR).getId());
+    }
+
+    @AfterEach
+    void settle() {
+        TestStore.await(() -> db.fetchCount(SCHEDULED_TASKS, SCHEDULED_TASKS.TASK_NAME.eq(Jobs.PUBLISH_SITE)) == 0, 30);
+    }
+
+    @Test
+    void listShowsOwnerUsageAndCapability() {
+        var b = create(author1, "one");
+        var item = ItemsResourceTest.create(author1, "post").getLong("id");
+        db
+            .update(ITEM)
+            .set(ITEM.BODY, "<!-- wp:block {\"ref\":" + b.getLong("id") + "} /-->")
+            .where(ITEM.ID.eq(item))
+            .execute();
+        as(author2)
+            .get("/admin/api/blocks")
+            .then()
+            .statusCode(200)
+            .body("[0].id", equalTo(b.getInt("id")))
+            .body("[0].author", equalTo("Author One"))
+            .body("[0].usedBy", equalTo(1))
+            .body("[0].canEdit", equalTo(false))
+            .body("[0].content", nullValue());
+    }
+
+    @Test
+    void staleUpdateIs409AndAutosaveShowsUntilSaved() {
+        var b = create(author1, "one");
+        var path = "/admin/api/blocks/" + b.getLong("id");
+        var saved = put(author1, b, "two").then().statusCode(200).extract().jsonPath();
+        put(author1, b, "three").then().statusCode(409).body("error", equalTo("conflict"));
+        as(author1).body(Map.of("title", "T", "content", "draft")).put(path + "/autosave").then().statusCode(204);
+        as(author1)
+            .get(path)
+            .then()
+            .statusCode(200)
+            .body("content", equalTo("two"))
+            .body("autosave.createdAt", notNullValue());
+        as(author1).get(path + "/autosave").then().statusCode(200).body("content", equalTo("draft"));
+        put(author1, saved, "four").then().statusCode(200).body("autosave", nullValue());
+    }
+
+    @Test
+    void revisionRestoreSavesOldContent() {
+        var b = create(author1, "one");
+        var path = "/admin/api/blocks/" + b.getLong("id");
+        put(author1, b, "two").then().statusCode(200);
+        var revs = as(author1).get(path + "/revisions").then().statusCode(200).extract().jsonPath();
+        var first = revs.getList("id", Long.class).getLast();
+        as(author1).get(path + "/revisions/" + first).then().statusCode(200).body("content", equalTo("one"));
+        as(author1).post(path + "/revisions/" + first + "/restore").then().statusCode(200).body(
+                "content",
+                equalTo("one")
+        );
+        as(author2).post(path + "/revisions/" + first + "/restore").then().statusCode(403);
+        assertThat(as(author1).get(path + "/revisions").then().extract().jsonPath().getList("id")).hasSize(3);
+    }
+
+    private JsonPath create(String cookie, String content) {
+        return as(cookie)
+            .body(Map.of("title", "T", "content", content))
+            .post("/admin/api/blocks")
+            .then()
+            .statusCode(201)
+            .extract()
+            .jsonPath();
+    }
+
+    private static io.restassured.response.Response put(String cookie, JsonPath block, String content) {
+        var body = new HashMap<String, Object>(Map.of("title", "T", "content", content));
+        body.put("expectedModifiedAt", block.getString("modifiedAt"));
+        return as(cookie).body(body).put("/admin/api/blocks/" + block.getLong("id"));
+    }
+
+    private static RequestSpecification as(String cookie) {
+        return csrf().contentType(JSON).cookie("sp_session", cookie);
+    }
+}

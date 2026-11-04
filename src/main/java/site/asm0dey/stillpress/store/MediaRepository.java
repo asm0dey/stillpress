@@ -15,4 +15,12 @@ public class MediaRepository {
     public Optional<MediaRecord> findBySource(String sourceUrl) {
         return db.selectFrom(MEDIA).where(MEDIA.SOURCE_URL.eq(sourceUrl)).fetchOptional();
     }
+
+    public Optional<MediaRecord> findById(long id) {
+        return db.selectFrom(MEDIA).where(MEDIA.ID.eq(id)).fetchOptional();
+    }
+
+    public List<MediaRecord> findByIds(Collection<Long> ids) {
+        return db.selectFrom(MEDIA).where(MEDIA.ID.in(ids)).orderBy(MEDIA.ID).fetch();
+    }
 }
