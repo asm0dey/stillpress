@@ -7,6 +7,7 @@ import Setup from './pages/Setup.jsx';
 import Login from './pages/Login.jsx';
 import SetPassword from './pages/SetPassword.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import Users from './pages/Users.jsx';
 
 const PUBLIC = ['/setup', '/login', '/set-password'];
 
@@ -47,6 +48,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/login" element={<Login />} />
           <Route path="/set-password" element={<SetPassword />} />
           <Route path="/" element={<Dashboard />} />
+          <Route path="/users" element={<Users />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Gate>

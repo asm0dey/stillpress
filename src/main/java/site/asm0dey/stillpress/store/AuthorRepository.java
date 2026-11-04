@@ -64,6 +64,24 @@ public class AuthorRepository {
         db.update(AUTHOR).set(AUTHOR.ROLE, role.id()).where(AUTHOR.ID.eq(id)).execute();
     }
 
+    /**
+     * Sets the role unless that would leave no administrator with a password; false then.
+     * Locks those administrators first, so two concurrent demotions cannot both pass. Call inside a transaction.
+     */
+    public boolean setRoleKeepingAdministrator(long id, Role role) {
+        var keepers = db
+            .select(AUTHOR.ID)
+            .from(AUTHOR)
+            .where(AUTHOR.ROLE.eq(Role.ADMINISTRATOR.id()).and(AUTHOR.PASSWORD_HASH.isNotNull()))
+            .forUpdate()
+            .fetch(AUTHOR.ID);
+        if (role != Role.ADMINISTRATOR && keepers.equals(List.of(id))) {
+            return false;
+        }
+        setRole(id, role);
+        return true;
+    }
+
     public boolean anyAdministratorWithPassword() {
         return db.fetchExists(AUTHOR, AUTHOR.ROLE.eq(Role.ADMINISTRATOR.id()).and(AUTHOR.PASSWORD_HASH.isNotNull()));
     }

@@ -7,8 +7,6 @@ import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 import site.asm0dey.stillpress.store.AuthorRepository;
-import site.asm0dey.stillpress.store.SettingRepository;
-import site.asm0dey.stillpress.store.TokenRepository;
 
 @Command(name = "user", description = "Manage users", subcommands = UserCommand.ResetPassword.class)
 public class UserCommand {
@@ -21,9 +19,7 @@ public class UserCommand {
         @Inject
         AuthorRepository users;
         @Inject
-        TokenRepository tokens;
-        @Inject
-        SettingRepository settings;
+        SetPasswordLink link;
 
         @Override
         public Integer call() {
@@ -32,10 +28,7 @@ public class UserCommand {
                 spec.commandLine().getErr().println("No such user: " + login);
                 return 1;
             }
-            var token =
-                    tokens.create(user.get().getId(), TokenRepository.SET_PASSWORD, TokenRepository.SET_PASSWORD_TTL);
-            var home = settings.get("home_url").orElse("").replaceAll("/+$", "");
-            spec.commandLine().getOut().println(home + "/admin/set-password?token=" + token);
+            spec.commandLine().getOut().println(link.issue(user.get().getId()));
             return 0;
         }
     }
