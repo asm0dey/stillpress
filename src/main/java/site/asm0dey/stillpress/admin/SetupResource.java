@@ -50,7 +50,8 @@ public class SetupResource {
             String login,
             String email,
             String displayName,
-            String password
+            String password,
+            String timezone
     ) {}
 
     @GET
@@ -97,6 +98,9 @@ public class SetupResource {
     private String create(Setup s, String hash, String home) {
         settings.put("title", s.title().strip());
         settings.put("language", s.language());
+        if (s.timezone() != null) {
+            settings.put("timezone", s.timezone());
+        }
         // an install that already holds a CLI import keeps the export's site URL, not the host the admin used
         if (settings.get("home_url").isEmpty()) {
             settings.put("home_url", home);
@@ -142,6 +146,13 @@ public class SetupResource {
             Passwords.validate(s.password());
         } catch (IllegalArgumentException e) {
             return "password";
+        }
+        if (s.timezone() != null) {
+            try {
+                ZoneId.of(s.timezone());
+            } catch (DateTimeException e) {
+                return "timezone";
+            }
         }
         return null;
     }

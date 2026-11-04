@@ -149,6 +149,21 @@ class SetupResourceTest {
     }
 
     @Test
+    void timezoneIsStored() {
+        var body = body(token.current().orElseThrow(), "admin0");
+        body.put("timezone", "Europe/Moscow");
+        post(body).then().statusCode(201);
+        assertThat(settings.get("timezone")).hasValue("Europe/Moscow");
+    }
+
+    @Test
+    void badTimezoneIs400() {
+        var body = body(token.current().orElseThrow(), "admin0");
+        body.put("timezone", "Mars/Base");
+        post(body).then().statusCode(400).body("field", equalTo("timezone"));
+    }
+
+    @Test
     void weakPasswordIs400() {
         var body = body(token.current().orElseThrow(), "admin0");
         body.put("password", "short");

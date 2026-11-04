@@ -42,7 +42,7 @@ export default function Setup() {
     setErrors({});
     setProblem(null);
     try {
-      await api('/setup', { method: 'POST', body: form });
+      await api('/setup', { method: 'POST', body: { ...form, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } });
       setDone(true);
     } catch (e) {
       const err = e as ApiError;

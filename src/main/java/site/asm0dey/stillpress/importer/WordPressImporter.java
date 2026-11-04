@@ -7,9 +7,11 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.blocks.Block;
 import site.asm0dey.stillpress.blocks.BlockParser;
 import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.content.PermalinkStructure;
 import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
@@ -197,6 +199,7 @@ public class WordPressImporter {
                     var r = db.newRecord(REUSABLE_BLOCK);
                     r.setSourceId(i.postId());
                     r.setTitle(i.title());
+                    r.setAuthorId(authorIds.get(i.creator()));
                     r.setContent(localize(i.content()).rewrite(Objects.requireNonNullElse(i.content(), "")));
                     reportLeftovers(r.getContent());
                     r.store();
@@ -475,6 +478,11 @@ public class WordPressImporter {
          * Parents may appear after their children in the stream, so they are linked once it ends.
          */
         void finish() {
+            if (settings.get("permalink_structure").isEmpty()) {
+                PermalinkStructure
+                    .infer(importedPosts())
+                    .ifPresent(v -> settings.put("permalink_structure", v));
+            }
             for (var t : pendingTerms) {
                 var parent = db.fetchValue(TERM.ID, TERM.TAXONOMY.eq(t.taxonomy()).and(TERM.SLUG.eq(t.parentSlug())));
                 if (parent != null) {
@@ -500,6 +508,46 @@ public class WordPressImporter {
                     redirect("?attachment_id=" + p.sourceId(), parent.value2());
                 }
             }
+        }
+
+        /**
+         * The published posts with their category (the lowest id, as WordPress picks it) and author.
+         */
+        private List<PermalinkStructure.Fields> importedPosts() {
+            var categories = db
+                .select(TERM.ID, TERM.SLUG, TERM.PARENT_ID)
+                .from(TERM)
+                .where(TERM.TAXONOMY.eq("category"))
+                .fetchMap(TERM.ID);
+            var firstCategory = db
+                .select(ITEM_TERM.ITEM_ID, DSL.min(ITEM_TERM.TERM_ID))
+                .from(ITEM_TERM)
+                .join(TERM)
+                .on(TERM.ID.eq(ITEM_TERM.TERM_ID))
+                .where(TERM.TAXONOMY.eq("category"))
+                .groupBy(ITEM_TERM.ITEM_ID)
+                .fetchMap(ITEM_TERM.ITEM_ID, DSL.min(ITEM_TERM.TERM_ID));
+            return db
+                .select(ITEM.ID, ITEM.SOURCE_ID, ITEM.SLUG, ITEM.PUBLISHED_LOCAL, AUTHOR.SLUG, ITEM.PERMALINK)
+                .from(ITEM)
+                .leftJoin(AUTHOR)
+                .on(AUTHOR.ID.eq(ITEM.AUTHOR_ID))
+                .where(ITEM.TYPE.eq("post"), ITEM.STATUS.eq("publish"), ITEM.PUBLISHED_LOCAL.isNotNull())
+                .fetch(r -> {
+                    var path = new ArrayDeque<String>();
+                    for (var t = categories.get(firstCategory.get(r.value1())); t != null; t = categories.get(t.value3()
+                    )) {
+                        path.addFirst(t.value2());
+                    }
+                    return new PermalinkStructure.Fields(
+                            Objects.requireNonNullElse(r.value2(), 0L),
+                            Objects.requireNonNullElse(r.value3(), ""),
+                            r.value4(),
+                            String.join("/", path),
+                            Objects.requireNonNullElse(r.value5(), ""),
+                            r.value6()
+                    );
+                });
         }
 
         ImportReport report() {

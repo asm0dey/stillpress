@@ -1,6 +1,7 @@
 package site.asm0dey.stillpress.importer;
 
 import module java.base;
+import site.asm0dey.stillpress.content.Slugs;
 
 /**
  * WordPress {@code user_nicename} from a login, as {@code wp_insert_user} derives it:
@@ -10,24 +11,6 @@ public final class Nicename {
     private Nicename() {
     }
 
-    private static final Map<String, String> LIGATURES = Map.ofEntries(
-            Map.entry("ß", "ss"),
-            Map.entry("æ", "ae"),
-            Map.entry("Æ", "AE"),
-            Map.entry("œ", "oe"),
-            Map.entry("Œ", "OE"),
-            Map.entry("ø", "o"),
-            Map.entry("Ø", "O"),
-            Map.entry("đ", "d"),
-            Map.entry("Đ", "D"),
-            Map.entry("ð", "d"),
-            Map.entry("Ð", "D"),
-            Map.entry("ł", "l"),
-            Map.entry("Ł", "L"),
-            Map.entry("þ", "th"),
-            Map.entry("Þ", "TH")
-    );
-
     public static String of(String login) {
         var s =
                 login.codePointCount(0, login.length()) > 50
@@ -35,7 +18,7 @@ public final class Nicename {
                 : login;
         // sanitize_user(..., strict = true)
         s = s.replaceAll("<[^>]*>", "");
-        s = removeAccents(s);
+        s = Slugs.removeAccents(s);
         s = s.replaceAll("%[a-fA-F0-9]{2}", "").replaceAll("&.+?;", "");
         s = s.replaceAll("[^a-zA-Z0-9 _.\\-@]", "");
         s = s.trim().replaceAll("\\s+", " ");
@@ -43,13 +26,5 @@ public final class Nicename {
         s = s.toLowerCase(Locale.ROOT).replace('.', '-');
         s = s.replaceAll("[^%a-z0-9 _-]", "").replaceAll("\\s+", "-").replaceAll("-+", "-");
         return s.replaceAll("^-+|-+$", "");
-    }
-
-    // shortcut: NFD + mark stripping plus common ligatures, not WP's full table or its locale rules (de_DE, da_DK, ca)
-    private static String removeAccents(String s) {
-        for (var e : LIGATURES.entrySet()) {
-            s = s.replace(e.getKey(), e.getValue());
-        }
-        return Normalizer.normalize(s, Normalizer.Form.NFD).replaceAll("\\p{M}+", "");
     }
 }

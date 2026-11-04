@@ -15,6 +15,7 @@ import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.content.PermalinkStructure;
 import site.asm0dey.stillpress.store.*;
 
 @QuarkusTest
@@ -149,6 +150,19 @@ class WordPressImporterTest {
     }
 
     @Test
+    void importInfersPermalinkStructure() throws Exception {
+        store.importSample();
+        assertThat(settings.get("permalink_structure")).contains(PermalinkStructure.DEFAULT);
+    }
+
+    @Test
+    void reusableBlockGetsItsCreatorAsOwner() throws Exception {
+        store.importSample();
+        assertThat(db.select(REUSABLE_BLOCK.AUTHOR_ID).from(REUSABLE_BLOCK).fetchOne(REUSABLE_BLOCK.AUTHOR_ID))
+            .isEqualTo(users.findByLoginOrEmail("mama").orElseThrow().getId());
+    }
+
+    @Test
     void newAuthorSlugsAvoidExistingUsers() throws Exception {
         users.create("Papa", "other@example.org", "Other", Role.EDITOR);
         store.importSample();
@@ -224,9 +238,11 @@ class WordPressImporterTest {
     void failureRollsEverythingBack() {
         fetcher.failOn("/2023/01/a.jpg");
         assertThatThrownBy(() -> importer.importWxr(sample())).hasMessageContaining("boom");
-        for (var t : List.of(ITEM, TERM, ITEM_TERM, AUTHOR, REUSABLE_BLOCK, COMMENT, MEDIA, REDIRECT, SETTING)) {
+        for (var t : List.of(ITEM, TERM, ITEM_TERM, AUTHOR, REUSABLE_BLOCK, COMMENT, MEDIA, REDIRECT)) {
             assertThat(db.fetchCount(t)).as(t.getName()).isZero();
         }
+        // V4's lock row is the only setting that may exist
+        assertThat(db.select(SETTING.KEY).from(SETTING).fetch(SETTING.KEY)).containsExactly("publish_lock");
     }
 
     static final String HOME = "https://blog.example.ru";

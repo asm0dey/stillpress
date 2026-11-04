@@ -27,16 +27,23 @@ public class TestStore {
         db.update(ITEM).setNull(ITEM.PARENT_ID).execute();
         db.update(TERM).setNull(TERM.PARENT_ID).execute();
         db.deleteFrom(ITEM_TERM).execute();
+        db.deleteFrom(ITEM_FRAGMENT).execute();
+        db.deleteFrom(PUBLISHED_ITEM).execute();
+        db.deleteFrom(PUBLISH_QUEUE).execute();
+        db.deleteFrom(SCHEDULED_TASKS).execute();
+        db.deleteFrom(REVISION).execute();
         db.deleteFrom(COMMENT).execute();
         db.deleteFrom(MEDIA).execute();
         db.deleteFrom(ITEM).execute();
         db.deleteFrom(TERM).execute();
         db.deleteFrom(SESSION).execute();
         db.deleteFrom(USER_TOKEN).execute();
-        db.deleteFrom(AUTHOR).execute();
         db.deleteFrom(REUSABLE_BLOCK).execute();
+        db.deleteFrom(AUTHOR).execute();
         db.deleteFrom(REDIRECT).execute();
         db.deleteFrom(SETTING).execute();
+        // the row every publish locks
+        db.insertInto(SETTING, SETTING.KEY, SETTING.VALUE).values("publish_lock", null).execute();
         try (var walk = Files.walk(dataDir.media())) {
             walk
                 .sorted(Comparator.reverseOrder())
