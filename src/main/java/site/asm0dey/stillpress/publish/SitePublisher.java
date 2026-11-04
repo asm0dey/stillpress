@@ -1,5 +1,6 @@
 package site.asm0dey.stillpress.publish;
 
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.qute.Engine;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -7,6 +8,7 @@ import module java.base;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.db.tables.records.TermRecord;
 import site.asm0dey.stillpress.publish.views.ArchiveView;
+import site.asm0dey.stillpress.publish.views.EntryView;
 import site.asm0dey.stillpress.publish.views.ItemView;
 import site.asm0dey.stillpress.publish.views.SiteComment;
 import site.asm0dey.stillpress.publish.views.SiteView;
@@ -14,12 +16,15 @@ import site.asm0dey.stillpress.publish.views.ViewFactory;
 import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.CommentRepository;
+import site.asm0dey.stillpress.store.FragmentRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
+import site.asm0dey.stillpress.store.PublishedItemRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TermRepository;
 
 /**
- * Renders the whole site into a fresh release and switches {@code current} to it only once every file is written.
+ * Renders the site into a fresh release and switches {@code current} to it only once every file is written. A batch
+ * re-renders only what it touches and hard-links every other file from the live release.
  */
 @ApplicationScoped
 public class SitePublisher {
@@ -31,6 +36,7 @@ public class SitePublisher {
     static final List<String> ASSETS = List.of("block-library.css", "plain.css", "plain.js");
     private static final int BATCH = 50;
     private static final Logger LOG = Logger.getLogger(SitePublisher.class);
+    private static final Pattern PAGE = Pattern.compile("(.*)page/[0-9]+/index\\.html");
     @Inject
     ItemRepository items;
     @Inject
@@ -49,21 +55,74 @@ public class SitePublisher {
     DataDir dataDir;
     @Inject
     ReleaseSwitcher switcher;
+    @Inject
+    FragmentRepository fragments;
+    @Inject
+    PublishedItemRepository published;
+    @Inject
+    PublishQueue queue;
 
     public PublishResult publishAll() {
+        return publish(new PublishQueue.Batch(Set.of(), Set.of(), Set.of(), false, true));
+    }
+
+    /**
+     * Full when the batch asks for it or there is nothing to build on (no live release, no {@code published_item}
+     * rows); otherwise only the batch's items, the listings they were and are in, and the comments feed.
+     */
+    public PublishResult publish(PublishQueue.Batch batch) {
         var start = Instant.now();
+        var live = liveRelease();
+        var incremental = !batch.all() && live != null && published.any();
         var release = switcher.newRelease();
+        Out out;
         try {
-            var out = new Out(release);
+            out = new Out(release, incremental ? live : null, batch);
+            if (incremental) {
+                // a fragment stored by a run that read the item just before it was saved is dropped here
+                fragments.delete(batch.items());
+            } else {
+                fragments.clear();
+            }
             render(out);
             switcher.activate(release);
-            return new PublishResult(release, out.files, Duration.between(start, Instant.now()));
         } catch (IOException e) {
             discardUnlessLive(release);
             throw new UncheckedIOException(e);
         } catch (RuntimeException e) {
             discardUnlessLive(release);
             throw e;
+        }
+        record(out);
+        return new PublishResult(release, out.files, Duration.between(start, Instant.now()));
+    }
+
+    private Path liveRelease() {
+        try {
+            return Files.exists(dataDir.current()) ? dataDir.current().toRealPath() : null;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * The release is live already; stale bookkeeping would make later runs skip paths, so a failure forces a full one.
+     */
+    private void record(Out out) {
+        try {
+            QuarkusTransaction.requiringNew().run(() -> {
+                if (out.live == null) {
+                    published.replaceAll(out.rows);
+                    return;
+                }
+                var gone = new HashSet<>(out.batch.items());
+                out.rows.forEach(r -> gone.remove(r.itemId()));
+                published.delete(gone);
+                published.upsert(out.rows);
+            });
+        } catch (RuntimeException e) {
+            LOG.errorf(e, "Could not record the published items of %s; queueing a full publish", out.root);
+            queue.all();
         }
     }
 
@@ -86,8 +145,36 @@ public class SitePublisher {
         out.perPage = positive("posts_per_page");
         out.perRss = positive("posts_per_rss");
         var summaries = items.findPublishedSummaries();
+        var posts = summaries
+            .stream()
+            .filter(r -> "post".equals(r.type()))
+            .toList();
+        var listings = new ArrayList<Listing>();
+        listings.add(new Listing("home", "/", site.title(), posts, true));
+        termListings(listings, posts);
+        authorListings(listings, posts);
+        dateListings(listings, posts);
+        var bases = new HashMap<Long, List<String>>();
+        for (var l : listings) {
+            l
+                .posts()
+                .forEach(p -> bases
+                    .computeIfAbsent(p.id(), k -> new ArrayList<>())
+                    .add(l.base()));
+        }
+        var rendered = summaries
+            .stream()
+            .filter(s -> out.wantsItem(s.id()))
+            .toList();
+        out.rows = rendered
+            .stream()
+            .map(s -> new PublishedItemRepository.Row(s.id(), s.permalink(), bases.getOrDefault(s.id(), List.of())))
+            .toList();
+        if (out.live != null) {
+            linkUntouched(out);
+        }
         // the only thing held for the whole run: ids, dates and links; bodies are loaded a page at a time
-        for (var chunk : chunks(summaries)) {
+        for (var chunk : chunks(rendered)) {
             for (var v : views(chunk)) {
                 out.origin = "item:" + v.id();
                 var path = Permalinks.decode(v.permalinkEncoded());
@@ -106,29 +193,72 @@ public class SitePublisher {
                 );
             }
         }
-        var posts = summaries
-            .stream()
-            .filter(r -> "post".equals(r.type()))
-            .toList();
-        out.origin = "home";
-        paged(out, site, "/", site.title(), posts);
-        feed(out, site, "/", posts);
-        out.origin = "comments feed";
-        commentsFeed(out, site);
-        termArchives(out, site, posts);
-        authorArchives(out, site, posts);
-        out.origin = "date archive";
-        dateArchives(out, site, posts);
-        out.origin = "static";
-
-        out.file("404.html", render("plain/404", "site", site).getBytes(StandardCharsets.UTF_8));
-        out.file("robots.txt", "User-agent: *\nDisallow: /admin/\n".getBytes(StandardCharsets.UTF_8));
-        for (var a : ASSETS) {
-            try (var in = SitePublisher.class.getResourceAsStream("/static-assets/" + a)) {
-                out.file("assets/" + a, Objects.requireNonNull(in, a).readAllBytes());
+        for (var l : listings) {
+            if (out.wantsBase(l.base())) {
+                out.origin = l.origin();
+                paged(out, site, l.base(), l.heading(), l.posts());
+                if (l.feed()) {
+                    feed(out, site, l.base(), l.posts());
+                }
             }
         }
-        linkMedia(out);
+        out.origin = "comments feed";
+        commentsFeed(out, site);
+        out.origin = "static";
+        if (out.live == null) {
+            out.file("404.html", render("plain/404", "site", site).getBytes(StandardCharsets.UTF_8));
+            out.file("robots.txt", "User-agent: *\nDisallow: /admin/\n".getBytes(StandardCharsets.UTF_8));
+            for (var a : ASSETS) {
+                try (var in = SitePublisher.class.getResourceAsStream("/static-assets/" + a)) {
+                    out.file("assets/" + a, Objects.requireNonNull(in, a).readAllBytes());
+                }
+            }
+        }
+        if (out.live == null || out.batch.media()) {
+            linkMedia(out);
+        }
+    }
+
+    /**
+     * One archive: its base path, its posts newest first, and whether it has a feed (date archives do not).
+     */
+    private record Listing(String origin, String base, String heading, List<ItemRepository.Summary> posts, boolean feed) {}
+
+    /**
+     * Links every live file the batch cannot have changed: anything but the listing pages and feeds of the old and new
+     * bases, the old and new item pages and their feeds, and the comments feed. A dirty path covers only its own
+     * {@code index.html}, never the item pages below it.
+     */
+    private void linkUntouched(Out out) throws IOException {
+        var bases = new HashSet<>(out.batch.bases());
+        var paths = new HashSet<String>();
+        for (var old : published.find(out.batch.items()).values()) {
+            bases.addAll(old.bases());
+            paths.add(old.permalink());
+        }
+        for (var now : out.rows) {
+            bases.addAll(now.bases());
+            paths.add(now.permalink());
+        }
+        out.dirtyBases = bases;
+        var skip = new HashSet<String>();
+        skip.add("comments/" + FEED_SEGMENT + "/index.html");
+        var baseDirs = new HashSet<String>();
+        for (var p : Stream.concat(bases.stream(), paths.stream()).toList()) {
+            var dir = p.replaceFirst("^/+", "");
+            skip.add(dir + "index.html");
+            skip.add(dir + FEED_SEGMENT + "/index.html");
+        }
+        bases.forEach(b -> baseDirs.add(b.replaceFirst("^/+", "")));
+        try (var walk = Files.walk(out.live)) {
+            for (var src : walk.filter(Files::isRegularFile).toList()) {
+                var rel = out.live.relativize(src).toString().replace('\\', '/');
+                var page = PAGE.matcher(rel);
+                if (!skip.contains(rel) && !(page.matches() && baseDirs.contains(page.group(1)))) {
+                    out.hardLink(rel, src);
+                }
+            }
+        }
     }
 
     /**
@@ -167,7 +297,7 @@ public class SitePublisher {
             .toList();
     }
 
-    private void termArchives(Out out, SiteView site, List<ItemRepository.Summary> posts) throws IOException {
+    private void termListings(List<Listing> listings, List<ItemRepository.Summary> posts) {
         var byId = new HashMap<Long, TermRecord>();
         terms.all().forEach(t -> byId.put(t.getId(), t));
         var termIds = terms.termIdsByItem();
@@ -191,14 +321,18 @@ public class SitePublisher {
             if (!"category".equals(term.getTaxonomy()) && !"post_tag".equals(term.getTaxonomy())) {
                 continue;
             }
-            out.origin = "term " + term.getTaxonomy() + ":" + term.getSlug();
             var isCategory = "category".equals(term.getTaxonomy());
             var base = settings.get(isCategory ? "category_base" : "tag_base").orElse(isCategory ? "category" : "tag");
-            var path = "/" + base + "/" + termPath(byId, term) + "/";
-            var list = buckets.getOrDefault(term.getId(), List.of());
             // WordPress answers an existing term 200 with an empty list, never 404
-            paged(out, site, path, term.getName(), list);
-            feed(out, site, path, list);
+            listings.add(
+                    new Listing(
+                            "term " + term.getTaxonomy() + ":" + term.getSlug(),
+                            "/" + base + "/" + termPath(byId, term) + "/",
+                            term.getName(),
+                            buckets.getOrDefault(term.getId(), List.of()),
+                            true
+                    )
+            );
         }
     }
 
@@ -218,7 +352,7 @@ public class SitePublisher {
         return String.join("/", parts);
     }
 
-    private void authorArchives(Out out, SiteView site, List<ItemRepository.Summary> posts) throws IOException {
+    private void authorListings(List<Listing> listings, List<ItemRepository.Summary> posts) {
         var byAuthor = new HashMap<Long, List<ItemRepository.Summary>>();
         for (var p : posts) {
             if (p.authorId() != null) {
@@ -228,15 +362,19 @@ public class SitePublisher {
             }
         }
         for (var a : authors.all()) {
-            out.origin = "author:" + a.getSlug();
-            var list = byAuthor.getOrDefault(a.getId(), List.of());
-            var path = "/author/" + a.getSlug() + "/";
-            paged(out, site, path, Objects.requireNonNullElse(a.getDisplayName(), a.getLogin()), list);
-            feed(out, site, path, list);
+            listings.add(
+                    new Listing(
+                            "author:" + a.getSlug(),
+                            "/author/" + a.getSlug() + "/",
+                            Objects.requireNonNullElse(a.getDisplayName(), a.getLogin()),
+                            byAuthor.getOrDefault(a.getId(), List.of()),
+                            true
+                    )
+            );
         }
     }
 
-    private void dateArchives(Out out, SiteView site, List<ItemRepository.Summary> posts) throws IOException {
+    private void dateListings(List<Listing> listings, List<ItemRepository.Summary> posts) {
         var groups = new LinkedHashMap<String, List<ItemRepository.Summary>>();
         for (var p : posts) {
             // WordPress groups by the site-local date, so a post at 01:30 Moscow time is in that day's archive
@@ -252,9 +390,9 @@ public class SitePublisher {
                 }
             }
         }
-        for (var e : groups.entrySet()) {
-            paged(out, site, e.getKey(), e.getKey().substring(1, e.getKey().length() - 1), e.getValue());
-        }
+        groups.forEach((base, list) -> listings.add(
+                new Listing("date archive", base, base.substring(1, base.length() - 1), list, false)
+        ));
     }
 
     /**
@@ -267,7 +405,7 @@ public class SitePublisher {
             var slice = all.subList((n - 1) * out.perPage, Math.min(all.size(), n * out.perPage));
             var view = new ArchiveView(
                     heading,
-                    views(slice),
+                    entries(slice),
                     n,
                     total,
                     n > 1 ? Permalinks.encode(pagePath(base, n - 1)) : null,
@@ -275,6 +413,23 @@ public class SitePublisher {
             );
             out.page(pagePath(base, n), render("plain/archive", "site", site, "archive", view));
         }
+    }
+
+    /**
+     * Archive entries of one page from {@code item_fragment}; the missing ones are rendered and stored.
+     */
+    private List<String> entries(List<ItemRepository.Summary> slice) {
+        var html = new HashMap<>(fragments.find(slice.stream().map(ItemRepository.Summary::id).toList()));
+        var fresh = new HashMap<Long, String>();
+        for (var v : views(slice
+            .stream()
+            .filter(s -> !html.containsKey(s.id()))
+            .toList())) {
+            fresh.put(v.id(), render("plain/entry", "entry", EntryView.of(v)));
+        }
+        fragments.put(fresh);
+        html.putAll(fresh);
+        return slice.stream().map(s -> html.get(s.id())).toList();
     }
 
     private static String pagePath(String base, int n) {
@@ -355,7 +510,11 @@ public class SitePublisher {
         var media = dataDir.media();
         try (var walk = Files.walk(media)) {
             for (var src : walk.filter(Files::isRegularFile).toList()) {
-                out.link("media/" + media.relativize(src).toString().replace('\\', '/'), src);
+                var rel = "media/" + media.relativize(src).toString().replace('\\', '/');
+                // an incremental release already holds the live one's media
+                if (!Files.exists(out.root.resolve(rel))) {
+                    out.link(rel, src);
+                }
             }
         }
     }
@@ -370,6 +529,19 @@ public class SitePublisher {
 
     private static final class Out {
         final Path root;
+        /**
+         * The release untouched files are linked from; null in a full publish.
+         */
+        final Path live;
+        final PublishQueue.Batch batch;
+        /**
+         * Listing bases to render in an incremental publish; filled once the walk knows them.
+         */
+        Set<String> dirtyBases = Set.of();
+        /**
+         * {@code published_item} rows for the rendered items.
+         */
+        List<PublishedItemRepository.Row> rows = List.of();
         int files;
         /**
          * Posts per archive page, read once per publish.
@@ -382,8 +554,31 @@ public class SitePublisher {
         String origin = "";
         private final Map<Path, String> written = new HashMap<>();
 
-        Out(Path root) {
+        Out(Path root, Path live, PublishQueue.Batch batch) {
             this.root = root;
+            this.live = live;
+            this.batch = batch;
+        }
+
+        boolean wantsItem(long id) {
+            return live == null || batch.items().contains(id);
+        }
+
+        boolean wantsBase(String base) {
+            return live == null || dirtyBases.contains(base);
+        }
+
+        /**
+         * A file carried over unchanged from the live release; not counted as written.
+         */
+        void hardLink(String relative, Path source) throws IOException {
+            var target = root.resolve(relative);
+            Files.createDirectories(target.getParent());
+            try {
+                Files.createLink(target, source);
+            } catch (IOException | UnsupportedOperationException e) {
+                Files.copy(source, target);
+            }
         }
 
         /**
@@ -400,12 +595,7 @@ public class SitePublisher {
         void link(String relative, Path source) throws IOException {
             var target = root.resolve(relative);
             claim(target);
-            Files.createDirectories(target.getParent());
-            try {
-                Files.createLink(target, source);
-            } catch (IOException | UnsupportedOperationException e) {
-                Files.copy(source, target);
-            }
+            hardLink(relative, source);
             files++;
         }
 
@@ -422,6 +612,8 @@ public class SitePublisher {
         private void write(Path target, byte[] bytes) throws IOException {
             claim(target);
             Files.createDirectories(target.getParent());
+            // never write through a link: the same inode is a file of the live release
+            Files.deleteIfExists(target);
             Files.write(target, bytes);
             files++;
         }

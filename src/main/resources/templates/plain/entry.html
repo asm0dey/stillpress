@@ -1,0 +1,6 @@
+{@site.asm0dey.stillpress.publish.views.EntryView entry}
+<article>
+<h2><a href="{entry.permalinkEncoded}">{entry.title}</a></h2>
+<div class="meta">{#if entry.publishedAt}<time datetime="{entry.publishedAt}">{entry.publishedAt}</time>{/if}</div>
+<div class="excerpt">{entry.excerptHtml.raw}</div>
+</article>

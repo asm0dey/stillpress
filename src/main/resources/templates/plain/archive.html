@@ -4,12 +4,8 @@
 {#title}{archive.heading} - {site.title}{/title}
 {#body}
 <h1>{archive.heading}</h1>
-{#for item in archive.items}
-<article>
-<h2><a href="{item.permalinkEncoded}">{item.title}</a></h2>
-<div class="meta">{#if item.publishedAt}<time datetime="{item.publishedAt}">{item.publishedAt}</time>{/if}</div>
-<div class="excerpt">{item.excerptHtml.raw}</div>
-</article>
+{#for entry in archive.entries}
+{entry.raw}
 {/for}
 <nav class="pager">{#if archive.prevUrl}<a rel="prev" href="{archive.prevUrl}">Newer</a>{/if} {#if archive.nextUrl}<a rel="next" href="{archive.nextUrl}">Older</a>{/if}</nav>
 {/body}

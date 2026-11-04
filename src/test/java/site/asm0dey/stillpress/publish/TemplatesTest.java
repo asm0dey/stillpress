@@ -152,7 +152,7 @@ class TemplatesTest {
     void archiveAnd404Render() {
         var a = new site.asm0dey.stillpress.publish.views.ArchiveView(
                 "H",
-                List.of(item("T", "", List.of())),
+                List.of("<article>T</article>"),
                 1,
                 2,
                 null,
