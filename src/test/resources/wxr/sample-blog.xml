@@ -25,12 +25,12 @@
     <dc:creator><![CDATA[mama]]></dc:creator>
     <guid isPermaLink="false">https://blog.example.ru/?p=5994</guid>
     <content:encoded><![CDATA[<!-- wp:gallery {"linkTo":"none"} -->
-<figure class="wp-block-gallery has-nested-images columns-default is-cropped"><!-- wp:image {"id":11,"url":"https://blog.example.ru/wp-content/uploads/2023/01/a.jpg","sizeSlug":"large"} -->
-<figure class="wp-block-image size-large"><img src="https://blog.example.ru/wp-content/uploads/2023/01/a.jpg" srcset="https://blog.example.ru/wp-content/uploads/2023/01/a-300x200.jpg 300w, https://blog.example.ru/wp-content/uploads/2023/01/a.jpg 1024w" alt="" class="wp-image-11"/></figure>
+<figure class="wp-block-gallery has-nested-images columns-default is-cropped"><!-- wp:image {"id":11,"sizeSlug":"large","linkDestination":"none"} -->
+<figure class="wp-block-image size-large"><img src="https://blog.example.ru/wp-content/uploads/2023/01/a.jpg" alt="" class="wp-image-11"/></figure>
 <!-- /wp:image -->
 
-<!-- wp:image {"id":12,"url":"https://blog.example.ru/wp-content/uploads/2023/01/a.jpg","sizeSlug":"large"} -->
-<figure class="wp-block-image size-large"><img src="https://blog.example.ru/wp-content/uploads/2023/01/a.jpg" srcset="https://blog.example.ru/wp-content/uploads/2023/01/a-300x200.jpg 300w" alt="" class="wp-image-12"/></figure>
+<!-- wp:image {"id":12,"sizeSlug":"large","linkDestination":"none"} -->
+<figure class="wp-block-image size-large"><img src="https://blog.example.ru/wp-content/uploads/2023/01/b.jpg" alt="" class="wp-image-12"/></figure>
 <!-- /wp:image --></figure>
 <!-- /wp:gallery -->
 
@@ -171,6 +171,44 @@ Line two [caption id="attachment_7" width="300"]<img src="https://blog.example.r
     <wp:post_type><![CDATA[attachment]]></wp:post_type>
     <wp:post_password><![CDATA[]]></wp:post_password>
     <wp:attachment_url><![CDATA[https://blog.example.ru/wp-content/uploads/2020/05/c.jpg]]></wp:attachment_url>
+  </item>
+  <item>
+    <title><![CDATA[a]]></title>
+    <link>https://blog.example.ru/2023/01/14/%d0%bc%d0%b5%d1%81%d1%8f%d1%86-%d0%bd%d0%be%d1%8f%d0%b1%d1%80%d1%8c-%d0%b3%d0%be%d0%b4-2022/a/</link>
+    <dc:creator><![CDATA[mama]]></dc:creator>
+    <guid isPermaLink="false">https://blog.example.ru/wp-content/uploads/2023/01/a.jpg</guid>
+    <content:encoded><![CDATA[]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:post_id>11</wp:post_id>
+    <wp:post_date_gmt><![CDATA[2023-01-14 09:00:00]]></wp:post_date_gmt>
+    <wp:post_modified_gmt><![CDATA[2023-01-14 09:00:00]]></wp:post_modified_gmt>
+    <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+    <wp:post_name><![CDATA[a]]></wp:post_name>
+    <wp:status><![CDATA[inherit]]></wp:status>
+    <wp:post_parent>5994</wp:post_parent>
+    <wp:menu_order>0</wp:menu_order>
+    <wp:post_type><![CDATA[attachment]]></wp:post_type>
+    <wp:post_password><![CDATA[]]></wp:post_password>
+    <wp:attachment_url><![CDATA[https://blog.example.ru/wp-content/uploads/2023/01/a.jpg]]></wp:attachment_url>
+  </item>
+  <item>
+    <title><![CDATA[b]]></title>
+    <link>https://blog.example.ru/2023/01/14/%d0%bc%d0%b5%d1%81%d1%8f%d1%86-%d0%bd%d0%be%d1%8f%d0%b1%d1%80%d1%8c-%d0%b3%d0%be%d0%b4-2022/b/</link>
+    <dc:creator><![CDATA[mama]]></dc:creator>
+    <guid isPermaLink="false">https://blog.example.ru/wp-content/uploads/2023/01/b.jpg</guid>
+    <content:encoded><![CDATA[]]></content:encoded>
+    <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+    <wp:post_id>12</wp:post_id>
+    <wp:post_date_gmt><![CDATA[2023-01-14 09:00:00]]></wp:post_date_gmt>
+    <wp:post_modified_gmt><![CDATA[2023-01-14 09:00:00]]></wp:post_modified_gmt>
+    <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+    <wp:post_name><![CDATA[b]]></wp:post_name>
+    <wp:status><![CDATA[inherit]]></wp:status>
+    <wp:post_parent>5994</wp:post_parent>
+    <wp:menu_order>0</wp:menu_order>
+    <wp:post_type><![CDATA[attachment]]></wp:post_type>
+    <wp:post_password><![CDATA[]]></wp:post_password>
+    <wp:attachment_url><![CDATA[https://blog.example.ru/wp-content/uploads/2023/01/b.jpg]]></wp:attachment_url>
   </item>
   <item>
     <title><![CDATA[Подписка]]></title>

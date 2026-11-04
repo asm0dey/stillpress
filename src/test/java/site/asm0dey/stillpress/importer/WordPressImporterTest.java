@@ -61,8 +61,8 @@ class WordPressImporterTest {
     @Test
     void importsSampleBlog() throws Exception {
         var report = importer.importWxr(sample());
-        // 5994,103,100,2,101,102,7
-        assertThat(report.items()).isEqualTo(7);
+        // 5994, 103, 100, 2, 101, 102, the attachment 7 and the gallery attachments 11 and 12
+        assertThat(report.items()).isEqualTo(9);
         assertThat(report.comments()).isEqualTo(3);
         assertThat(report.reusableBlocks()).isEqualTo(1);
         assertThat(report.passwordProtected()).containsExactly("/2021/03/01/secret-post/");
@@ -85,7 +85,7 @@ class WordPressImporterTest {
     @Test
     void storesRowsFaithfully() throws Exception {
         importer.importWxr(sample());
-        assertThat(items.count()).isEqualTo(7);
+        assertThat(items.count()).isEqualTo(9);
         assertThat(settings.get("home_url")).contains("https://blog.example.ru");
         assertThat(settings.get("title")).contains("Блог");
         assertThat(settings.get("posts_per_page")).contains("10");
@@ -397,7 +397,7 @@ class WordPressImporterTest {
                 );
         }
         var report = importer.importWxr(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
-        assertThat(report.items()).isEqualTo(7);
+        assertThat(report.items()).isEqualTo(9);
         assertThat(report.unparseableLinks())
             .containsExactly("100: https://blog.example.ru/2020/05/10/q%2Fa/", "2: https://blog.example.ru/ab%zzout/");
         assertThat(report.toText()).contains(

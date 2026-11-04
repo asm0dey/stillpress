@@ -72,7 +72,7 @@ class WxrReaderTest {
         assertThat(events.getFirst()).isEqualTo("site");
         assertThat(events.indexOf("author")).isLessThan(events.indexOf("term"));
         assertThat(events.indexOf("term")).isLessThan(events.indexOf("item"));
-        assertThat(events.stream().filter("item"::equals).count()).isEqualTo(9);
+        assertThat(events.stream().filter("item"::equals).count()).isEqualTo(11);
     }
 
     @Test

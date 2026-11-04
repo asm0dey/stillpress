@@ -28,7 +28,7 @@ class ImportCommandTest {
         store.reset();
         var wxr = sampleFile();
         assertThat(run("--wxr", wxr.toString())).isZero();
-        assertThat(out.toString()).startsWith("Imported 7 items");
+        assertThat(out.toString()).startsWith("Imported 9 items");
         assertThat(settings.get(ImportGuard.STATE)).contains("done");
         assertThat(run("--wxr", wxr.toString())).isOne();
         assertThat(err.toString()).contains("an import is already done");

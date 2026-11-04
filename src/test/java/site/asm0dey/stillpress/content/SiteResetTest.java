@@ -180,7 +180,7 @@ class SiteResetTest {
         guard.begin();
         var report = store.importSample();
         guard.done();
-        assertThat(report.items()).isEqualTo(7);
+        assertThat(report.items()).isEqualTo(9);
     }
 
     @Test

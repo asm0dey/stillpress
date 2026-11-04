@@ -64,8 +64,8 @@ class ImportResourceTest {
         as(adminCookie)
             .get("/admin/api/import")
             .then()
-            .body("items", equalTo(7))
-            .body("report", containsString("Imported 7"));
+            .body("items", equalTo(9))
+            .body("report", containsString("Imported 9"));
         var post = dataDir.current().resolve("2023/01/14/месяц-ноябрь-год-2022/index.html");
         TestStore.await(() -> Files.exists(post), 20);
         assertThat(post).exists();
