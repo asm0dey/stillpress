@@ -1,20 +1,25 @@
 package site.asm0dey.stillpress.pg;
 
 import io.quarkus.test.junit.QuarkusTestProfile;
-import java.util.List;
-import java.util.Map;
+import module java.base;
 
 /**
- * Runs a test against PostgreSQL instead of H2; the jOOQ dialect follows db-kind.
+ * Runs a test against PostgreSQL instead of H2. The pg config profile has no JDBC URL (application.properties), so Dev
+ * Services starts the same image the jOOQ codegen uses; the jOOQ dialect follows db-kind.
  */
 public class PostgresProfile implements QuarkusTestProfile {
     @Override
-    public Map<String, String> getConfigOverrides() {
-        return Map.of("quarkus.datasource.db-kind", "postgresql", "quarkus.datasource.devservices.enabled", "false");
+    public String getConfigProfile() {
+        return "pg";
     }
 
     @Override
-    public List<TestResourceEntry> testResources() {
-        return List.of(new TestResourceEntry(PostgresResource.class));
+    public Map<String, String> getConfigOverrides() {
+        return Map.of(
+                "quarkus.datasource.db-kind",
+                "postgresql",
+                "quarkus.datasource.devservices.image-name",
+                "postgres:18"
+        );
     }
 }
