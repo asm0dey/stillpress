@@ -219,6 +219,9 @@
  "Could not add the redirect.": [
   "Не удалось добавить перенаправление."
  ],
+ "Could not change the language.": [
+  "Не удалось сменить язык."
+ ],
  "Could not change the role.": [
   "Не удалось изменить роль."
  ],

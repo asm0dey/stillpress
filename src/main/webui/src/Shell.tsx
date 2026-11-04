@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router';
 import { type ReactNode, useEffect, useState } from 'react';
 import { __ } from '@wordpress/i18n';
-import { type Role, type SessionUser, type Site, api } from './api.ts';
+import { type ApiError, type Role, type SessionUser, type Site, api } from './api.ts';
 import { type Locale, locale } from './i18n/index.ts';
 
 /** Each admin language in its own name. */
@@ -16,16 +16,21 @@ export default function Shell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [role, setRole] = useState<Role | null>(null);
   const [importAllowed, setImportAllowed] = useState(false);
+  const [languageError, setLanguageError] = useState<string | null>(null);
   useEffect(() => {
     api<SessionUser>('/session').then((s) => setRole(s.role), () => {});
     api<Site>('/site').then((s) => setImportAllowed(s.importAllowed), () => {});
   }, []);
 
   async function switchLanguage(l: Locale) {
+    setLanguageError(null);
     try {
       await api('/session/locale', { method: 'PUT', body: { locale: l } });
       location.reload();
-    } catch { /* the select stays on the language still shown */ }
+    } catch (e) {
+      const err = e as ApiError;
+      setLanguageError(err.error === 'csrf' ? err.message! : __('Could not change the language.', 'stillpress'));
+    }
   }
 
   async function logout() {
@@ -53,7 +58,10 @@ export default function Shell({ children }: { children: ReactNode }) {
         </select>
         <button type="button" onClick={logout}>{__('Log out', 'stillpress')}</button>
       </header>
-      <main className="page">{children}</main>
+      <main className="page">
+        {languageError && <p role="alert" className="error">{languageError}</p>}
+        {children}
+      </main>
     </>
   );
 }

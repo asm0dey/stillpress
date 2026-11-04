@@ -233,6 +233,17 @@ class ImportClosedTest {
         importUpload().then().statusCode(409).body("error", equalTo("already_imported"));
     }
 
+    /**
+     * Ruling R30: the admin language is the user's preference, not site content, so choosing it is the one
+     * authenticated write that leaves the import open.
+     */
+    @Test
+    void choosingTheAdminLanguageLeavesImportOpen() {
+        as(admin).body(Map.of("locale", "ru")).put("/admin/api/session/locale").then().statusCode(204);
+        assertThat(settings.get(ImportGuard.STATE)).isNotPresent();
+        as(admin).get("/admin/api/site").then().body("importAllowed", equalTo(true));
+    }
+
     @Test
     void rejectedWriteLeavesImportOpen() {
         as(admin)

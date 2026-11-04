@@ -1,7 +1,8 @@
 /** One translatable call: its Jed key (context + U+0004 + msgid for _x/_nx) and the text domain, if given. */
 export interface Call { key: string; domain: string | undefined; plural: boolean }
 
-const S = String.raw`("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')`;
+// a quoted literal, or a template literal without interpolation (a ${…} id could not be looked up)
+const S = String.raw`("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\`(?:[^\`\\$]|\\.|\$(?!\{))*\`)`;
 const C = String.raw`\s*,\s*`;
 // the count argument of _n/_nx; shortcut: an expression with a comma inside parentheses is not matched
 const N = String.raw`[^,]+?`;

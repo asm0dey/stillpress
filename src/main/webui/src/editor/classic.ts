@@ -2,6 +2,7 @@ import {
   type Block as BlockInstance, __unstableSerializeAndClean, createBlock, parse, serialize, setFreeformContentHandlerName,
 } from '@wordpress/blocks';
 import { __ } from '@wordpress/i18n';
+import { locale } from '../i18n/index.ts';
 import { autop } from '@wordpress/autop';
 import { addFilter } from '@wordpress/hooks';
 import { type ComponentType, createElement, useEffect, useState } from 'react';
@@ -126,6 +127,9 @@ async function load(): Promise<void> {
     import('tinymce/plugins/lists'),
     import('tinymce/plugins/media'),
     import('tinymce/plugins/fullscreen'),
+    // TinyMCE's own UI strings (Tiny's community pack, under TinyMCE's licence); registered with addI18n, so the
+    // editor never fetches langs/ru.js by URL
+    locale() === 'ru' ? import('tinymce-i18n/langs8/ru.js') : null,
   ]);
   // freeform/modal: EditorManager.overrideDefaults({ base_url: wpEditorL10n.tinymce.baseURL, suffix }), then
   // initialize(id, { tinymce: { ...wpEditorL10n.tinymce.settings, setup } })
@@ -139,7 +143,7 @@ async function load(): Promise<void> {
       initialize(id: string, { tinymce: own }: { tinymce: Record<string, unknown> }) {
         const target = document.getElementById(id);
         // the block's content already has its paragraphs (toBlocks); bodyOf removes them on save
-        if (target) tinymce.init({ ...own, target });
+        if (target) tinymce.init({ ...own, language: locale(), target });
       },
       // freeform/modal ClassicEdit effect cleanup: remove(id) when the modal closes
       remove: (id: string) => tinymce.get(id)?.remove(),

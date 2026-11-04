@@ -5,3 +5,4 @@ declare module '@wordpress/block-library' {
 
 // tinymce's theme, model, icon, skin and plugin modules only register themselves
 declare module 'tinymce/*';
+declare module 'tinymce-i18n/langs8/ru.js';

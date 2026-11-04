@@ -9,6 +9,8 @@ dir = "src/main/webui"
 run = """
 full=$(mktemp)
 trap 'rm -f "$full"' EXIT
+# the filter scans node_modules/@wordpress, so it must match bun.lock
+bun install --frozen-lockfile
 curl -fsSL 'https://translate.wordpress.org/projects/wp/dev/ru/default/export-translations/?format=jed1x' -o "$full"
 bun scripts/filter-wp-ru.ts "$full" src/i18n/wp-ru.json
 """

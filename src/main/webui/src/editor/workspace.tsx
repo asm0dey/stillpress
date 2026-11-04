@@ -10,7 +10,7 @@ import { useDispatch, useSelect } from '@wordpress/data';
 import { store as noticesStore } from '@wordpress/notices';
 import { getSettings, setSettings } from '@wordpress/date';
 import { __ } from '@wordpress/i18n';
-import { dateL10n } from '../i18n/index.ts';
+import { dateL10n, zoneOffset } from '../i18n/index.ts';
 import { type ApiError, type ItemSummary, type SessionUser, type Site, api } from '../api.ts';
 import { type Message } from './errors.ts';
 import { installWordPressApi } from './wpapi.ts';
@@ -50,7 +50,7 @@ export function useEditorSession(): { session: SessionUser | null; failed: strin
       const date = getSettings();
       const l10n = dateL10n();
       setSettings({
-        ...date, l10n: { ...date.l10n, ...l10n }, timezone: { ...date.timezone, string: site.timezone },
+        ...date, l10n: { ...date.l10n, ...l10n }, timezone: { ...date.timezone, ...zoneOffset(site.timezone), string: site.timezone },
         // WordPress's Russian defaults; the date picker labels its days with them, our screens format through Intl
         formats: l10n.locale === 'ru' ? { time: 'H:i', date: 'd.m.Y', datetime: 'd.m.Y H:i', datetimeAbbreviated: 'd.m.Y H:i' } : date.formats,
       });

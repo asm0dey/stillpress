@@ -38,9 +38,10 @@ describe('stillpress strings', () => {
 
 describe('extractCalls', () => {
   test('reads each call shape and its domain', () => {
-    expect(extractCalls(`__('A', 'stillpress'); _x("B", "ctx", 'stillpress'); _n('%d item', '%d items', list.length, 'stillpress');
+    expect(extractCalls(`__('A', 'stillpress'); __(\`Menu: "%s"\`); __(\`\${skipped}\`); _x("B", "ctx", 'stillpress'); _n('%d item', '%d items', list.length, 'stillpress');
       _nx('one', 'many', n, 'noun', 'stillpress'); __("It\\'s"); sprintf(__('%s left', 'stillpress'), x)`)).toEqual([
       { key: 'A', domain: 'stillpress', plural: false },
+      { key: 'Menu: "%s"', domain: undefined, plural: false },
       { key: "It's", domain: undefined, plural: false },
       { key: '%s left', domain: 'stillpress', plural: false },
       { key: 'ctx\u0004B', domain: 'stillpress', plural: false },

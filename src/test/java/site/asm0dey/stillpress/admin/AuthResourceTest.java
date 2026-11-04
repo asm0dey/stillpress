@@ -173,6 +173,17 @@ class AuthResourceTest {
 
     @Test
     void localeDefaultsFromSiteLanguageAndCanBeChanged() {
+        var language = settings.get("language");
+        try {
+            localeFlow();
+        } finally {
+            // leave the site language and the admin's locale as other tests expect them
+            language.ifPresentOrElse(l -> settings.put("language", l), () -> settings.delete("language"));
+            users.setLocale(adminId, null);
+        }
+    }
+
+    private void localeFlow() {
         var cookie = login("admin", "correct horse battery").cookie("sp_session");
         given().cookie("sp_session", cookie).get("/admin/api/session").then().body("locale", equalTo("en"));
         settings.put("language", "ru-RU");

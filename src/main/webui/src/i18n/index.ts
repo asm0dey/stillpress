@@ -1,4 +1,4 @@
-import { setLocaleData } from '@wordpress/i18n';
+import { resetLocaleData, setLocaleData } from '@wordpress/i18n';
 
 /** The admin languages. */
 export type Locale = 'en' | 'ru';
@@ -11,9 +11,13 @@ export const locale = (): Locale => current;
 /** Before any session exists (setup, login): the browser's language. */
 export const browserLocale = (): Locale => (navigator.language.toLowerCase().startsWith('ru') ? 'ru' : 'en');
 
-/** Our strings (text domain stillpress) for {@code l}; English needs nothing. Also sets {@code <html lang>}. */
+/**
+ * Our strings (text domain stillpress) for {@code l}. English drops any Russian loaded before (the login page follows
+ * the browser, the user may not), Gutenberg's included. Also sets {@code <html lang>}.
+ */
 export async function loadLocale(l: Locale): Promise<void> {
   if (l === 'ru') setLocaleData((await import('./ru.json')).default, 'stillpress');
+  else resetLocaleData();
   current = l;
   document.documentElement.lang = l;
 }
@@ -56,4 +60,18 @@ export function dateL10n() {
     weekdaysShort: names({ weekday: 'short' }, 7, day),
     startOfWeek: (current === 'ru' ? 1 : 0) as 0 | 1,
   };
+}
+
+/**
+ * The @wordpress/date timezone fields WordPress fills in from PHP, for {@code timeZone}'s current offset: hours
+ * (5.5 for +05:30), the offset as WordPress writes it ("5:30", "-3:30", "3") and the label the date picker shows.
+ */
+export function zoneOffset(timeZone: string, at = new Date()) {
+  const name = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' }).formatToParts(at)
+    .find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
+  // "GMT" alone is UTC; otherwise "GMT+03:00" / "GMT-03:30"
+  const [, sign = '+', h = '0', m = '00'] = /^GMT(?:([+-])(\d\d):(\d\d))?$/.exec(name) ?? [];
+  const offset = (sign === '-' ? -1 : 1) * (Number(h) + Number(m) / 60);
+  const offsetFormatted = `${sign === '-' ? '-' : ''}${Number(h)}${m === '00' ? '' : ':' + m}`;
+  return { offset, offsetFormatted, abbr: `UTC${sign === '-' ? '' : '+'}${offsetFormatted}` };
 }
