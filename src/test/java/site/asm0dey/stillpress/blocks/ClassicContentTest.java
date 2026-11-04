@@ -70,4 +70,9 @@ class ClassicContentTest {
     void preBlocksKeepNewlines() {
         assertThat(ClassicContent.toHtml("a\n\n<pre>x\n\ny</pre>")).contains("<pre>x\n\ny</pre>");
     }
+
+    @Test
+    void attrEscapesSingleQuote() {
+        assertThat(ClassicContent.attr("a'b\"<>&")).isEqualTo("a&#039;b&quot;&lt;&gt;&amp;");
+    }
 }

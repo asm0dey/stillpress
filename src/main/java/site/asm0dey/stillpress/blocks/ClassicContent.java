@@ -45,7 +45,12 @@ public final class ClassicContent {
     }
 
     static String attr(String s) {
-        return s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;");
+        return s
+            .replace("&", "&amp;")
+            .replace("\"", "&quot;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("'", "&#039;");
     }
 
     /**

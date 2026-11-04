@@ -51,6 +51,8 @@ public class ItemService {
     Jobs jobs;
     @Inject
     ImportGuard guard;
+    @Inject
+    HtmlCheck html;
 
     public record Actor(long userId, Role role) {}
 
@@ -182,7 +184,13 @@ public class ItemService {
         if (!Capabilities.canEdit(a.role(), a.userId(), r)) {
             throw forbidden();
         }
-        HtmlPolicy.check(a.role(), u.title(), u.body(), u.excerpt());
+        html.item(
+                a.role(),
+                u.title(),
+                u.body(),
+                Objects.requireNonNullElse(u.bodyFormat(), r.getBodyFormat()),
+                u.excerpt()
+        );
         guard.close();
         var wasPublished = "publish".equals(r.getStatus());
         var now = now();
@@ -331,7 +339,8 @@ public class ItemService {
         if (!Capabilities.canEdit(a.role(), a.userId(), r)) {
             throw forbidden();
         }
-        HtmlPolicy.check(a.role(), title, body, excerpt);
+        // the preview renders an autosave in the item's stored format
+        html.item(a.role(), title, body, r.getBodyFormat(), excerpt);
         guard.close();
         revisions.autosave("item", id, a.userId(), title, body, excerpt);
     }

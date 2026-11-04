@@ -3,7 +3,7 @@ package site.asm0dey.stillpress.content;
 import com.fasterxml.jackson.databind.JsonNode;
 import module java.base;
 import org.jsoup.Jsoup;
-import site.asm0dey.stillpress.account.Role;
+import org.jsoup.nodes.Comment;
 import site.asm0dey.stillpress.blocks.Block;
 import site.asm0dey.stillpress.blocks.BlockParser;
 import site.asm0dey.stillpress.blocks.ClassicContent;
@@ -33,35 +33,11 @@ public final class HtmlPolicy {
     // embed hosts, exact or as a subdomain; wider than OEmbedProxy's lookup list, which only fetches oEmbed metadata
     private static final List<String> IFRAME_HOSTS =
             List.of("youtube.com", "youtube-nocookie.com", "youtu.be", "vimeo.com", "player.vimeo.com");
+    // block attributes a renderer may write into a link
+    private static final Set<String> URL_KEYS = Set.of("url", "href", "src", "link");
     private static final Pattern IGNORED = Pattern.compile("[\\s\\p{Cntrl}]");
 
     private HtmlPolicy() {
-    }
-
-    /**
-     * Refuses with 400 {@code unsafe_html} when a role without {@link Capabilities#canPostUnfilteredHtml} saves
-     * script-capable HTML; {@code field} names the first offending part.
-     */
-    static void check(Role role, String title, String body, String excerpt) {
-        if (Capabilities.canPostUnfilteredHtml(role)) {
-            return;
-        }
-        var parts = new LinkedHashMap<String, String>();
-        parts.put("title", title);
-        parts.put("body", body);
-        parts.put("excerpt", excerpt);
-        String field = null;
-        var found = new LinkedHashSet<String>();
-        for (var p : parts.entrySet()) {
-            var v = violations(p.getValue());
-            if (!v.isEmpty() && field == null) {
-                field = p.getKey();
-            }
-            found.addAll(v);
-        }
-        if (field != null) {
-            throw new ItemService.Refused(400, "unsafe_html", field, List.copyOf(found));
-        }
     }
 
     /**
@@ -80,18 +56,39 @@ public final class HtmlPolicy {
         return List.copyOf(out);
     }
 
+    /**
+     * {@code block comment inside HTML} when a block delimiter is not a comment node of the HTML: inside a tag, an
+     * attribute value or raw text. The renderer removes delimiters wherever they are, so the published markup would
+     * differ from the one judged.
+     */
+    public static List<String> structure(String body) {
+        if (body == null || body.isEmpty()) {
+            return List.of();
+        }
+        var asComments = new ArrayList<String>();
+        Jsoup.parse(body).traverse((node, depth) -> {
+            if (node instanceof Comment c) {
+                asComments.addAll(BlockParser.delimiters("<!--" + c.getData() + "-->"));
+            }
+        });
+        var all = new ArrayList<>(BlockParser.delimiters(body));
+        Collections.sort(all);
+        Collections.sort(asComments);
+        return all.equals(asComments) ? List.of() : List.of("block comment inside HTML");
+    }
+
     private static void blocks(List<Block> blocks, Set<String> out) {
         for (var b : blocks) {
-            attributes(b.attrs(), out);
+            attributes(b.attrs(), "", out);
             blocks(b.innerBlocks(), out);
         }
     }
 
-    private static void attributes(JsonNode node, Set<String> out) {
+    private static void attributes(JsonNode node, String key, Set<String> out) {
         if (node.isTextual() && node.textValue().contains("<")) {
             html(node.textValue(), out);
         }
-        if (node.isTextual()) {
+        if (node.isTextual() && URL_KEYS.contains(key.toLowerCase(Locale.ROOT))) {
             // a renderer may write an attribute (an embed's url) into a link
             var value = squash(node.textValue());
             for (var scheme : List.of("javascript:", "vbscript:")) {
@@ -100,9 +97,15 @@ public final class HtmlPolicy {
                 }
             }
         }
-        // object values and array elements
-        for (var child : node) {
-            attributes(child, out);
+        if (node.isObject()) {
+            node
+                .properties()
+                .forEach(e -> attributes(e.getValue(), e.getKey(), out));
+        } else {
+            // array elements keep the array's key
+            for (var child : node) {
+                attributes(child, key, out);
+            }
         }
     }
 

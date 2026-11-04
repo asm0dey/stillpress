@@ -28,6 +28,8 @@ public class ReusableBlockService {
     Jobs jobs;
     @Inject
     ImportGuard guard;
+    @Inject
+    HtmlCheck html;
 
     /**
      * Creates ({@code ref == null}) or updates a block; a null title or content keeps the stored value. Refused with
@@ -48,7 +50,7 @@ public class ReusableBlockService {
     @Transactional
     public void autosave(long ref, ItemService.Actor a, String title, String content) {
         editable(ref, a);
-        HtmlPolicy.check(a.role(), title, content, null);
+        html.block(a.role(), ref, title, content, List::of);
         guard.close();
         revisions.autosave(OBJECT_TYPE, ref, a.userId(), title, content, null);
     }
@@ -69,7 +71,7 @@ public class ReusableBlockService {
         if (!Capabilities.canCreateBlock(a.role())) {
             throw forbidden();
         }
-        HtmlPolicy.check(a.role(), title, content, null);
+        html.block(a.role(), null, title, content, List::of);
         guard.close();
         var r = blocks.create(
                 Objects.requireNonNullElse(title, ""),
@@ -92,7 +94,8 @@ public class ReusableBlockService {
         if (expectedModifiedAt != null && !Objects.equals(r.getModifiedAt(), expectedModifiedAt)) {
             throw new ItemService.Refused(409, "conflict", null);
         }
-        HtmlPolicy.check(a.role(), title, content, null);
+        // the items showing the block are published with the new content
+        html.block(a.role(), ref, title, content, () -> blocks.itemsUsing(withContainers(ref)));
         guard.close();
         Optional.ofNullable(title).ifPresent(r::setTitle);
         Optional.ofNullable(content).ifPresent(r::setContent);

@@ -68,6 +68,19 @@ public final class BlockParser {
         return null;
     }
 
+    /**
+     * The block delimiters in {@code document} as written, in order.
+     */
+    public static List<String> delimiters(String document) {
+        var p = new BlockParser(document == null ? "" : document);
+        var out = new ArrayList<String>();
+        for (var t = p.nextToken(); t != null; t = p.nextToken()) {
+            out.add(p.doc.substring(t.start(), t.end()));
+            p.offset = t.end();
+        }
+        return out;
+    }
+
     private boolean step() {
         var t = nextToken();
         if (t == null) {

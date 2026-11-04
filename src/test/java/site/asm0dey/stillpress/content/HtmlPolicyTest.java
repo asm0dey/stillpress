@@ -91,4 +91,35 @@ class HtmlPolicyTest {
                 "<meta> element"
         );
     }
+
+    @Test
+    void blockCommentsInsideHtmlAreRefused() {
+        for (var payload :
+                List.of(
+                        "<img src=x o<!-- wp:x /-->nerror=alert(1)>",
+                        "<img src=x alt='<!-- wp:separator {\"q\":\"'\"} /-->' onerror=alert(1)>",
+                        "<textarea></text<!-- wp:x /-->area><img src=x onerror=alert(1)></textarea>",
+                        "<p title='<!-- wp:embed {\"url\":\"https://a.b/'\"} /--> <img src=x onerror=alert(1)>'>x</p>"
+        )) {
+            assertThat(HtmlPolicy.structure(payload)).as(payload).containsExactly("block comment inside HTML");
+        }
+        assertThat(HtmlPolicy.structure(
+                "<!-- wp:group --><div><!-- wp:paragraph --><p>a</p><!-- /wp:paragraph --></div><!-- /wp:group -->"
+        ))
+            .isEmpty();
+    }
+
+    @Test
+    void scriptWordsInNonUrlBlockAttributesPass() {
+        assertThat(HtmlPolicy.violations(
+                "<!-- wp:group {\"metadata\":{\"name\":\"JavaScript: examples\"}} --><div></div><!-- /wp:group -->"
+        ))
+            .isEmpty();
+        assertThat(HtmlPolicy.violations(
+                "<!-- wp:navigation-link {\"label\":\"JavaScript: intro\",\"url\":\"/js\"} /-->"
+        ))
+            .isEmpty();
+        assertThat(HtmlPolicy.violations("<!-- wp:x {\"a\":[{\"HREF\":\" javascript:x\"}]} /-->"))
+            .containsExactly("javascript: URL in a block attribute");
+    }
 }

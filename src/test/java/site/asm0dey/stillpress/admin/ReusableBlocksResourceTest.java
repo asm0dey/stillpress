@@ -34,6 +34,8 @@ class ReusableBlocksResourceTest {
     SessionRepository sessions;
     @Inject
     DSLContext db;
+    @Inject
+    site.asm0dey.stillpress.store.SettingRepository settings;
     String author1;
     String author2;
     long author1Id;
@@ -151,6 +153,50 @@ class ReusableBlocksResourceTest {
         as(author1).get("/admin/api/blocks/" + b.getLong("id")).then().body("content", equalTo("one"));
         var editor = sessions.create(users.create("editor", "e@example.org", "Ed", Role.EDITOR).getId());
         put(editor, b, "<script>x</script>").then().statusCode(200).body("content", equalTo("<script>x</script>"));
+    }
+
+    @Test
+    void blockAndPostThatOnlyTogetherRunScriptAreRefusedInEitherOrder() {
+        // a tag split across a reusable block and the post that shows it; each half alone is plain text
+        var half = "<img src=x alt='";
+        var rest = "' onerror=alert(1)>";
+        var b = create(author1, half);
+        var post = ItemsResourceTest.create(author1, "post");
+        var ref = "<!-- wp:block {\"ref\":" + b.getLong("id") + "} /-->";
+        settings.delete("import_state");
+        ItemsResourceTest
+            .update(author1, post, Map.of("body", ref + rest))
+            .then()
+            .statusCode(400)
+            .body("error", equalTo("unsafe_html"))
+            .body("violations", org.hamcrest.Matchers.contains("onerror attribute on <img>"));
+        // the review's payload 5: the block reference inside an attribute
+        ItemsResourceTest
+            .update(author1, post, Map.of("body", "<img src=x alt='" + ref + "'>"))
+            .then()
+            .statusCode(400)
+            .body("violations", org.hamcrest.Matchers.contains("block comment inside HTML"));
+        assertThat(ItemsResourceTest.get(author1, post.getLong("id")).getString("body")).isEqualTo("");
+        assertThat(settings.get("import_state")).isNotPresent();
+        // the other order: the post shows a harmless block, then the block is edited
+        var c = create(author1, "x");
+        var other = ItemsResourceTest.create(author1, "post");
+        ItemsResourceTest
+            .update(
+                    author1,
+                    other,
+                    Map.of("title", "Split", "body", "<!-- wp:block {\"ref\":" + c.getLong("id") + "} /-->" + rest)
+            )
+            .then()
+            .statusCode(200);
+        settings.delete("import_state");
+        put(author1, c, half)
+            .then()
+            .statusCode(400)
+            .body("error", equalTo("unsafe_html"))
+            .body("violations", org.hamcrest.Matchers.contains("in \"Split\": onerror attribute on <img>"));
+        as(author1).get("/admin/api/blocks/" + c.getLong("id")).then().body("content", equalTo("x"));
+        assertThat(settings.get("import_state")).isNotPresent();
     }
 
     private JsonPath create(String cookie, String content) {

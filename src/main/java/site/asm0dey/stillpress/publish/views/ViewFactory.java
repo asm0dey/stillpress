@@ -73,12 +73,19 @@ public class ViewFactory {
     }
 
     private String html(String content, String format) {
+        return html(content, format, reusable::content);
+    }
+
+    /**
+     * An item's body or excerpt as published, with reusable blocks looked up through {@code reusableBlockContent}.
+     */
+    public String html(String content, String format, Function<Long, Optional<String>> reusableBlockContent) {
         if (content == null || content.isBlank()) {
             return "";
         }
         return "classic".equals(format)
                 ? ClassicContent.toHtml(content)
-                : blocks.render(content, new RenderContext(reusable::content, 0));
+                : blocks.render(content, new RenderContext(reusableBlockContent, 0));
     }
 
     private List<TermLink> links(List<TermRecord> all, String taxonomy) {
