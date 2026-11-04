@@ -13,6 +13,10 @@ public class CommentRepository {
     @Inject
     DSLContext db;
 
+    public int count() {
+        return db.fetchCount(COMMENT);
+    }
+
     /**
      * Approved comments of an item, oldest first.
      */

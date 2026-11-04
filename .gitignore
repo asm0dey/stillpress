@@ -9,3 +9,5 @@ data/
 .project
 .settings/
 data-*/
+src/main/webui/node_modules/
+src/main/webui/dist/
