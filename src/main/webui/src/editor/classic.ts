@@ -4,7 +4,7 @@ import {
 import { autop } from '@wordpress/autop';
 import { addFilter } from '@wordpress/hooks';
 import { type ComponentType, createElement, useEffect, useState } from 'react';
-import type { TinyMCE } from 'tinymce';
+import type { RawEditorOptions, TinyMCE } from 'tinymce';
 
 // HTML outside block delimiters is a Classic block and serializes without delimiters, as in WordPress. Its
 // registerCoreBlocks sets this only when window.wp.oldEditor exists at that moment; ours is installed lazily.
@@ -36,11 +36,17 @@ export function bodyFormatOf(blocks: BlockInstance[]): BodyFormat {
 
 // WordPress's classic-editor toolbars without its PHP-shipped wp* buttons
 export const SETTINGS = {
-  skin: false,
+  // TinyMCE is GPL-2.0-or-later since 7.0, as Stillpress is; without a key the editor opens read-only
+  license_key: 'gpl',
+  // bundled through Resource.add by the skin and content modules load() imports; nothing is fetched by URL
+  skin: 'oxide',
+  content_css: 'default',
   menubar: false,
   branding: false,
-  plugins: 'charmap colorpicker hr link lists media paste tabfocus textcolor fullscreen',
-  toolbar1: 'formatselect bold italic bullist numlist blockquote alignleft aligncenter alignright link unlink fullscreen',
+  promotion: false,
+  // paste, hr, textcolor and colorpicker are core since 6; tabfocus is gone
+  plugins: 'charmap link lists media fullscreen',
+  toolbar1: 'blocks bold italic bullist numlist blockquote alignleft aligncenter alignright link unlink fullscreen',
   toolbar2: 'strikethrough hr forecolor pastetext removeformat charmap outdent indent undo redo',
   relative_urls: false,
   convert_urls: false,
@@ -50,7 +56,20 @@ export const SETTINGS = {
   // old posts carry iframes, embeds, scripts and event attributes; TinyMCE's schema would drop what the user never
   // touched (inside the editor TinyMCE keeps scripts inert)
   valid_elements: '*[*]',
-};
+  // TinyMCE 6+ defaults that would rewrite untouched markup on the first edit, for the same R24 reason:
+  // DOMPurify would drop commented-out HTML, scripts inside <svg> and namespaced attributes (xlink:href),
+  xss_sanitization: false,
+  // every <iframe> would gain sandbox="",
+  sandbox_iframes: false,
+  // <object>/<embed> would become <iframe>/<img>/<video>,
+  convert_unsafe_embeds: false,
+  // javascript: URLs would be dropped,
+  allow_script_urls: true,
+  // target="_blank" links would gain rel="noopener",
+  allow_unsafe_link_target: true,
+  // and <br />, <img … /> would lose their slash (6+ writes html; WordPress's classic HTML is xhtml)
+  element_format: 'xhtml',
+} satisfies RawEditorOptions;
 
 declare global {
   interface Window {
@@ -80,7 +99,7 @@ export const withClassicEditor = (BlockEdit: ComponentType<{ name: string }>) =>
   };
 addFilter('editor.BlockEdit', 'stillpress/classic-editor', withClassicEditor);
 
-/** Loads TinyMCE 4 and the globals core/freeform's edit modal reads; only classic items pay for the download. */
+/** Loads TinyMCE and the globals core/freeform's edit modal reads; only classic items pay for the download. */
 export function installClassicEditor(): Promise<void> {
   // a failed download is retried by the next call
   return installed ??= load().catch((e: unknown) => {
@@ -92,33 +111,29 @@ export function installClassicEditor(): Promise<void> {
 async function load(): Promise<void> {
   // tinymce.js sets window.tinymce itself; the theme and plugins resolve it as a global, so they come after
   const tinymce = (await import('tinymce')).default;
-  const [{ default: contentCss }] = await Promise.all([
-    import('tinymce/skins/lightgray/content.min.css?inline'),
-    // skin: false plus the bundled skin CSS: Vite hashes its fonts, nothing is fetched from a TinyMCE base URL
-    import('tinymce/skins/lightgray/skin.min.css'),
+  await Promise.all([
     import('@wordpress/block-library/build-style/freeform/editor.css'),
     import('./classic.css'),
-    import('tinymce/themes/modern/theme'),
-    import('tinymce/plugins/charmap/plugin'),
-    import('tinymce/plugins/colorpicker/plugin'),
-    import('tinymce/plugins/hr/plugin'),
-    import('tinymce/plugins/link/plugin'),
-    import('tinymce/plugins/lists/plugin'),
-    import('tinymce/plugins/media/plugin'),
-    import('tinymce/plugins/paste/plugin'),
-    import('tinymce/plugins/tabfocus/plugin'),
-    import('tinymce/plugins/textcolor/plugin'),
-    import('tinymce/plugins/fullscreen/plugin'),
-  ]) as [{ default: string }, ...unknown[]];
-  const settings = { ...SETTINGS, content_style: contentCss };
+    import('tinymce/models/dom'),
+    import('tinymce/themes/silver'),
+    import('tinymce/icons/default'),
+    import('tinymce/skins/ui/oxide/skin.js'),
+    import('tinymce/skins/ui/oxide/content.js'),
+    import('tinymce/skins/content/default/content.js'),
+    import('tinymce/plugins/charmap'),
+    import('tinymce/plugins/link'),
+    import('tinymce/plugins/lists'),
+    import('tinymce/plugins/media'),
+    import('tinymce/plugins/fullscreen'),
+  ]);
   // freeform/modal: EditorManager.overrideDefaults({ base_url: wpEditorL10n.tinymce.baseURL, suffix }), then
   // initialize(id, { tinymce: { ...wpEditorL10n.tinymce.settings, setup } })
-  window.wpEditorL10n = { tinymce: { baseURL: `${import.meta.env.BASE_URL}tinymce`, suffix: '.min', settings } };
+  window.wpEditorL10n = { tinymce: { baseURL: `${import.meta.env.BASE_URL}tinymce`, suffix: '.min', settings: SETTINGS } };
   window.wp = {
     ...window.wp,
     oldEditor: {
       // not called by core/freeform 12.1; kept because WordPress's wp.oldEditor has it
-      getDefaultSettings: () => ({ tinymce: settings }),
+      getDefaultSettings: () => ({ tinymce: SETTINGS }),
       // freeform/modal ClassicEdit effect: initialize(`editor-${clientId}`, { tinymce }) on the modal's textarea
       initialize(id: string, { tinymce: own }: { tinymce: Record<string, unknown> }) {
         const target = document.getElementById(id);

@@ -8,6 +8,8 @@ useDom();
 let c: typeof import('./classic.ts');
 let b: typeof import('@wordpress/blocks');
 beforeAll(async () => {
+  // tinymce.js probes the device at load; jsdom has no matchMedia
+  window.matchMedia ??= () => ({ matches: false, addEventListener() {}, removeEventListener() {} }) as never;
   const { registerCoreBlocks } = await import('@wordpress/block-library');
   registerCoreBlocks();
   b = await import('@wordpress/blocks');
@@ -53,7 +55,7 @@ test('opening an unedited classic post leaves it clean, so nothing is saved', as
 });
 
 test('a failed TinyMCE download is retried, not cached', async () => {
-  // bun cannot load the skin CSS, so the install fails here as a lost chunk would in the browser
+  // bun cannot load the Classic modal's CSS, so the install fails here as a lost chunk would in the browser
   const first = c.installClassicEditor();
   await expect(first).rejects.toBeDefined();
   const second = c.installClassicEditor();
@@ -62,24 +64,23 @@ test('a failed TinyMCE download is retried, not cached', async () => {
 });
 
 test('TinyMCE keeps markup the user never touched', async () => {
-  await import('tinymce');
-  const t = (window as unknown as { tinymce: TinyHtml }).tinymce;
+  const t = (await import('tinymce')).default;
   const html = '<p>Hi <span style="color:red;font-weight:bold">x</span></p>'
     + '<iframe src="https://www.youtube.com/embed/x" width="560" height="315" frameborder="0" allowfullscreen=""></iframe>'
     + '<object data="a.swf"><param name="movie" value="a.swf" /><embed src="a.swf" type="application/x-shockwave-flash" /></object>'
-    + '<script>var widget = 1;</script><div onclick="go()" data-x="1">d</div>';
-  const schema = new t.html.Schema(c.SETTINGS);
-  const parsed = new t.html.DomParser(c.SETTINGS, schema).parse(html);
-  expect(new t.html.Serializer(c.SETTINGS, schema).serialize(parsed)).toBe(html);
+    + '<script>var widget = 1;</script><div onclick="go()" data-x="1">d</div><!--more--><!-- <img src="old.jpg"> -->'
+    + '<p><a href="https://x.example/" target="_blank">out</a> <a href="javascript:void(0)">js</a></p>';
+  // the editor's option defaults (tinymce.js registerOption) that the bare parser and serializer do not apply
+  const defaults = { xss_sanitization: true, sandbox_iframes: true, convert_unsafe_embeds: true, element_format: 'html' };
+  const options = { ...defaults as object, ...c.SETTINGS };
+  // the parser settings the editor derives from its options (tinymce.js mkParserSettings)
+  const parserSettings = { ...options, sanitize: options.xss_sanitization, validate: true };
+  const schema = t.html.Schema(options);
+  const parsed = t.html.DomParser(parserSettings, schema).parse(html);
+  // the one rewrite left is not an option: TinyMCE spells boolean attributes out (4.x did so in the editor too)
+  expect(t.html.Serializer(options, schema).serialize(parsed))
+    .toBe(html.replace('allowfullscreen=""', 'allowfullscreen="allowfullscreen"'));
 });
-
-interface TinyHtml {
-  html: {
-    Schema: new (s: object) => object;
-    DomParser: new (s: object, schema: object) => { parse(html: string): object };
-    Serializer: new (s: object, schema: object) => { serialize(node: object): string };
-  };
-}
 
 test('a Classic block shows a placeholder until TinyMCE is installed; other blocks render as they are', async () => {
   const { createElement } = await import('react');

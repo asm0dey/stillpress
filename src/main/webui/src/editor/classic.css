@@ -1,3 +1,2 @@
-/* TinyMCE's menus and dialogs open above the Classic block's modal (z-index 100000); their inline z-index is 65536 */
-#mce-modal-block { z-index: 100100 !important; }
-.mce-floatpanel { z-index: 100101 !important; }
+/* TinyMCE's menus and dialogs (all in its .tox-tinymce-aux sink, z-index 1300) open above the Classic block's modal (z-index 100000) */
+.tox.tox-tinymce-aux { z-index: 100100 !important; }
