@@ -169,7 +169,8 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - Accounts (02a): `findByLoginOrEmail` lower-cases in Java and SQL separately (non-ASCII emails may disagree); `setRoleKeepingAdministrator` locks without `ORDER BY` and has no concurrency test; `PasswordsTest` lacks the 11-character case; only `AuthResourceTest` resets the shared login limiter; no rollback test for the set-password transaction; no test that no setup token is printed when an administrator already exists.
 - Import (02a): an old job's `finally` can briefly race a fast retry's `start()`; the upload file stays in `<data>/import` if the thread fails to start; no test for a publish failing after content was written; the admin media cap rejects a negative value only when an import starts and its test proves only a cap of 0.
 - nginx (02a): the `root` path is unquoted in the template; HEAD is untested through nginx; small Mode 1/Mode 2 differences (POST to a static file gives 405, `%2F` is decoded by nginx, a bare `?p` is served by nginx).
-- Tests (02a): `PostgresAccountsTest` waits on futures without a timeout; `postgres:18` is written both in the test and in the codegen config; every `@QuarkusTest` augmentation runs `bun install` and a Vite build.
+- Tests (02a): `PostgresAccountsTest` waits on futures without a timeout; `postgres:18` is written both in the test and in the codegen config; every `@QuarkusTest` augmentation runs `bun install` and a Vite build; the root-skip in `ReleaseSwitcherTest` checks `user.name`, not the uid.
+- Admin API: `ImportResource` builds `Map.of("error", e.getMessage())`, which throws (500) when the exception has no message. `api.ts`: the `CSRF_MESSAGE` doc comment sits between `ApiError`'s comment and the interface.
 
 ## Not in scope
 
