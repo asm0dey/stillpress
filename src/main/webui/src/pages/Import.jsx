@@ -71,7 +71,13 @@ export default function Import() {
           {status.report && <pre className="report">{status.report}</pre>}
         </div>
       )}
-      {(state === 'idle' || (state === 'failed' && !leftContent)) && (
+      {state === 'idle' && status.contentLeft && (
+        <p role="status">
+          This site already has content, and import works only into an empty site. To start over, wipe the data
+          directory and run setup again.
+        </p>
+      )}
+      {(state === 'idle' || state === 'failed') && !status.contentLeft && (
         <form onSubmit={submit}>
           <p className="muted">
             Export your site in WordPress under Tools → Export → All content. The import replaces this site’s title
