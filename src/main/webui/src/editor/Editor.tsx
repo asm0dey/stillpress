@@ -16,6 +16,7 @@ import { type ApiError, type Item, type ItemSummary, type SessionUser, type Site
 import { installWordPressApi } from './wpapi.ts';
 import { picked, upload, uploadError } from './MediaLibrary.tsx';
 import Sidebar, { type Draft } from './Sidebar.tsx';
+import { Edits } from './edits.ts';
 import '@wordpress/components/build-style/style.css';
 import '@wordpress/block-editor/build-style/style.css';
 // format-library does not export its stylesheet
@@ -113,7 +114,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   const [message, setMessage] = useState<Message | null>(null);
   const [autosaveAt, setAutosaveAt] = useState<string | null>(null);
   const [editingRef, setEditingRef] = useState<number | null>(null);
-  const unsavedForAutosave = useRef(false);
+  const edits = useRef(new Edits(''));
   const latest = useRef({ title, blocks, excerpt: '' });
   latest.current = { title, blocks, excerpt: draft?.excerpt ?? '' };
 
@@ -143,14 +144,22 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   function load(it: Item, tagList: TermView[]) {
     setItem(it);
     setTitle(it.title);
-    if (it.bodyFormat === 'blocks') setBlocks(parse(it.body));
+    const parsed = it.bodyFormat === 'blocks' ? parse(it.body) : [];
+    setBlocks(parsed);
     setDraft(draftOf(it, tagList));
+    edits.current = new Edits(serialize(parsed));
     setDirty(false);
   }
 
   const markDirty = useCallback(() => {
+    edits.current.edit();
     setDirty(true);
-    unsavedForAutosave.current = true;
+  }, []);
+
+  const changeBlocks = useCallback((b: BlockInstance[]) => {
+    setBlocks(b);
+    edits.current.blocks(serialize(b));
+    setDirty(edits.current.dirty);
   }, []);
 
   const dirtyEntities = useSelect((s) => s(coreStore).__experimentalGetDirtyEntityRecords().length > 0, []);
@@ -166,12 +175,13 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   const classic = item?.bodyFormat === 'classic';
 
   const autosave = useCallback(async () => {
-    if (!unsavedForAutosave.current || classic) return;
+    if (!edits.current.needsAutosave || classic) return;
     const { title: t, blocks: b, excerpt } = latest.current;
-    unsavedForAutosave.current = false;
+    const mark = edits.current.mark();
     try {
       await api(`/items/${id}/autosave`, { method: 'PUT', body: { title: t, body: serialize(b), excerpt } });
-    } catch { unsavedForAutosave.current = true; }
+      edits.current.autosaved(mark);
+    } catch { /* retried at the next tick */ }
   }, [id, classic]);
 
   useEffect(() => {
@@ -242,10 +252,12 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
           return;
         }
       }
+      const mark = edits.current.mark();
+      const body = serialize(blocks);
       const saved = await api<Item>(`/items/${id}`, {
         method: 'PUT',
         body: {
-          title, slug: draft.slug, body: classic ? undefined : serialize(blocks), bodyFormat: item.bodyFormat,
+          title, slug: draft.slug, body: classic ? undefined : body, bodyFormat: item.bodyFormat,
           excerpt: draft.excerpt, status, localDate: draft.dateChanged ? draft.date : undefined,
           categories: item.type === 'post' ? draft.categories : undefined,
           tags: item.type === 'post' ? await tagIds(draft.tags) : undefined,
@@ -256,9 +268,10 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
         },
       });
       setItem(saved);
-      setDraft((d) => d && { ...draftOf(saved, tags), tags: d.tags });
-      setDirty(false);
-      unsavedForAutosave.current = false;
+      edits.current.saved(mark, body);
+      // sidebar changes made while the save was in flight stay in the form
+      if (!edits.current.dirty) setDraft((d) => d && { ...draftOf(saved, tags), tags: d.tags });
+      setDirty(edits.current.dirty);
       setAutosaveAt(null);
       setRevisions((n) => n + 1);
       setMessage({ kind: 'status', text: SAVED[saved.status] ?? 'Saved.' });
@@ -377,8 +390,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
             header={header(true)} sidebar={sidebar} notices={notices} />
         ) : (
           <BlockEditorProvider value={blocks} settings={settings}
-            onInput={(b: BlockInstance[]) => { setBlocks(b); markDirty(); }}
-            onChange={(b: BlockInstance[]) => { setBlocks(b); markDirty(); }}>
+            onInput={changeBlocks} onChange={changeBlocks}>
             <BlockEditorKeyboardShortcuts.Register />
             {header(true)}
             <div className="sp-editor__main">

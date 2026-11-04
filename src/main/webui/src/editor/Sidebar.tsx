@@ -14,6 +14,9 @@ export interface Draft {
   parentId: number | null; menuOrder: number;
 }
 
+export const isKnownTag = (tags: TermView[], name: string) =>
+  tags.some((t) => t.name.toLowerCase() === name.trim().toLowerCase());
+
 const STATUS: Record<string, string> = {
   draft: 'Draft', pending: 'Pending review', future: 'Scheduled', publish: 'Published', private: 'Private', trash: 'Trash',
 };
@@ -82,6 +85,8 @@ function ItemPanel({ item, session, draft, onChange, categories, onAddCategory, 
           </PanelBody>
           <PanelBody title="Tags">
             <FormTokenField __next40pxDefaultSize label="Add tag" value={draft.tags} suggestions={tags.map((t) => t.name)}
+              // contributors cannot create tags, so they may only pick existing ones
+              __experimentalValidateInput={canPublish ? undefined : (t: string) => isKnownTag(tags, t)}
               onChange={(v) => onChange({ tags: v.map((t) => (typeof t === 'string' ? t : t.value)) })} />
             {!canPublish && <p className="hint">Only existing tags can be added.</p>}
           </PanelBody>
