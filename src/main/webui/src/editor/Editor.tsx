@@ -8,6 +8,7 @@ import { Button, MenuItem, Modal, Notice, TextControl } from '@wordpress/compone
 import { store as coreStore } from '@wordpress/core-data';
 import { useDispatch, useRegistry } from '@wordpress/data';
 import { isInTheFuture } from '@wordpress/date';
+import { __, sprintf } from '@wordpress/i18n';
 import { type ApiError, type Item, type ItemSummary, type SessionUser, type TermView, type UserView, api } from '../api.ts';
 import { UNSAFE_HTML, saveError } from './errors.ts';
 import Sidebar, { type Draft } from './Sidebar.tsx';
@@ -17,13 +18,13 @@ import {
   useEditorSession, useEditorSettings,
 } from './workspace.tsx';
 
-const SAVED: Record<string, string> = {
-  publish: 'Published. The site updates in a few seconds.',
-  future: 'Scheduled. It goes live at the chosen time.',
-  pending: 'Submitted for review.',
-  draft: 'Draft saved.',
-  private: 'Saved as private.',
-};
+const savedText = (status: string): string => ({
+  publish: __('Published. The site updates in a few seconds.', 'stillpress'),
+  future: __('Scheduled. It goes live at the chosen time.', 'stillpress'),
+  pending: __('Submitted for review.', 'stillpress'),
+  draft: __('Draft saved.', 'stillpress'),
+  private: __('Saved as private.', 'stillpress'),
+} as Record<string, string>)[status] ?? __('Saved.', 'stillpress');
 type WpError = { code?: string; data?: { status?: number; violations?: string[] } };
 
 function draftOf(item: Item, tags: TermView[]): Draft {
@@ -101,7 +102,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
         if (role === 'administrator') api<UserView[]>('/users').then(setUsers, () => {});
         api<unknown[]>(`/items/${id}/revisions`).then((r) => setRevisions(r.length), () => {});
       } catch (e) {
-        setMessage({ kind: 'alert', text: (e as ApiError).status === 403 ? 'You cannot edit this item.' : 'Could not load this item.' });
+        setMessage({ kind: 'alert', text: (e as ApiError).status === 403 ? __('You cannot edit this item.', 'stillpress') : __('Could not load this item.', 'stillpress') });
       }
     })();
   }, [id]);
@@ -142,7 +143,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
       const t = await api<TermView>('/terms', { method: 'POST', body: { taxonomy: 'category', name, parentId } });
       setCategories((c) => [...c, t]);
       patch({ categories: [...(draft?.categories ?? []), t.id] });
-    } catch { setMessage({ kind: 'alert', text: 'Could not add the category.' }); }
+    } catch { setMessage({ kind: 'alert', text: __('Could not add the category.', 'stillpress') }); }
   }
 
   function patch(p: Partial<Draft>) {
@@ -194,7 +195,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
       if (!edits.current.dirty) setDraft((d) => d && { ...draftOf(saved, tags), tags: d.tags });
       setAutosaveAt(null);
       setRevisions((n) => n + 1);
-      setMessage({ kind: 'status', text: SAVED[saved.status] ?? 'Saved.' });
+      setMessage({ kind: 'status', text: savedText(saved.status) });
     } catch (e) {
       setMessage(saveError(e as ApiError, 'post'));
     } finally { setBusy(false); }
@@ -203,7 +204,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   const settings = useEditorSettings(canPublish, unsaved);
 
   if (!item || !draft) {
-    return <main className="page">{message ? <p role="alert" className="error">{message.text}</p> : <p role="status">Loading…</p>}</main>;
+    return <main className="page">{message ? <p role="alert" className="error">{message.text}</p> : <p role="status">{__('Loading…', 'stillpress')}</p>}</main>;
   }
 
   const published = ['publish', 'future', 'private'].includes(item.status);
@@ -215,16 +216,16 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     <EditorFrame>
       <BlockEditorProvider value={blocks} settings={settings} onInput={changeBlocks} onChange={changeBlocks}>
         <BlockEditorKeyboardShortcuts.Register />
-        <EditorHeader back={back} label={item.type === 'page' ? 'Pages' : 'Posts'} unsaved={unsaved}>
-          {revisions > 0 && <Button variant="tertiary" onClick={() => navigate(`/edit/${id}/revisions`)}>Revisions ({revisions})</Button>}
-          {bodyFormatOf(blocks) === item.bodyFormat && <Button variant="tertiary" onClick={preview}>Preview</Button>}
-          {!published && <Button variant="secondary" disabled={busy} onClick={() => save('draft')}>Save draft</Button>}
+        <EditorHeader back={back} label={item.type === 'page' ? __('Pages', 'stillpress') : __('Posts', 'stillpress')} unsaved={unsaved}>
+          {revisions > 0 && <Button variant="tertiary" onClick={() => navigate(`/edit/${id}/revisions`)}>{sprintf(__('Revisions (%d)', 'stillpress'), revisions)}</Button>}
+          {bodyFormatOf(blocks) === item.bodyFormat && <Button variant="tertiary" onClick={preview}>{__('Preview', 'stillpress')}</Button>}
+          {!published && <Button variant="secondary" disabled={busy} onClick={() => save('draft')}>{__('Save draft', 'stillpress')}</Button>}
           {!canPublish && (
-            <Button variant="primary" disabled={busy} onClick={() => save('pending')}>Submit for review</Button>
+            <Button variant="primary" disabled={busy} onClick={() => save('pending')}>{__('Submit for review', 'stillpress')}</Button>
           )}
           {canPublish && (
             <Button variant="primary" disabled={busy} onClick={() => save(target)}>
-              {published ? (future && item.status !== 'future' ? 'Schedule' : 'Update') : future ? 'Schedule' : 'Publish'}
+              {published ? (future && item.status !== 'future' ? __('Schedule', 'stillpress') : __('Update', 'stillpress')) : future ? __('Schedule', 'stillpress') : __('Publish', 'stillpress')}
             </Button>
           )}
         </EditorHeader>
@@ -236,7 +237,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
                 setBlocks(toBlocks(a.body, latest.current.format ?? 'blocks'));
                 setDraft((d) => d && { ...d, excerpt: a.excerpt ?? '' });
               })} onDismissAutosave={() => setAutosaveAt(null)} />} />
-          <aside className="sp-editor__sidebar" aria-label="Settings">
+          <aside className="sp-editor__sidebar" aria-label={__('Settings', 'stillpress')}>
             <Sidebar item={item} session={session} draft={draft} onChange={patch} categories={categories}
               onAddCategory={addCategory} tags={tags} users={users} pages={pages} />
           </aside>
@@ -269,8 +270,8 @@ function MakeReusable() {
       setName('');
     } catch (e) {
       const err = e as WpError;
-      setError(err.code === 'unsafe_html' ? `This block contains HTML your role cannot publish: ${err.data?.violations?.join(', ')}`
-        : err.data?.status === 403 ? 'You cannot create reusable blocks.' : 'Could not create the reusable block.');
+      setError(err.code === 'unsafe_html' ? `${UNSAFE_HTML('block')} ${err.data?.violations?.join(', ')}`
+        : err.data?.status === 403 ? __('You cannot create reusable blocks.', 'stillpress') : __('Could not create the reusable block.', 'stillpress'));
     }
   }
   return (
@@ -279,17 +280,17 @@ function MakeReusable() {
         {({ selectedClientIds, onClose }) => {
           const all = blocksOf(selectedClientIds ?? []);
           if (!all.length || all.some((b) => b.name === 'core/block')) return null;
-          return <MenuItem onClick={() => { setError(null); setPending(selectedClientIds); onClose?.(); }}>Create reusable block</MenuItem>;
+          return <MenuItem onClick={() => { setError(null); setPending(selectedClientIds); onClose?.(); }}>{__('Create reusable block', 'stillpress')}</MenuItem>;
         }}
       </BlockSettingsMenuControls>
       {pending && (
-        <Modal title="Create reusable block" onRequestClose={() => setPending(null)}>
+        <Modal title={__('Create reusable block', 'stillpress')} onRequestClose={() => setPending(null)}>
           <form onSubmit={(e) => { e.preventDefault(); create(); }}>
-            <TextControl __next40pxDefaultSize label="Name" value={name} onChange={setName} />
+            <TextControl __next40pxDefaultSize label={__('Name', 'stillpress')} value={name} onChange={setName} />
             {error && <Notice status="error" isDismissible={false}><span role="alert">{error}</span></Notice>}
             <div className="sp-modal-actions">
-              <Button variant="tertiary" onClick={() => setPending(null)}>Cancel</Button>
-              <Button variant="primary" type="submit" disabled={!name.trim()}>Create</Button>
+              <Button variant="tertiary" onClick={() => setPending(null)}>{__('Cancel', 'stillpress')}</Button>
+              <Button variant="primary" type="submit" disabled={!name.trim()}>{__('Create', 'stillpress')}</Button>
             </div>
           </form>
         </Modal>

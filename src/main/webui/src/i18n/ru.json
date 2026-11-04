@@ -1,0 +1,1084 @@
+{
+ "": {
+  "domain": "stillpress",
+  "plural-forms": "nplurals=3; plural=(n % 10 == 1 && n % 100 != 11) ? 0 : ((n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? 1 : 2);",
+  "lang": "ru"
+ },
+ "%1$s (%2$d)": [
+  "%1$s (%2$d)"
+ ],
+ "%1$s by %2$s": [
+  "%1$s, %2$s"
+ ],
+ "%d item": [
+  "%d материал",
+  "%d материала",
+  "%d материалов"
+ ],
+ "%d page": [
+  "%d страница",
+  "%d страницы",
+  "%d страниц"
+ ],
+ "%d post": [
+  "%d запись",
+  "%d записи",
+  "%d записей"
+ ],
+ "%d redirect": [
+  "%d перенаправление",
+  "%d перенаправления",
+  "%d перенаправлений"
+ ],
+ "(no parent)": [
+  "(нет родителя)"
+ ],
+ "(no title)": [
+  "(без названия)"
+ ],
+ "(no title) #%d": [
+  "(без названия) №%d"
+ ],
+ "(view only)": [
+  "(только просмотр)"
+ ],
+ "301 (moved permanently)": [
+  "301 (перемещено навсегда)"
+ ],
+ "302 (temporary)": [
+  "302 (временно)"
+ ],
+ "A category cannot sit under itself or one of its own subcategories.": [
+  "Рубрику нельзя вложить в саму себя или в одну из её подрубрик."
+ ],
+ "A code such as en or en-GB.": [
+  "Код вида en или en-GB."
+ ],
+ "A decoded path such as /old-page/, or a query such as ?p=12.": [
+  "Декодированный путь вида /old-page/ или запрос вида ?p=12."
+ ],
+ "A new structure applies only to posts published afterwards. Existing permalinks never change.": [
+  "Новая структура действует только для записей, опубликованных после её изменения. Существующие постоянные ссылки не меняются."
+ ],
+ "A published post or page lives at this address.": [
+  "По этому адресу находится опубликованная запись или страница."
+ ],
+ "A scheduled post needs a date in the future.": [
+  "Для запланированной записи нужна дата в будущем."
+ ],
+ "Add category": [
+  "Добавить рубрику"
+ ],
+ "Add new block": [
+  "Добавить новый блок"
+ ],
+ "Add new category": [
+  "Добавить новую рубрику"
+ ],
+ "Add new page": [
+  "Добавить страницу"
+ ],
+ "Add new post": [
+  "Добавить запись"
+ ],
+ "Add redirect": [
+  "Добавить перенаправление"
+ ],
+ "Add tag": [
+  "Добавить метку"
+ ],
+ "Add title": [
+  "Добавить заголовок"
+ ],
+ "Add user": [
+  "Добавить пользователя"
+ ],
+ "Added: ": [
+  "Добавлено: "
+ ],
+ "Administrator": [
+  "Администратор"
+ ],
+ "All": [
+  "Все"
+ ],
+ "Alternative text": [
+  "Атрибут alt"
+ ],
+ "An import is running. Reset after it ends.": [
+  "Идёт импорт. Сбросьте сайт, когда он закончится."
+ ],
+ "Another user has this email.": [
+  "Этот email уже есть у другого пользователя."
+ ],
+ "At least 12 characters.": [
+  "Не менее 12 символов."
+ ],
+ "Author": [
+  "Автор"
+ ],
+ "Author and discussion": [
+  "Автор и обсуждение"
+ ],
+ "Back to the editor": [
+  "Вернуться в редактор"
+ ],
+ "Begin with a blank site and write your first post.": [
+  "Начните с пустого сайта и напишите первую запись."
+ ],
+ "Block": [
+  "Блок"
+ ],
+ "Bring posts, pages, comments and media from a WordPress export file.": [
+  "Перенесите записи, страницы, комментарии и медиафайлы из файла экспорта WordPress."
+ ],
+ "Cancel": [
+  "Отмена"
+ ],
+ "Categories": [
+  "Рубрики"
+ ],
+ "Category base": [
+  "Префикс рубрик"
+ ],
+ "Changes are waiting to be published.": [
+  "Изменения ждут публикации."
+ ],
+ "Changing a base redirects the old archive addresses and republishes the site.": [
+  "При смене префикса старые адреса архивов перенаправляются на новые, а сайт публикуется заново."
+ ],
+ "Changing it moves the archive; the old address redirects to the new one.": [
+  "При изменении архив переезжает; старый адрес перенаправляет на новый."
+ ],
+ "Changing it republishes the whole site.": [
+  "При изменении весь сайт публикуется заново."
+ ],
+ "Check the %s field.": [
+  "Проверьте поле %s."
+ ],
+ "Check the fields and try again.": [
+  "Проверьте поля и попробуйте ещё раз."
+ ],
+ "Check the settings.": [
+  "Проверьте настройки."
+ ],
+ "Check this field.": [
+  "Проверьте это поле."
+ ],
+ "Check this value.": [
+  "Проверьте это значение."
+ ],
+ "Choose 301 or 302.": [
+  "Выберите 301 или 302."
+ ],
+ "Choose a login name.": [
+  "Выберите имя для входа."
+ ],
+ "Choose another parent page.": [
+  "Выберите другую родительскую страницу."
+ ],
+ "Choose one of the categories.": [
+  "Выберите одну из рубрик."
+ ],
+ "Choose open or closed.": [
+  "Выберите «Открыто» или «Закрыто»."
+ ],
+ "Choose the export file.": [
+  "Выберите файл экспорта."
+ ],
+ "Closed": [
+  "Закрыто"
+ ],
+ "Comments": [
+  "Комментарии"
+ ],
+ "Comments on new items": [
+  "Комментарии к новым материалам"
+ ],
+ "Compare from %s": [
+  "Было: %s"
+ ],
+ "Compare to %s": [
+  "Стало: %s"
+ ],
+ "Content was already written. To start over, use Reset site at the bottom of Settings.": [
+  "Часть содержимого уже записана. Чтобы начать заново, воспользуйтесь сбросом сайта внизу страницы настроек."
+ ],
+ "Contributor": [
+  "Участник"
+ ],
+ "Copy set-password link": [
+  "Скопировать ссылку для установки пароля"
+ ],
+ "Could not add one.": [
+  "Не удалось добавить."
+ ],
+ "Could not add the category.": [
+  "Не удалось добавить рубрику."
+ ],
+ "Could not add the redirect.": [
+  "Не удалось добавить перенаправление."
+ ],
+ "Could not change the role.": [
+  "Не удалось изменить роль."
+ ],
+ "Could not create the link.": [
+  "Не удалось создать ссылку."
+ ],
+ "Could not create the reusable block.": [
+  "Не удалось создать многоразовый блок."
+ ],
+ "Could not delete the redirect.": [
+  "Не удалось удалить перенаправление."
+ ],
+ "Could not load that revision.": [
+  "Не удалось загрузить эту редакцию."
+ ],
+ "Could not load the autosave.": [
+  "Не удалось загрузить автосохранение."
+ ],
+ "Could not load the classic editor.": [
+  "Не удалось загрузить классический редактор."
+ ],
+ "Could not load the editor.": [
+  "Не удалось загрузить редактор."
+ ],
+ "Could not load the import status.": [
+  "Не удалось загрузить состояние импорта."
+ ],
+ "Could not load the list.": [
+  "Не удалось загрузить список."
+ ],
+ "Could not load the media library.": [
+  "Не удалось загрузить библиотеку файлов."
+ ],
+ "Could not load the publish state.": [
+  "Не удалось загрузить состояние публикации."
+ ],
+ "Could not load the redirects.": [
+  "Не удалось загрузить перенаправления."
+ ],
+ "Could not load the revisions.": [
+  "Не удалось загрузить редакции."
+ ],
+ "Could not load the settings.": [
+  "Не удалось загрузить настройки."
+ ],
+ "Could not load the site.": [
+  "Не удалось загрузить сайт."
+ ],
+ "Could not load the users.": [
+  "Не удалось загрузить пользователей."
+ ],
+ "Could not load this block.": [
+  "Не удалось загрузить этот блок."
+ ],
+ "Could not load this item.": [
+  "Не удалось загрузить этот материал."
+ ],
+ "Could not reset the site.": [
+  "Не удалось сбросить сайт."
+ ],
+ "Could not save the change.": [
+  "Не удалось сохранить изменение."
+ ],
+ "Could not save the details.": [
+  "Не удалось сохранить сведения."
+ ],
+ "Could not save the profile.": [
+  "Не удалось сохранить профиль."
+ ],
+ "Could not save the settings.": [
+  "Не удалось сохранить настройки."
+ ],
+ "Could not save. Your text stays in this tab.": [
+  "Не удалось сохранить. Ваш текст остаётся в этой вкладке."
+ ],
+ "Could not set the password. Try again.": [
+  "Не удалось установить пароль. Попробуйте ещё раз."
+ ],
+ "Could not start an empty site. Try again.": [
+  "Не удалось создать пустой сайт. Попробуйте ещё раз."
+ ],
+ "Could not start the republish.": [
+  "Не удалось запустить повторную публикацию."
+ ],
+ "Create": [
+  "Создать"
+ ],
+ "Create reusable block": [
+  "Создать многоразовый блок"
+ ],
+ "Create site": [
+  "Создать сайт"
+ ],
+ "Created on the first post (Uncategorized)": [
+  "Создаётся с первой записью (Без рубрики)"
+ ],
+ "Creating…": [
+  "Создание…"
+ ],
+ "Custom": [
+  "Произвольно"
+ ],
+ "Date": [
+  "Дата"
+ ],
+ "Day and name": [
+  "День и название"
+ ],
+ "Default post category": [
+  "Рубрика записей по умолчанию"
+ ],
+ "Delete": [
+  "Удалить"
+ ],
+ "Delete redirect from %s": [
+  "Удалить перенаправление с %s"
+ ],
+ "Delete “%s”? Its posts lose it; addresses under it stop working.": [
+  "Удалить «%s»? Записи её лишатся, а адреса внутри неё перестанут работать."
+ ],
+ "Deletes all posts, pages, media, users other than you, categories, redirects and settings. This cannot be undone; copy the data directory first if you may want it back.": [
+  "Удаляет все записи, страницы, медиафайлы, пользователей, кроме вас, рубрики, перенаправления и настройки. Это нельзя отменить; если данные могут понадобиться, сначала скопируйте каталог данных."
+ ],
+ "Description": [
+  "Описание"
+ ],
+ "Details": [
+  "Подробности"
+ ],
+ "Dismiss": [
+  "Закрыть"
+ ],
+ "Display name": [
+  "Отображаемое имя"
+ ],
+ "Draft": [
+  "Черновик"
+ ],
+ "Draft saved.": [
+  "Черновик сохранён."
+ ],
+ "Drafts": [
+  "Черновики"
+ ],
+ "Edit": [
+  "Изменить"
+ ],
+ "Editor": [
+  "Редактор"
+ ],
+ "Email": [
+  "Email"
+ ],
+ "Enter a name of at most 250 characters.": [
+  "Введите имя не длиннее 250 символов."
+ ],
+ "Enter a name.": [
+  "Введите название."
+ ],
+ "Enter a title.": [
+  "Введите название."
+ ],
+ "Enter a valid email address.": [
+  "Введите корректный адрес email."
+ ],
+ "Enter the name shown on your posts.": [
+  "Введите имя, которое будет показано у ваших записей."
+ ],
+ "Enter the setup token printed in the server log.": [
+  "Введите токен установки из журнала сервера."
+ ],
+ "Excerpt": [
+  "Отрывок"
+ ],
+ "Export file (.xml)": [
+  "Файл экспорта (.xml)"
+ ],
+ "Export your site in WordPress under Tools → Export → All content. The import replaces this site’s title and language with the export’s, and can run only once.": [
+  "Экспортируйте сайт в WordPress: Инструменты → Экспорт → Всё содержимое. Импорт заменит название и язык этого сайта на указанные в экспорте и может выполняться только один раз."
+ ],
+ "Filter by status": [
+  "Фильтр по статусу"
+ ],
+ "Follow its progress on the dashboard": [
+  "Ход публикации — в консоли"
+ ],
+ "From": [
+  "Откуда"
+ ],
+ "Give the site a title.": [
+  "Задайте название сайта."
+ ],
+ "How do you want to begin?": [
+  "С чего начнём?"
+ ],
+ "Immediately": [
+  "Немедленно"
+ ],
+ "Import": [
+  "Импорт"
+ ],
+ "Import from WordPress": [
+  "Импорт из WordPress"
+ ],
+ "Importing… %1$d posts, pages and attachments, %2$d media files so far.": [
+  "Импорт… Пока что записей, страниц и вложений: %1$d, медиафайлов: %2$d."
+ ],
+ "Items per feed": [
+  "Элементов в ленте"
+ ],
+ "Language": [
+  "Язык"
+ ],
+ "Last modified": [
+  "Последнее изменение"
+ ],
+ "Last published: %s": [
+  "Последняя публикация: %s"
+ ],
+ "Leave without saving your changes?": [
+  "Уйти, не сохранив изменения?"
+ ],
+ "Loading the classic editor…": [
+  "Загрузка классического редактора…"
+ ],
+ "Loading the editor…": [
+  "Загрузка редактора…"
+ ],
+ "Loading…": [
+  "Загрузка…"
+ ],
+ "Log in": [
+  "Войти"
+ ],
+ "Log in instead": [
+  "Войти"
+ ],
+ "Log in with your new password": [
+  "Войти с новым паролем"
+ ],
+ "Log out": [
+  "Выйти"
+ ],
+ "Logging in…": [
+  "Вход…"
+ ],
+ "Login": [
+  "Имя пользователя"
+ ],
+ "Login failed. Try again.": [
+  "Не удалось войти. Попробуйте ещё раз."
+ ],
+ "Login or email": [
+  "Имя пользователя или email"
+ ],
+ "Media": [
+  "Медиафайлы"
+ ],
+ "Media library": [
+  "Библиотека файлов"
+ ],
+ "Month and name": [
+  "Месяц и название"
+ ],
+ "Move “%s” to the trash": [
+  "Переместить «%s» в корзину"
+ ],
+ "Name": [
+  "Имя"
+ ],
+ "New address": [
+  "Новый адрес"
+ ],
+ "New category name": [
+  "Название новой рубрики"
+ ],
+ "New password": [
+  "Новый пароль"
+ ],
+ "Next": [
+  "Далее"
+ ],
+ "No reusable blocks yet.": [
+  "Многоразовых блоков пока нет."
+ ],
+ "No revisions yet.": [
+  "Редакций пока нет."
+ ],
+ "None": [
+  "Нет"
+ ],
+ "Nothing here yet.": [
+  "Здесь пока ничего нет."
+ ],
+ "Nothing was imported. Fix the file and try again.": [
+  "Ничего не импортировано. Исправьте файл и попробуйте ещё раз."
+ ],
+ "Numeric": [
+  "Цифровая"
+ ],
+ "Old address": [
+  "Старый адрес"
+ ],
+ "Only editors and administrators can change this.": [
+  "Изменять это могут только редакторы и администраторы."
+ ],
+ "Only existing tags can be added.": [
+  "Можно добавлять только существующие метки."
+ ],
+ "Open": [
+  "Открыто"
+ ],
+ "Open Settings": [
+  "Открыть настройки"
+ ],
+ "Order": [
+  "Порядок"
+ ],
+ "Page": [
+  "Страница"
+ ],
+ "Page %1$d of %2$d": [
+  "Страница %1$d из %2$d"
+ ],
+ "Page attributes": [
+  "Атрибуты страницы"
+ ],
+ "Pages": [
+  "Страницы"
+ ],
+ "Pagination": [
+  "Постраничная навигация"
+ ],
+ "Parent": [
+  "Родитель"
+ ],
+ "Parent category": [
+  "Родительская рубрика"
+ ],
+ "Parent page": [
+  "Родительская страница"
+ ],
+ "Password": [
+  "Пароль"
+ ],
+ "Password set": [
+  "Пароль установлен"
+ ],
+ "Patterns": [
+  "Паттерны"
+ ],
+ "Pending": [
+  "На утверждении"
+ ],
+ "Pending review": [
+  "На утверждении"
+ ],
+ "Permalink structure": [
+  "Структура постоянных ссылок"
+ ],
+ "Permalinks": [
+  "Постоянные ссылки"
+ ],
+ "Post": [
+  "Запись"
+ ],
+ "Post name": [
+  "Название записи"
+ ],
+ "Posts": [
+  "Записи"
+ ],
+ "Posts and pages": [
+  "Записи и страницы"
+ ],
+ "Posts per feed": [
+  "Записей в ленте"
+ ],
+ "Posts per page": [
+  "Записей на странице"
+ ],
+ "Posts published without a category go here.": [
+  "Сюда попадают записи, опубликованные без рубрики."
+ ],
+ "Preview": [
+  "Просмотреть"
+ ],
+ "Previous": [
+  "Назад"
+ ],
+ "Printed in the server log as “Setup token: …”.": [
+  "Выводится в журнал сервера в виде «Setup token: …»."
+ ],
+ "Private": [
+  "Личное"
+ ],
+ "Public": [
+  "Открыто"
+ ],
+ "Publish": [
+  "Опубликовать"
+ ],
+ "Published": [
+  "Опубликовано"
+ ],
+ "Published. The site updates in a few seconds.": [
+  "Опубликовано. Сайт обновится через несколько секунд."
+ ],
+ "Publishing": [
+  "Публикация"
+ ],
+ "Publishing failed: %s It is retried in a minute.": [
+  "Публикация не удалась: %s Повторная попытка — через минуту."
+ ],
+ "Publishing… %1$d of about %2$d files": [
+  "Публикация… %1$d из примерно %2$d файлов"
+ ],
+ "Redirects": [
+  "Перенаправления"
+ ],
+ "Removed: ": [
+  "Удалено: "
+ ],
+ "Repeat password": [
+  "Повторите пароль"
+ ],
+ "Republish site": [
+  "Опубликовать сайт заново"
+ ],
+ "Reset site": [
+  "Сбросить сайт"
+ ],
+ "Restore": [
+  "Восстановить"
+ ],
+ "Restore revision from %s": [
+  "Восстановить редакцию от %s"
+ ],
+ "Restore this revision": [
+  "Восстановить эту редакцию"
+ ],
+ "Restore this revision? The current version stays in the history.": [
+  "Восстановить эту редакцию? Текущая версия останется в истории."
+ ],
+ "Restore “%s”": [
+  "Восстановить «%s»"
+ ],
+ "Restored.": [
+  "Восстановлено."
+ ],
+ "Restored. %d item will be republished.": [
+  "Восстановлено. Будет заново опубликован %d материал.",
+  "Восстановлено. Будут заново опубликованы %d материала.",
+  "Восстановлено. Будут заново опубликованы %d материалов."
+ ],
+ "Restored. No published items use this block.": [
+  "Восстановлено. Опубликованные материалы этот блок не используют."
+ ],
+ "Restored. The site updates in a few seconds.": [
+  "Восстановлено. Сайт обновится через несколько секунд."
+ ],
+ "Reusable blocks": [
+  "Мои блоки"
+ ],
+ "Revisions": [
+  "Редакции"
+ ],
+ "Revisions (%d)": [
+  "Редакции (%d)"
+ ],
+ "Role": [
+  "Роль"
+ ],
+ "Role of %s": [
+  "Роль пользователя %s"
+ ],
+ "Save": [
+  "Сохранить"
+ ],
+ "Save details": [
+  "Сохранить сведения"
+ ],
+ "Save draft": [
+  "Сохранить черновик"
+ ],
+ "Save settings": [
+  "Сохранить настройки"
+ ],
+ "Saved": [
+  "Сохранено"
+ ],
+ "Saved as private.": [
+  "Сохранено как личное."
+ ],
+ "Saved.": [
+  "Сохранено."
+ ],
+ "Saved. %d item will be republished.": [
+  "Сохранено. Будет заново опубликован %d материал.",
+  "Сохранено. Будут заново опубликованы %d материала.",
+  "Сохранено. Будут заново опубликованы %d материалов."
+ ],
+ "Saved. Changes that affect every page are being published.": [
+  "Сохранено. Изменения, затрагивающие все страницы, публикуются."
+ ],
+ "Schedule": [
+  "Запланировать"
+ ],
+ "Scheduled": [
+  "Запланировано"
+ ],
+ "Scheduled. It goes live at the chosen time.": [
+  "Запланировано. Публикация состоится в выбранное время."
+ ],
+ "Search media": [
+  "Поиск медиафайлов"
+ ],
+ "Search pages": [
+  "Поиск страниц"
+ ],
+ "Search posts": [
+  "Поиск записей"
+ ],
+ "Search redirects": [
+  "Поиск перенаправлений"
+ ],
+ "Select": [
+  "Выбрать"
+ ],
+ "Set password": [
+  "Установить пароль"
+ ],
+ "Set up Stillpress": [
+  "Установка Stillpress"
+ ],
+ "Set your password": [
+  "Установите пароль"
+ ],
+ "Set-password link for %s (valid 24 hours, single use; copied if your browser allowed it):": [
+  "Ссылка для установки пароля пользователю %s (действует 24 часа, одноразовая; скопирована, если браузер это разрешил):"
+ ],
+ "Settings": [
+  "Настройки"
+ ],
+ "Settings the export does not carry": [
+  "Настройки, которых нет в экспорте"
+ ],
+ "Setup failed. Check the server log and try again.": [
+  "Установка не удалась. Проверьте журнал сервера и попробуйте ещё раз."
+ ],
+ "Setup token": [
+  "Токен установки"
+ ],
+ "Site": [
+  "Сайт"
+ ],
+ "Site address": [
+  "Адрес сайта"
+ ],
+ "Site title": [
+  "Название сайта"
+ ],
+ "Slug": [
+  "Ярлык"
+ ],
+ "Someone else changed this block. Reload to see their version; your text stays in this tab.": [
+  "Этот блок изменил кто-то другой. Обновите страницу, чтобы увидеть его версию; ваш текст остаётся в этой вкладке."
+ ],
+ "Someone else changed this post. Reload to see their version; your text stays in this tab.": [
+  "Эту запись изменил кто-то другой. Обновите страницу, чтобы увидеть его версию; ваш текст остаётся в этой вкладке."
+ ],
+ "Start and end with a slash, and include %postname% or %post_id%.": [
+  "Начните и закончите косой чертой и включите %postname% или %post_id%."
+ ],
+ "Start empty": [
+  "Начать с нуля"
+ ],
+ "Start with / (a path) or ? (a query such as ?p=12), without .. segments.": [
+  "Начните с / (путь) или ? (запрос вида ?p=12), без сегментов «..»."
+ ],
+ "Status": [
+  "Статус"
+ ],
+ "Structure": [
+  "Структура"
+ ],
+ "Submit for review": [
+  "Отправить на утверждение"
+ ],
+ "Submitted for review.": [
+  "Отправлено на утверждение."
+ ],
+ "Tag base": [
+  "Префикс меток"
+ ],
+ "Tagline": [
+  "Краткое описание"
+ ],
+ "Tags": [
+  "Метки"
+ ],
+ "That author no longer exists.": [
+  "Этого автора больше нет."
+ ],
+ "That login is already taken.": [
+  "Это имя пользователя уже занято."
+ ],
+ "That token does not match the one in the server log.": [
+  "Этот токен не совпадает с токеном из журнала сервера."
+ ],
+ "The author archive address stays the same.": [
+  "Адрес архива автора не изменится."
+ ],
+ "The default category cannot be deleted. Choose another one in Settings first.": [
+  "Рубрику по умолчанию удалить нельзя. Сначала выберите другую в настройках."
+ ],
+ "The defaults are WordPress’s. Settings → Reading and Settings → Permalinks in your WordPress show the real values.": [
+  "Значения по умолчанию взяты из WordPress. Настоящие значения — в вашем WordPress в разделах Настройки → Чтение и Настройки → Постоянные ссылки."
+ ],
+ "The file is too large.": [
+  "Файл слишком большой."
+ ],
+ "The import failed: %s": [
+  "Импорт не удался: %s"
+ ],
+ "The import is done. The site is publishing in the background.": [
+  "Импорт завершён. Сайт публикуется в фоновом режиме."
+ ],
+ "The last part of the address.": [
+  "Последняя часть адреса."
+ ],
+ "The login or password is incorrect.": [
+  "Неверное имя пользователя или пароль."
+ ],
+ "The password is wrong.": [
+  "Неверный пароль."
+ ],
+ "The passwords do not match.": [
+  "Пароли не совпадают."
+ ],
+ "The request failed (%d).": [
+  "Запрос не удался (%d)."
+ ],
+ "The site is up to date.": [
+  "Сайт в актуальном состоянии."
+ ],
+ "The site was reset, but some files could not be removed. See the server log.": [
+  "Сайт сброшен, но некоторые файлы удалить не удалось. Подробности — в журнале сервера."
+ ],
+ "The upload failed.": [
+  "Загрузка не удалась."
+ ],
+ "The upload failed. Try again.": [
+  "Загрузка не удалась. Попробуйте ещё раз."
+ ],
+ "There is an autosave of this block that is more recent than the version below.": [
+  "Существует более поздняя версия этого блока, чем версия ниже."
+ ],
+ "There is an autosave of this post that is more recent than the version below.": [
+  "Существует более поздняя версия этой записи, чем версия ниже."
+ ],
+ "There must be at least one administrator with a password.": [
+  "Должен остаться хотя бы один администратор с паролем."
+ ],
+ "This block contains HTML your role cannot publish:": [
+  "Этот блок содержит HTML, который ваша роль не может публиковать:"
+ ],
+ "This block does not exist.": [
+  "Такого блока нет."
+ ],
+ "This file type cannot be uploaded.": [
+  "Файлы этого типа загружать нельзя."
+ ],
+ "This link is invalid or has expired. Ask an administrator for a new one.": [
+  "Ссылка недействительна или устарела. Попросите у администратора новую."
+ ],
+ "This post contains HTML your role cannot publish:": [
+  "Эта запись содержит HTML, который ваша роль не может публиковать:"
+ ],
+ "This site already has content, and import works only into an empty site. To start over, use Reset site at the bottom of Settings.": [
+  "На сайте уже есть содержимое, а импорт возможен только в пустой сайт. Чтобы начать заново, воспользуйтесь сбросом сайта внизу страницы настроек."
+ ],
+ "This site has already been imported.": [
+  "На этот сайт уже выполнялся импорт."
+ ],
+ "This site is already set up.": [
+  "Этот сайт уже установлен."
+ ],
+ "This slug cannot be used.": [
+  "Этот ярлык использовать нельзя."
+ ],
+ "This slug is already used, or has no letters or digits.": [
+  "Этот ярлык уже занят или не содержит ни букв, ни цифр."
+ ],
+ "Time zone": [
+  "Часовой пояс"
+ ],
+ "Time zone: %s": [
+  "Часовой пояс: %s"
+ ],
+ "Title": [
+  "Заголовок"
+ ],
+ "To": [
+  "Куда"
+ ],
+ "Too many attempts. Wait a few minutes and try again.": [
+  "Слишком много попыток. Подождите несколько минут и попробуйте ещё раз."
+ ],
+ "Too many wrong passwords. Wait a few minutes and try again.": [
+  "Слишком много неверных паролей. Подождите несколько минут и попробуйте ещё раз."
+ ],
+ "Trash": [
+  "В корзине"
+ ],
+ "Try again": [
+  "Попробовать ещё раз"
+ ],
+ "Type": [
+  "Тип"
+ ],
+ "Type the site title (%s) to confirm": [
+  "Для подтверждения введите название сайта (%s)"
+ ],
+ "Type the site title exactly.": [
+  "Введите название сайта точно."
+ ],
+ "Untitled site": [
+  "Сайт без названия"
+ ],
+ "Update": [
+  "Обновить"
+ ],
+ "Upload": [
+  "Загрузить"
+ ],
+ "Uploading…": [
+  "Загрузка…"
+ ],
+ "Use 12 to 1024 characters.": [
+  "Используйте от 12 до 1024 символов."
+ ],
+ "Use a full address such as https://example.org, without a path.": [
+  "Укажите полный адрес вида https://example.org, без пути."
+ ],
+ "Use a language code such as en or en-GB.": [
+  "Укажите код языка вида en или en-GB."
+ ],
+ "Use a language code such as en or ru-RU.": [
+  "Укажите код языка вида en или ru-RU."
+ ],
+ "Use a number from 1 to 100.": [
+  "Укажите число от 1 до 100."
+ ],
+ "Use a path on this site starting with /, or a full http(s) address, different from the old address.": [
+  "Укажите путь на этом сайте, начинающийся с /, или полный адрес http(s), отличный от старого."
+ ],
+ "Use a time zone such as Europe/Berlin.": [
+  "Укажите часовой пояс вида Europe/Moscow."
+ ],
+ "Use an email address of at most 100 characters.": [
+  "Укажите адрес email не длиннее 100 символов."
+ ],
+ "Use one word or slug, different from the category base.": [
+  "Используйте одно слово или ярлык, отличный от префикса рубрик."
+ ],
+ "Use one word or slug.": [
+  "Используйте одно слово или ярлык."
+ ],
+ "Used by": [
+  "Используется в"
+ ],
+ "Users": [
+  "Пользователи"
+ ],
+ "View site": [
+  "Перейти на сайт"
+ ],
+ "View the autosave": [
+  "Посмотреть автосохранение"
+ ],
+ "Visibility": [
+  "Видимость"
+ ],
+ "Write an excerpt (optional)": [
+  "Напишите отрывок (необязательно)"
+ ],
+ "Writing": [
+  "Написание"
+ ],
+ "You can view this reusable block but not change it; its author or an editor can.": [
+  "Вы можете просматривать этот блок, но не изменять его; это могут сделать его автор или редактор."
+ ],
+ "You cannot add one.": [
+  "Вы не можете добавлять."
+ ],
+ "You cannot change this one.": [
+  "Вы не можете это изменить."
+ ],
+ "You cannot create reusable blocks.": [
+  "Вы не можете создавать многоразовые блоки."
+ ],
+ "You cannot edit this item.": [
+  "Вы не можете редактировать этот материал."
+ ],
+ "You cannot make this change.": [
+  "Вы не можете внести это изменение."
+ ],
+ "You cannot see these revisions.": [
+  "Вы не можете просматривать эти редакции."
+ ],
+ "You cannot upload files.": [
+  "Вы не можете загружать файлы."
+ ],
+ "Your password": [
+  "Ваш пароль"
+ ],
+ "Your session token has expired. Reload the page and try again.": [
+  "Срок действия токена сессии истёк. Обновите страницу и попробуйте ещё раз."
+ ],
+ "Your site is ready": [
+  "Сайт готов"
+ ],
+ "never": [
+  "ещё не было"
+ ],
+ "revision\u0004From": [
+  "Было"
+ ],
+ "revision\u0004To": [
+  "Стало"
+ ],
+ "see the server log.": [
+  "подробности в журнале сервера."
+ ],
+ "status tab\u0004Pending": [
+  "На утверждении"
+ ],
+ "status tab\u0004Private": [
+  "Личные"
+ ],
+ "status tab\u0004Published": [
+  "Опубликованные"
+ ],
+ "status tab\u0004Scheduled": [
+  "Запланированные"
+ ],
+ "status tab\u0004Trash": [
+  "Корзина"
+ ],
+ "unknown": [
+  "неизвестно"
+ ],
+ "untitled": [
+  "без названия"
+ ],
+ "verb\u0004Trash": [
+  "Удалить"
+ ],
+ "— Parent category —": [
+  "— Родительская рубрика —"
+ ]
+}

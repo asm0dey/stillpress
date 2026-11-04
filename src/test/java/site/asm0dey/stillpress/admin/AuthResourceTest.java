@@ -18,6 +18,7 @@ import site.asm0dey.stillpress.account.Limiters;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TokenRepository;
 
 @QuarkusTest
@@ -28,6 +29,8 @@ class AuthResourceTest {
     AuthorRepository users;
     @Inject
     TokenRepository tokens;
+    @Inject
+    SettingRepository settings;
     long adminId;
 
     @BeforeEach
@@ -166,6 +169,27 @@ class AuthResourceTest {
             .body("displayName", equalTo("Admin"))
             .body("role", equalTo("administrator"));
         given().get("/admin/api/session").then().statusCode(401);
+    }
+
+    @Test
+    void localeDefaultsFromSiteLanguageAndCanBeChanged() {
+        var cookie = login("admin", "correct horse battery").cookie("sp_session");
+        given().cookie("sp_session", cookie).get("/admin/api/session").then().body("locale", equalTo("en"));
+        settings.put("language", "ru-RU");
+        given().cookie("sp_session", cookie).get("/admin/api/session").then().body("locale", equalTo("ru"));
+        putLocale(cookie, Map.of("locale", "en")).then().statusCode(204);
+        given().cookie("sp_session", cookie).get("/admin/api/session").then().body("locale", equalTo("en"));
+        putLocale(cookie, Map.of("locale", "ru")).then().statusCode(204);
+        given().cookie("sp_session", cookie).get("/admin/api/session").then().body("locale", equalTo("ru"));
+        for (var body : List.<Map<String, String>>of(Map.of("locale", "de"), Map.of("locale", "ru-RU"), Map.of())) {
+            putLocale(cookie, body).then().statusCode(400).body("error", equalTo("invalid_locale"));
+        }
+        assertThat(users.findById(adminId).orElseThrow().getLocale()).isEqualTo("ru");
+        csrf().contentType(JSON).body(Map.of("locale", "en")).put("/admin/api/session/locale").then().statusCode(401);
+    }
+
+    private static Response putLocale(String cookie, Map<String, String> body) {
+        return csrf().cookie("sp_session", cookie).contentType(JSON).body(body).put("/admin/api/session/locale");
     }
 
     @Test

@@ -1,4 +1,5 @@
 import apiFetch, { type APIFetchOptions } from '@wordpress/api-fetch';
+import { __, sprintf } from '@wordpress/i18n';
 import { type SessionUser, csrfToken } from '../api.ts';
 
 /** The admin API's reusable block (GET /blocks/{id}, or the list with ?content=true). */
@@ -11,10 +12,10 @@ const postType = (slug: string, name: string, restBase: string) => ({
   supports: { title: true, editor: true, excerpt: slug !== 'wp_block' },
 });
 const TYPES: Record<string, ReturnType<typeof postType>> = {
-  post: postType('post', 'Posts', 'posts'),
-  page: postType('page', 'Pages', 'pages'),
-  wp_block: postType('wp_block', 'Patterns', 'blocks'),
-  attachment: postType('attachment', 'Media', 'media'),
+  post: postType('post', __('Posts', 'stillpress'), 'posts'),
+  page: postType('page', __('Pages', 'stillpress'), 'pages'),
+  wp_block: postType('wp_block', __('Patterns', 'stillpress'), 'blocks'),
+  attachment: postType('attachment', __('Media', 'stillpress'), 'media'),
 };
 const THEME = {
   stylesheet: 'plain', template: 'plain', status: 'active', name: { raw: 'Plain', rendered: 'Plain' },
@@ -94,7 +95,7 @@ async function wpError(r: Response) {
   const b = await r.json().catch(() => null);
   return {
     code: b?.code ?? b?.error ?? 'unknown_error',
-    message: b?.message ?? b?.error ?? `The request failed (${r.status}).`,
+    message: b?.message ?? b?.error ?? sprintf(__('The request failed (%d).', 'stillpress'), r.status),
     data: { status: r.status, ...(b?.violations && { violations: b.violations as string[] }) },
   };
 }

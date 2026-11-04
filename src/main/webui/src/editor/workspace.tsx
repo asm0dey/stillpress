@@ -9,6 +9,8 @@ import { store as coreStore } from '@wordpress/core-data';
 import { useDispatch, useSelect } from '@wordpress/data';
 import { store as noticesStore } from '@wordpress/notices';
 import { getSettings, setSettings } from '@wordpress/date';
+import { __ } from '@wordpress/i18n';
+import { dateL10n } from '../i18n/index.ts';
 import { type ApiError, type ItemSummary, type SessionUser, type Site, api } from '../api.ts';
 import { type Message } from './errors.ts';
 import { installWordPressApi } from './wpapi.ts';
@@ -39,20 +41,25 @@ export const hasClassic = (blocks: BlockInstance[]): boolean =>
 
 let installedFor: number | null = null;
 
-/** The session, once the site's time zone and the WordPress API translator are in place. */
+/** The session, once the site's time zone, the date names of the admin's language and the WordPress API translator are in place. */
 export function useEditorSession(): { session: SessionUser | null; failed: string | null } {
   const [session, setSession] = useState<SessionUser | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   useEffect(() => {
     Promise.all([api<SessionUser>('/session'), api<Site>('/site')]).then(([s, site]) => {
       const date = getSettings();
-      setSettings({ ...date, timezone: { ...date.timezone, string: site.timezone } });
+      const l10n = dateL10n();
+      setSettings({
+        ...date, l10n: { ...date.l10n, ...l10n }, timezone: { ...date.timezone, string: site.timezone },
+        // WordPress's Russian defaults; the date picker labels its days with them, our screens format through Intl
+        formats: l10n.locale === 'ru' ? { time: 'H:i', date: 'd.m.Y', datetime: 'd.m.Y H:i', datetimeAbbreviated: 'd.m.Y H:i' } : date.formats,
+      });
       if (installedFor !== s.id) {
         installWordPressApi(s);
         installedFor = s.id;
       }
       setSession(s);
-    }, () => setFailed('Could not load the editor.'));
+    }, () => setFailed(__('Could not load the editor.', 'stillpress')));
   }, []);
   return { session, failed };
 }
@@ -61,14 +68,14 @@ async function fetchLinkSuggestions(search: string) {
   const lists = await Promise.all(['post', 'page'].map((t) =>
     api<{ items: ItemSummary[] }>(`/items?type=${t}&status=publish&search=${encodeURIComponent(search)}`)));
   return lists.flatMap((l) => l.items).filter((i) => i.permalink)
-    .map((i) => ({ id: i.id, url: i.permalink!, title: i.title || '(no title)', type: i.type, kind: 'post-type' }));
+    .map((i) => ({ id: i.id, url: i.permalink!, title: i.title || __('(no title)', 'stillpress'), type: i.type, kind: 'post-type' }));
 }
 
 /** The block editor settings; a reusable block's "Edit original" opens its own screen, as in WordPress. */
 export function useEditorSettings(canPublish: boolean, unsaved: boolean) {
   const navigate = useNavigate();
   const onEditBlock = (ref: number) => {
-    if (!unsaved || confirm('Leave without saving your changes?')) navigate(`/blocks/${ref}`);
+    if (!unsaved || confirm(__('Leave without saving your changes?', 'stillpress'))) navigate(`/blocks/${ref}`);
   };
   const reusable = useSelect((s) => s(coreStore).getEntityRecords('postType', 'wp_block',
     { per_page: -1 }) as { id: number; title: { raw: string }; content: { raw: string } }[] | null, []);
@@ -159,7 +166,7 @@ export function useEditing(put: () => Promise<unknown> | null) {
       apply(await api<T>(path));
       markDirty();
       setAutosaveAt(null);
-    } catch { setMessage({ kind: 'alert', text: 'Could not load the autosave.' }); }
+    } catch { setMessage({ kind: 'alert', text: __('Could not load the autosave.', 'stillpress') }); }
   }
 
   return {
@@ -187,7 +194,7 @@ export function EditorHeader({ back, label, unsaved, inserter = true, children }
 }) {
   return (
     <header className="sp-editor__bar">
-      <Link to={back} onClick={(e) => { if (unsaved && !confirm('Leave without saving your changes?')) e.preventDefault(); }}>
+      <Link to={back} onClick={(e) => { if (unsaved && !confirm(__('Leave without saving your changes?', 'stillpress'))) e.preventDefault(); }}>
         ← {label}
       </Link>
       {inserter && <Inserter />}
@@ -198,7 +205,7 @@ export function EditorHeader({ back, label, unsaved, inserter = true, children }
 
 /** The save result or error, and the offer to load a newer autosave. */
 export function EditorNotices({ message, onDismiss, autosaveAt, noun, onViewAutosave, onDismissAutosave }: {
-  message: Message | null; onDismiss: () => void; autosaveAt: string | null; noun: string;
+  message: Message | null; onDismiss: () => void; autosaveAt: string | null; noun: 'post' | 'block';
   onViewAutosave: () => void; onDismissAutosave: () => void;
 }) {
   return (
@@ -207,14 +214,15 @@ export function EditorNotices({ message, onDismiss, autosaveAt, noun, onViewAuto
         <div role={message.kind} className={message.kind === 'alert' ? 'sp-notice sp-notice--error' : 'sp-notice'}>
           {message.text}
           {message.list && <ul>{message.list.map((v) => <li key={v}>{v}</li>)}</ul>}
-          {message.kind === 'alert' && <Button variant="link" onClick={onDismiss}>Dismiss</Button>}
+          {message.kind === 'alert' && <Button variant="link" onClick={onDismiss}>{__('Dismiss', 'stillpress')}</Button>}
         </div>
       )}
       {autosaveAt && (
         <div role="status" className="sp-notice">
-          There is an autosave of this {noun} that is more recent than the version below.{' '}
-          <Button variant="link" onClick={onViewAutosave}>View the autosave</Button>{' '}
-          <Button variant="link" onClick={onDismissAutosave}>Dismiss</Button>
+          {noun === 'post' ? __('There is an autosave of this post that is more recent than the version below.', 'stillpress')
+            : __('There is an autosave of this block that is more recent than the version below.', 'stillpress')}{' '}
+          <Button variant="link" onClick={onViewAutosave}>{__('View the autosave', 'stillpress')}</Button>{' '}
+          <Button variant="link" onClick={onDismissAutosave}>{__('Dismiss', 'stillpress')}</Button>
         </div>
       )}
     </>
@@ -228,8 +236,8 @@ export function EditorContent({ notices, title, onTitle, readOnly = false }: {
   return (
     <div className="sp-editor__content">
       {notices}
-      <label className="sp-visually-hidden" htmlFor="sp-title">Title</label>
-      <input id="sp-title" className="sp-title" placeholder="Add title" value={title} readOnly={readOnly}
+      <label className="sp-visually-hidden" htmlFor="sp-title">{__('Title', 'stillpress')}</label>
+      <input id="sp-title" className="sp-title" placeholder={__('Add title', 'stillpress')} value={title} readOnly={readOnly}
         onChange={(e) => onTitle(e.target.value)} />
       <Canvas />
     </div>

@@ -75,6 +75,10 @@ public class AuthorRepository {
         db.update(AUTHOR).set(AUTHOR.DISPLAY_NAME, displayName).set(AUTHOR.EMAIL, email).where(AUTHOR.ID.eq(id)).execute();
     }
 
+    public void setLocale(long id, String locale) {
+        db.update(AUTHOR).set(AUTHOR.LOCALE, locale).where(AUTHOR.ID.eq(id)).execute();
+    }
+
     public void setPassword(long id, String hash) {
         db.update(AUTHOR).set(AUTHOR.PASSWORD_HASH, hash).where(AUTHOR.ID.eq(id)).execute();
     }

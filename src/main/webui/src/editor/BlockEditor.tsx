@@ -5,6 +5,7 @@ import { BlockEditorKeyboardShortcuts, BlockEditorProvider } from '@wordpress/bl
 import { Button } from '@wordpress/components';
 import { store as coreStore } from '@wordpress/core-data';
 import { dispatch as wpDispatch } from '@wordpress/data';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { type ApiError, type ReusableBlock, api } from '../api.ts';
 import { saveError } from './errors.ts';
 import { bodyOf, installClassicEditor, toBlocks } from './classic.ts';
@@ -59,7 +60,7 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
         setAutosaveAt(b.canEdit ? b.autosave?.createdAt ?? null : null);
         api<unknown[]>(`/blocks/${id}/revisions`).then((r) => setRevisions(r.length), () => {});
       } catch (e) {
-        setMessage({ kind: 'alert', text: (e as ApiError).status === 404 ? 'This block does not exist.' : 'Could not load this block.' });
+        setMessage({ kind: 'alert', text: (e as ApiError).status === 404 ? __('This block does not exist.', 'stillpress') : __('Could not load this block.', 'stillpress') });
       }
     })();
   }, [id]);
@@ -90,7 +91,7 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
       setAutosaveAt(null);
       setRevisions((n) => n + 1);
       const n = saved.republished ?? 0;
-      setMessage({ kind: 'status', text: `Saved. ${n} ${n === 1 ? 'item' : 'items'} will be republished.` });
+      setMessage({ kind: 'status', text: sprintf(_n('Saved. %d item will be republished.', 'Saved. %d items will be republished.', n, 'stillpress'), n) });
     } catch (e) {
       setMessage(saveError(e as ApiError, 'block'));
     } finally { setBusy(false); }
@@ -101,18 +102,18 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
   const settings = useMemo(() => (canEdit ? base : { ...base, isPreviewMode: true, templateLock: 'all' }), [base, canEdit]);
 
   if (!block) {
-    return <main className="page">{message ? <p role="alert" className="error">{message.text}</p> : <p role="status">Loading…</p>}</main>;
+    return <main className="page">{message ? <p role="alert" className="error">{message.text}</p> : <p role="status">{__('Loading…', 'stillpress')}</p>}</main>;
   }
 
   return (
     <EditorFrame>
       <BlockEditorProvider value={blocks} settings={settings} onInput={changeBlocks} onChange={changeBlocks}>
         <BlockEditorKeyboardShortcuts.Register />
-        <EditorHeader back="/blocks" label="Reusable blocks" unsaved={unsaved} inserter={canEdit}>
+        <EditorHeader back="/blocks" label={__('Reusable blocks', 'stillpress')} unsaved={unsaved} inserter={canEdit}>
           {canEdit && revisions > 0 && (
-            <Button variant="tertiary" onClick={() => navigate(`/blocks/${id}/revisions`)}>Revisions ({revisions})</Button>
+            <Button variant="tertiary" onClick={() => navigate(`/blocks/${id}/revisions`)}>{sprintf(__('Revisions (%d)', 'stillpress'), revisions)}</Button>
           )}
-          {canEdit && <Button variant="primary" disabled={busy} onClick={save}>Save</Button>}
+          {canEdit && <Button variant="primary" disabled={busy} onClick={save}>{__('Save', 'stillpress')}</Button>}
         </EditorHeader>
         <div className="sp-editor__main sp-editor__main--single">
           <EditorContent title={title} readOnly={!canEdit} onTitle={(t) => { setTitle(t); markDirty(); }}
@@ -120,7 +121,7 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
               <>
                 {!canEdit && (
                   <div role="status" className="sp-notice">
-                    You can view this reusable block but not change it; its author or an editor can.
+                    {__('You can view this reusable block but not change it; its author or an editor can.', 'stillpress')}
                   </div>
                 )}
                 <EditorNotices message={message} onDismiss={() => setMessage(null)} autosaveAt={autosaveAt} noun="block"

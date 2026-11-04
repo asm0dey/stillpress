@@ -1,7 +1,9 @@
 import { type ReactNode, StrictMode, Suspense, lazy, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
-import { type ApiError, api } from './api.ts';
+import { __ } from '@wordpress/i18n';
+import { type ApiError, type SessionUser, api } from './api.ts';
+import { browserLocale, loadLocale, loadWordPressLocale } from './i18n/index.ts';
 import './theme.css';
 import Setup from './pages/Setup.tsx';
 import Login from './pages/Login.tsx';
@@ -18,9 +20,9 @@ const Redirects = lazy(() => admin().then((m) => ({ default: m.Redirects })));
 const Items = lazy(() => admin().then((m) => ({ default: m.Items })));
 const Blocks = lazy(() => admin().then((m) => ({ default: m.Blocks })));
 
-// Gutenberg is large: only the editor route downloads it
-const Editor = lazy(() => import('./editor/Editor.tsx'));
-const BlockEditor = lazy(() => import('./editor/BlockEditor.tsx'));
+// Gutenberg is large: only the editor route downloads it, with WordPress's translation of its strings
+const Editor = lazy(() => loadWordPressLocale().then(() => import('./editor/Editor.tsx')));
+const BlockEditor = lazy(() => loadWordPressLocale().then(() => import('./editor/BlockEditor.tsx')));
 // the diff library comes with the revisions screens only
 const Revisions = lazy(() => import('./pages/Revisions.tsx'));
 
@@ -54,11 +56,12 @@ function Gate({ children }: { children: ReactNode }) {
   return ready ? children : null;
 }
 
-createRoot(document.getElementById('root')!).render(
+// the signed-in user's language, or the browser's before anyone has signed in; loaded before anything renders
+api<SessionUser>('/session').then((s) => s.locale, () => browserLocale()).then(loadLocale).then(() => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter basename="/admin">
       <Gate>
-        <Suspense fallback={<p role="status">Loading…</p>}>
+        <Suspense fallback={<p role="status">{__('Loading…', 'stillpress')}</p>}>
         <Routes>
           <Route path="/setup" element={<Setup />} />
           <Route path="/login" element={<Login />} />
@@ -72,15 +75,15 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/redirects" element={<Redirects />} />
           <Route path="/posts" element={<Items type="post" />} />
           <Route path="/pages" element={<Items type="page" />} />
-          <Route path="/edit/:id" element={<Suspense fallback={<p role="status">Loading the editor…</p>}><Editor /></Suspense>} />
+          <Route path="/edit/:id" element={<Suspense fallback={<p role="status">{__('Loading the editor…', 'stillpress')}</p>}><Editor /></Suspense>} />
           <Route path="/edit/:id/revisions" element={<Revisions kind="items" />} />
           <Route path="/blocks/:id/revisions" element={<Revisions kind="blocks" />} />
           <Route path="/blocks" element={<Blocks />} />
-          <Route path="/blocks/:id" element={<Suspense fallback={<p role="status">Loading the editor…</p>}><BlockEditor /></Suspense>} />
+          <Route path="/blocks/:id" element={<Suspense fallback={<p role="status">{__('Loading the editor…', 'stillpress')}</p>}><BlockEditor /></Suspense>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
       </Gate>
     </BrowserRouter>
   </StrictMode>,
-);
+));

@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { Button, FormFileUpload, Modal, Notice, Spinner, TextControl } from '@wordpress/components';
 import { addFilter } from '@wordpress/hooks';
+import { __, sprintf } from '@wordpress/i18n';
 import { type ApiError, type Media, api } from '../api.ts';
 
 /** What the block library's media blocks expect from a pick. */
@@ -23,10 +24,10 @@ export async function upload(files: File[]): Promise<Media[]> {
 
 export function uploadError(e: unknown): string {
   const err = e as ApiError;
-  if (err.error === 'type_not_allowed') return 'This file type cannot be uploaded.';
-  if (err.status === 403) return 'You cannot upload files.';
-  if (err.status === 413) return 'The file is too large.';
-  return err.message ?? 'The upload failed.';
+  if (err.error === 'type_not_allowed') return __('This file type cannot be uploaded.', 'stillpress');
+  if (err.status === 403) return __('You cannot upload files.', 'stillpress');
+  if (err.status === 413) return __('The file is too large.', 'stillpress');
+  return err.message ?? __('The upload failed.', 'stillpress');
 }
 
 interface Props {
@@ -47,7 +48,7 @@ export default function MediaLibrary({ allowedTypes, multiple, value, title, onS
     <>
       {render({ open: () => setOpen(true) })}
       {open && (
-        <Library allowedTypes={allowedTypes} multiple={!!multiple} value={value} title={title ?? 'Media library'}
+        <Library allowedTypes={allowedTypes} multiple={!!multiple} value={value} title={title ?? __('Media library', 'stillpress')}
           onClose={() => setOpen(false)} onSelect={(m) => { setOpen(false); onSelect(m); }} />
       )}
     </>
@@ -72,7 +73,7 @@ function Library({ allowedTypes, multiple, value, title, onClose, onSelect }: {
 
   const load = (p = page, q = search) =>
     api<{ items: Media[]; total: number }>(`/media?type=${type}&search=${encodeURIComponent(q)}&page=${p}&perPage=${PER_PAGE}`)
-      .then(setList, () => setError('Could not load the media library.'));
+      .then(setList, () => setError(__('Could not load the media library.', 'stillpress')));
   useEffect(() => { load(); }, []);
 
   // imported media whose file was missing has no url
@@ -103,7 +104,7 @@ function Library({ allowedTypes, multiple, value, title, onClose, onSelect }: {
     try {
       const m = await api<Media>(`/media/${current.id}`, { method: 'PUT', body: meta });
       setList(list && { ...list, items: list.items.map((x) => (x.id === m.id ? m : x)) });
-    } catch { setError('Could not save the details.'); }
+    } catch { setError(__('Could not save the details.', 'stillpress')); }
   }
 
   function choose() {
@@ -117,17 +118,17 @@ function Library({ allowedTypes, multiple, value, title, onClose, onSelect }: {
     <Modal title={title} onRequestClose={onClose} size="fill" className="sp-media">
       <div className="sp-media__bar">
         <form role="search" onSubmit={(e) => { e.preventDefault(); setPage(1); load(1, search); }}>
-          <TextControl __next40pxDefaultSize label="Search media" value={search} onChange={setSearch} />
+          <TextControl __next40pxDefaultSize label={__('Search media', 'stillpress')} value={search} onChange={setSearch} />
         </form>
         <FormFileUpload __next40pxDefaultSize multiple={multiple} accept={allowedTypes?.map((t) => (t.includes('/') ? t : t + '/*')).join(',')}
           onChange={(e) => add((e.target as HTMLInputElement).files)} render={({ openFileDialog }) => (
-            <Button variant="secondary" onClick={openFileDialog} isBusy={busy} disabled={busy}>Upload</Button>
+            <Button variant="secondary" onClick={openFileDialog} isBusy={busy} disabled={busy}>{__('Upload', 'stillpress')}</Button>
           )} />
       </div>
       {error && <Notice status="error" isDismissible={false}><span role="alert">{error}</span></Notice>}
       {!list ? <Spinner /> : (
         <div className="sp-media__body">
-          <ul className="sp-media__grid" aria-label="Media">
+          <ul className="sp-media__grid" aria-label={__('Media', 'stillpress')}>
             {items.map((m) => (
               <li key={m.id}>
                 <button type="button" aria-pressed={selected.includes(m.id)} onClick={() => toggle(m.id)}
@@ -137,27 +138,27 @@ function Library({ allowedTypes, multiple, value, title, onClose, onSelect }: {
                 </button>
               </li>
             ))}
-            {items.length === 0 && <li className="muted" role="status">Nothing here yet.</li>}
+            {items.length === 0 && <li className="muted" role="status">{__('Nothing here yet.', 'stillpress')}</li>}
           </ul>
           {current && (
-            <aside className="sp-media__details" aria-label="Details">
+            <aside className="sp-media__details" aria-label={__('Details', 'stillpress')}>
               <p className="hint">{current.url.split('/').pop()}{current.width ? ` · ${current.width}×${current.height}` : ''}</p>
-              <TextControl __next40pxDefaultSize label="Alternative text" value={meta.alt} onChange={(alt) => setMeta({ ...meta, alt })} />
-              <TextControl __next40pxDefaultSize label="Title" value={meta.title} onChange={(t) => setMeta({ ...meta, title: t })} />
-              <Button variant="secondary" onClick={saveMeta}>Save details</Button>
+              <TextControl __next40pxDefaultSize label={__('Alternative text', 'stillpress')} value={meta.alt} onChange={(alt) => setMeta({ ...meta, alt })} />
+              <TextControl __next40pxDefaultSize label={__('Title', 'stillpress')} value={meta.title} onChange={(t) => setMeta({ ...meta, title: t })} />
+              <Button variant="secondary" onClick={saveMeta}>{__('Save details', 'stillpress')}</Button>
             </aside>
           )}
         </div>
       )}
       <div className="sp-media__footer">
         {pages > 1 && (
-          <nav aria-label="Pages">
-            <Button disabled={page <= 1} onClick={() => { setPage(page - 1); load(page - 1); }}>Previous</Button>
-            <span> Page {page} of {pages} </span>
-            <Button disabled={page >= pages} onClick={() => { setPage(page + 1); load(page + 1); }}>Next</Button>
+          <nav aria-label={__('Pagination', 'stillpress')}>
+            <Button disabled={page <= 1} onClick={() => { setPage(page - 1); load(page - 1); }}>{__('Previous', 'stillpress')}</Button>
+            <span> {sprintf(__('Page %1$d of %2$d', 'stillpress'), page, pages)} </span>
+            <Button disabled={page >= pages} onClick={() => { setPage(page + 1); load(page + 1); }}>{__('Next', 'stillpress')}</Button>
           </nav>
         )}
-        <Button variant="primary" disabled={!selected.length} onClick={choose}>Select</Button>
+        <Button variant="primary" disabled={!selected.length} onClick={choose}>{__('Select', 'stillpress')}</Button>
       </div>
     </Modal>
   );

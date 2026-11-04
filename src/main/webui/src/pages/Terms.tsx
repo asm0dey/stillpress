@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react';
+import { __, sprintf } from '@wordpress/i18n';
 import { type ApiError, type TermView, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
@@ -7,11 +8,11 @@ type Taxonomy = 'category' | 'post_tag';
 
 interface Draft { name: string; slug: string; parentId: number | null; description: string }
 
-const MESSAGES: Record<string, string> = {
-  name: 'Enter a name.',
-  slug: 'This slug is already used, or has no letters or digits.',
-  parentId: 'A category cannot sit under itself or one of its own subcategories.',
-};
+const messages = (): Record<string, string> => ({
+  name: __('Enter a name.', 'stillpress'),
+  slug: __('This slug is already used, or has no letters or digits.', 'stillpress'),
+  parentId: __('A category cannot sit under itself or one of its own subcategories.', 'stillpress'),
+});
 
 /** Categories as an indented tree with a parent select, tags as a flat list; shared by both screens. */
 export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
@@ -24,16 +25,16 @@ export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
 
-  const load = () => api<TermView[]>(`/terms?taxonomy=${taxonomy}`).then(setTerms, () => setMessage('Could not load the list.'));
+  const load = () => api<TermView[]>(`/terms?taxonomy=${taxonomy}`).then(setTerms, () => setMessage(__('Could not load the list.', 'stillpress')));
   useEffect(() => { setEditing(null); load(); }, [taxonomy]);
 
   function fail(e: unknown) {
     const err = e as ApiError;
-    if (err.error === 'slug_taken') setErrors({ slug: MESSAGES.slug });
-    else if (err.field) setErrors({ [err.field]: MESSAGES[err.field] ?? 'Check this field.' });
+    if (err.error === 'slug_taken') setErrors({ slug: messages().slug });
+    else if (err.field) setErrors({ [err.field]: messages()[err.field] ?? __('Check this field.', 'stillpress') });
     else setMessage(err.error === 'csrf' ? err.message! : err.error === 'default_category'
-      ? 'The default category cannot be deleted. Choose another one in Settings first.'
-      : err.status === 403 ? 'Only editors and administrators can change this.' : 'Could not save the change.');
+      ? __('The default category cannot be deleted. Choose another one in Settings first.', 'stillpress')
+      : err.status === 403 ? __('Only editors and administrators can change this.', 'stillpress') : __('Could not save the change.', 'stillpress'));
   }
 
   function edit(t: TermView) {
@@ -55,7 +56,7 @@ export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
   }
 
   async function remove(t: TermView) {
-    if (!confirm(`Delete "${t.name}"? Its posts lose it; addresses under it stop working.`)) return;
+    if (!confirm(sprintf(__('Delete “%s”? Its posts lose it; addresses under it stop working.', 'stillpress'), t.name))) return;
     setMessage(null);
     try {
       await api(`/terms/${t.id}`, { method: 'DELETE' });
@@ -89,11 +90,11 @@ export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
 
   const parentSelect = (id: string, value: number | null, onChange: (v: number | null) => void, self?: number) => (
     <div className="field">
-      <label htmlFor={id}>Parent</label>
+      <label htmlFor={id}>{__('Parent', 'stillpress')}</label>
       <select id={id} value={value ?? ''} aria-invalid={errors.parentId ? 'true' : undefined}
         aria-describedby={errors.parentId ? id + '-error' : undefined}
         onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
-        <option value="">None</option>
+        <option value="">{__('None', 'stillpress')}</option>
         {rows.filter((r) => r.term.id !== self).map((r) => (
           <option key={r.term.id} value={r.term.id}>{'— '.repeat(r.depth) + r.term.name}</option>
         ))}
@@ -104,26 +105,26 @@ export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
 
   return (
     <Shell>
-      <h1>{category ? 'Categories' : 'Tags'}</h1>
+      <h1>{category ? __('Categories', 'stillpress') : __('Tags', 'stillpress')}</h1>
       {message && <p role="alert" className="error">{message}</p>}
       {terms && (
         <table className="table">
-          <thead><tr><th>Name</th><th>Slug</th><th>Posts</th><th /></tr></thead>
+          <thead><tr><th>{__('Name', 'stillpress')}</th><th>{__('Slug', 'stillpress')}</th><th>{__('Posts', 'stillpress')}</th><th /></tr></thead>
           <tbody>
             {rows.map(({ term: t, depth }) => editing === t.id ? (
               <tr key={t.id}>
                 <td colSpan={4}>
                   <form onSubmit={save}>
-                    <Field label="Name" name="name" required value={draft.name} error={errors.name}
+                    <Field label={__('Name', 'stillpress')} name="name" required value={draft.name} error={errors.name}
                       onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-                    <Field label="Slug" name="slug" value={draft.slug} error={errors.slug}
-                      hint="Changing it moves the archive; the old address redirects to the new one."
+                    <Field label={__('Slug', 'stillpress')} name="slug" value={draft.slug} error={errors.slug}
+                      hint={__('Changing it moves the archive; the old address redirects to the new one.', 'stillpress')}
                       onChange={(e) => setDraft({ ...draft, slug: e.target.value })} />
                     {category && parentSelect('edit-parent', draft.parentId, (v) => setDraft({ ...draft, parentId: v }), t.id)}
-                    <Field label="Description" name="description" value={draft.description}
+                    <Field label={__('Description', 'stillpress')} name="description" value={draft.description}
                       onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
-                    <button type="submit" className="primary">Save</button>{' '}
-                    <button type="button" onClick={() => setEditing(null)}>Cancel</button>
+                    <button type="submit" className="primary">{__('Save', 'stillpress')}</button>{' '}
+                    <button type="button" onClick={() => setEditing(null)}>{__('Cancel', 'stillpress')}</button>
                   </form>
                 </td>
               </tr>
@@ -133,20 +134,20 @@ export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
                 <td>{t.slug}</td>
                 <td>{t.count ?? 0}</td>
                 <td>
-                  <button type="button" onClick={() => edit(t)}>Edit</button>{' '}
-                  <button type="button" onClick={() => remove(t)}>Delete</button>
+                  <button type="button" onClick={() => edit(t)}>{__('Edit', 'stillpress')}</button>{' '}
+                  <button type="button" onClick={() => remove(t)}>{__('Delete', 'stillpress')}</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      <h2>{category ? 'Add category' : 'Add tag'}</h2>
+      <h2>{category ? __('Add category', 'stillpress') : __('Add tag', 'stillpress')}</h2>
       <form onSubmit={add}>
-        <Field label="Name" name="new-name" required value={newName} error={editing === null ? errors.name : undefined}
+        <Field label={__('Name', 'stillpress')} name="new-name" required value={newName} error={editing === null ? errors.name : undefined}
           onChange={(e) => setNewName(e.target.value)} />
         {category && parentSelect('new-parent', newParent, setNewParent)}
-        <button type="submit" className="primary">{category ? 'Add category' : 'Add tag'}</button>
+        <button type="submit" className="primary">{category ? __('Add category', 'stillpress') : __('Add tag', 'stillpress')}</button>
       </form>
     </Shell>
   );

@@ -1,5 +1,6 @@
 import { Link, Navigate } from 'react-router';
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
+import { __, sprintf } from '@wordpress/i18n';
 import { type ApiError, type ImportStatus, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
@@ -14,7 +15,7 @@ export default function Import() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = () => api<ImportStatus>('/import').then(setStatus, () => setMessage('Could not load the import status.'));
+  const load = () => api<ImportStatus>('/import').then(setStatus, () => setMessage(__('Could not load the import status.', 'stillpress')));
   useEffect(() => { load(); }, []);
   useEffect(() => {
     if (status?.state !== 'running' || status.error) return undefined;
@@ -26,7 +27,7 @@ export default function Import() {
     e.preventDefault();
     setMessage(null);
     if (!file) {
-      setMessage('Choose the export file.');
+      setMessage(__('Choose the export file.', 'stillpress'));
       return;
     }
     const body = new FormData();
@@ -37,8 +38,8 @@ export default function Import() {
       setStatus(await api<ImportStatus>('/import', { method: 'POST', body }));
     } catch (e) {
       const err = e as ApiError;
-      setMessage(err.error === 'csrf' ? err.message! : err.status === 409 ? err.message ?? 'This site has already been imported.'
-        : err.status === 400 ? err.error ?? 'Check the settings.' : 'The upload failed. Try again.');
+      setMessage(err.error === 'csrf' ? err.message! : err.status === 409 ? err.message ?? __('This site has already been imported.', 'stillpress')
+        : err.status === 400 ? err.error ?? __('Check the settings.', 'stillpress') : __('The upload failed. Try again.', 'stillpress'));
     } finally {
       setBusy(false);
     }
@@ -55,58 +56,56 @@ export default function Import() {
 
   return (
     <Shell>
-      <h1>Import from WordPress</h1>
+      <h1>{__('Import from WordPress', 'stillpress')}</h1>
       {message && <p role="alert" className="error">{message}</p>}
       {stalled && <p role="alert" className="error">{status!.error}</p>}
       {state === 'running' && !stalled && (
-        <p role="status">Importing… {status!.items} posts, pages and attachments, {status!.media} media files so far.</p>
+        <p role="status">{sprintf(__('Importing… %1$d posts, pages and attachments, %2$d media files so far.', 'stillpress'), status!.items, status!.media)}</p>
       )}
       {state === 'done' && (
         <>
-          <p role="status">The import is done. The site is publishing in the background; the <Link to="/">dashboard</Link> shows its progress.</p>
+          <p role="status">{__('The import is done. The site is publishing in the background.', 'stillpress')} <Link to="/">{__('Follow its progress on the dashboard', 'stillpress')}</Link></p>
           {status!.report && <pre className="report">{status!.report}</pre>}
         </>
       )}
       {state === 'failed' && (
         <div role="alert">
-          <p className="error">The import failed: {status!.error ?? 'see the server log.'}</p>
+          <p className="error">{sprintf(__('The import failed: %s', 'stillpress'), status!.error ?? __('see the server log.', 'stillpress'))}</p>
           {leftContent
-            ? <p>Content was already written. To start over, use Reset site at the bottom of <Link to="/settings">Settings</Link>.</p>
-            : <p>Nothing was imported. Fix the file and try again.</p>}
+            ? <p>{__('Content was already written. To start over, use Reset site at the bottom of Settings.', 'stillpress')} <Link to="/settings">{__('Open Settings', 'stillpress')}</Link></p>
+            : <p>{__('Nothing was imported. Fix the file and try again.', 'stillpress')}</p>}
           {status!.report && <pre className="report">{status!.report}</pre>}
         </div>
       )}
       {state === 'idle' && status!.contentLeft && (
         <p role="status">
-          This site already has content, and import works only into an empty site. To start over, use Reset site at
-          the bottom of <Link to="/settings">Settings</Link>.
+          {__('This site already has content, and import works only into an empty site. To start over, use Reset site at the bottom of Settings.', 'stillpress')}{' '}
+          <Link to="/settings">{__('Open Settings', 'stillpress')}</Link>
         </p>
       )}
       {(state === 'idle' || state === 'failed') && !status!.contentLeft && (
         <form onSubmit={submit}>
           <p className="muted">
-            Export your site in WordPress under Tools → Export → All content. The import replaces this site’s title
-            and language with the export’s, and can run only once.
+            {__('Export your site in WordPress under Tools → Export → All content. The import replaces this site’s title and language with the export’s, and can run only once.', 'stillpress')}
           </p>
           <div className="field">
-            <label htmlFor="wxr">Export file (.xml)</label>
+            <label htmlFor="wxr">{__('Export file (.xml)', 'stillpress')}</label>
             <input id="wxr" type="file" accept=".xml,text/xml,application/xml" required
               onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
           <fieldset>
-            <legend>Settings the export does not carry</legend>
+            <legend>{__('Settings the export does not carry', 'stillpress')}</legend>
             <p className="hint">
-              The defaults are WordPress’s. Settings → Reading and Settings → Permalinks in your WordPress show the
-              real values.
+              {__('The defaults are WordPress’s. Settings → Reading and Settings → Permalinks in your WordPress show the real values.', 'stillpress')}
             </p>
-            <Field label="Posts per page" type="number" min="1" required value={form.postsPerPage}
+            <Field label={__('Posts per page', 'stillpress')} type="number" min="1" required value={form.postsPerPage}
               onChange={set('postsPerPage')} />
-            <Field label="Items per feed" type="number" min="1" required value={form.postsPerRss}
+            <Field label={__('Items per feed', 'stillpress')} type="number" min="1" required value={form.postsPerRss}
               onChange={set('postsPerRss')} />
-            <Field label="Category base" required value={form.categoryBase} onChange={set('categoryBase')} />
-            <Field label="Tag base" required value={form.tagBase} onChange={set('tagBase')} />
+            <Field label={__('Category base', 'stillpress')} required value={form.categoryBase} onChange={set('categoryBase')} />
+            <Field label={__('Tag base', 'stillpress')} required value={form.tagBase} onChange={set('tagBase')} />
           </fieldset>
-          <button type="submit" className="primary" disabled={busy}>{busy ? 'Uploading…' : 'Import'}</button>
+          <button type="submit" className="primary" disabled={busy}>{busy ? __('Uploading…', 'stillpress') : __('Import', 'stillpress')}</button>
         </form>
       )}
     </Shell>

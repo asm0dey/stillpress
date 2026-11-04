@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { __ } from '@wordpress/i18n';
 import { type ApiError, CSRF_MESSAGE, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 
@@ -13,7 +14,7 @@ export default function SetPassword() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (password !== confirm) {
-      setErrors({ confirm: 'The passwords do not match.' });
+      setErrors({ confirm: __('The passwords do not match.', 'stillpress') });
       return;
     }
     setErrors({});
@@ -23,27 +24,27 @@ export default function SetPassword() {
     } catch (e) {
       const err = e as ApiError;
       if (err.error === 'csrf') setState('csrf');
-      else if (err.status === 400) setErrors({ password: 'Use 12 to 1024 characters.' });
+      else if (err.status === 400) setErrors({ password: __('Use 12 to 1024 characters.', 'stillpress') });
       else setState(err.status === 410 ? 'expired' : 'failed');
     }
   }
 
   if (state === 'done') {
-    return <main className="page narrow"><h1>Password set</h1><p><Link to="/login">Log in</Link> with your new password.</p></main>;
+    return <main className="page narrow"><h1>{__('Password set', 'stillpress')}</h1><p><Link to="/login">{__('Log in with your new password', 'stillpress')}</Link></p></main>;
   }
   return (
     <main className="page narrow">
-      <h1>Set your password</h1>
-      {state === 'expired' && <p role="alert" className="error">This link is invalid or has expired. Ask an administrator for a new one.</p>}
-      {state === 'csrf' && <p role="alert" className="error">{CSRF_MESSAGE}</p>}
-      {state === 'failed' && <p role="alert" className="error">Could not set the password. Try again.</p>}
+      <h1>{__('Set your password', 'stillpress')}</h1>
+      {state === 'expired' && <p role="alert" className="error">{__('This link is invalid or has expired. Ask an administrator for a new one.', 'stillpress')}</p>}
+      {state === 'csrf' && <p role="alert" className="error">{CSRF_MESSAGE()}</p>}
+      {state === 'failed' && <p role="alert" className="error">{__('Could not set the password. Try again.', 'stillpress')}</p>}
       <form onSubmit={submit} noValidate>
-        <Field label="New password" type="password" autoComplete="new-password" required minLength={12}
-          hint="At least 12 characters." value={password} onChange={(e) => setPassword(e.target.value)}
+        <Field label={__('New password', 'stillpress')} type="password" autoComplete="new-password" required minLength={12}
+          hint={__('At least 12 characters.', 'stillpress')} value={password} onChange={(e) => setPassword(e.target.value)}
           error={errors.password} />
-        <Field label="Repeat password" type="password" autoComplete="new-password" required value={confirm}
+        <Field label={__('Repeat password', 'stillpress')} type="password" autoComplete="new-password" required value={confirm}
           onChange={(e) => setConfirm(e.target.value)} error={errors.confirm} />
-        <button type="submit" className="primary">Set password</button>
+        <button type="submit" className="primary">{__('Set password', 'stillpress')}</button>
       </form>
     </main>
   );

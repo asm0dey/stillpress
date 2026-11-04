@@ -1,8 +1,11 @@
+import { __ } from '@wordpress/i18n';
+import { type Locale } from './i18n/index.ts';
+
 export type Role = 'administrator' | 'editor' | 'author' | 'contributor';
 
 /** The body of a non-2xx response, plus its status. */
 /** Shown when the server refuses a call for a missing or stale CSRF token. */
-export const CSRF_MESSAGE = 'Your session token has expired. Reload the page and try again.';
+export const CSRF_MESSAGE = () => __('Your session token has expired. Reload the page and try again.', 'stillpress');
 
 export interface ApiError {
   status: number;
@@ -14,7 +17,7 @@ export interface ApiError {
 }
 
 /** GET /session */
-export interface SessionUser { id: number; login: string; displayName: string; role: Role }
+export interface SessionUser { id: number; login: string; displayName: string; role: Role; locale: Locale }
 /** GET /site */
 export interface Site {
   title: string; homeUrl: string; language: string; items: number; comments: number; importAllowed: boolean;
@@ -108,7 +111,7 @@ export async function api<T = void>(
     // every 400 our endpoints send names an error; a bare one is the CSRF guard's refusal
     if (res.status === 400 && !e.error && !e.field) {
       e.error = 'csrf';
-      e.message = CSRF_MESSAGE;
+      e.message = CSRF_MESSAGE();
     }
     throw e;
   }

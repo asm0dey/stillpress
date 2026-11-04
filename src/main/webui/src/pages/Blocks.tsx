@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { type ApiError, type ReusableBlock, type SessionUser, api } from '../api.ts';
+import { __, _n, sprintf } from '@wordpress/i18n';
+import { formatInstant } from '../i18n/index.ts';
+import { type ApiError, type ReusableBlock, type SessionUser, type Site, api } from '../api.ts';
 import Shell from '../Shell.tsx';
 
 /** The reusable blocks: title, how many items use each, last change; authors and up add new ones. */
@@ -9,10 +11,12 @@ export default function Blocks() {
   const [list, setList] = useState<ReusableBlock[] | null>(null);
   const [session, setSession] = useState<SessionUser | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [timeZone, setTimeZone] = useState('UTC');
 
   useEffect(() => {
-    api<ReusableBlock[]>('/blocks').then(setList, () => setMessage('Could not load the list.'));
+    api<ReusableBlock[]>('/blocks').then(setList, () => setMessage(__('Could not load the list.', 'stillpress')));
     api<SessionUser>('/session').then(setSession, () => {});
+    api<Site>('/site').then((s) => setTimeZone(s.timezone), () => {});
   }, []);
 
   async function add() {
@@ -22,32 +26,32 @@ export default function Blocks() {
       navigate(`/blocks/${b.id}`);
     } catch (e) {
       const err = e as ApiError;
-      setMessage(err.error === 'csrf' ? err.message! : err.status === 403 ? 'You cannot add one.' : 'Could not add one.');
+      setMessage(err.error === 'csrf' ? err.message! : err.status === 403 ? __('You cannot add one.', 'stillpress') : __('Could not add one.', 'stillpress'));
     }
   }
 
   return (
     <Shell>
       <div className="heading-row">
-        <h1>Reusable blocks</h1>
-        {session && session.role !== 'contributor' && <button type="button" className="primary" onClick={add}>Add new block</button>}
+        <h1>{__('Reusable blocks', 'stillpress')}</h1>
+        {session && session.role !== 'contributor' && <button type="button" className="primary" onClick={add}>{__('Add new block', 'stillpress')}</button>}
       </div>
       {message && <p role="alert" className="error">{message}</p>}
       {list && (
-        list.length === 0 ? <p className="muted">No reusable blocks yet.</p> : (
+        list.length === 0 ? <p className="muted">{__('No reusable blocks yet.', 'stillpress')}</p> : (
           <table className="table">
-            <thead><tr><th>Title</th><th>Author</th><th>Used by</th><th>Last modified</th></tr></thead>
+            <thead><tr><th>{__('Title', 'stillpress')}</th><th>{__('Author', 'stillpress')}</th><th>{__('Used by', 'stillpress')}</th><th>{__('Last modified', 'stillpress')}</th></tr></thead>
             <tbody>
               {list.map((b) => (
                 <tr key={b.id}>
                   <td>
-                    <Link to={`/blocks/${b.id}`}>{b.title || '(no title)'}</Link>
-                    {!b.canEdit && <span className="muted"> (view only)</span>}
+                    <Link to={`/blocks/${b.id}`}>{b.title || __('(no title)', 'stillpress')}</Link>
+                    {!b.canEdit && <span className="muted"> {__('(view only)', 'stillpress')}</span>}
                   </td>
                   <td>{b.author ?? '—'}</td>
                   {/* shortcut: plain text; the posts list has no "uses block" filter to link to */}
-                  <td>{b.usedBy} {b.usedBy === 1 ? 'item' : 'items'}</td>
-                  <td>{b.modifiedAt?.slice(0, 16).replace('T', ' ')}</td>
+                  <td>{sprintf(_n('%d item', '%d items', b.usedBy, 'stillpress'), b.usedBy)}</td>
+                  <td>{b.modifiedAt && formatInstant(b.modifiedAt, timeZone)}</td>
                 </tr>
               ))}
             </tbody>

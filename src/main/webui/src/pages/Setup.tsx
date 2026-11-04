@@ -1,5 +1,6 @@
 import { type ChangeEvent, type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { __ } from '@wordpress/i18n';
 import { type ApiError, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 
@@ -8,15 +9,15 @@ interface Form {
   password: string;
 }
 
-const MESSAGES: Record<string, string> = {
-  token: 'Enter the setup token printed in the server log.',
-  title: 'Give the site a title.',
-  language: 'Use a language code such as en or en-GB.',
-  login: 'Choose a login name.',
-  email: 'Enter a valid email address.',
-  displayName: 'Enter the name shown on your posts.',
-  password: 'Use 12 to 1024 characters.',
-};
+const messages = (): Record<string, string> => ({
+  token: __('Enter the setup token printed in the server log.', 'stillpress'),
+  title: __('Give the site a title.', 'stillpress'),
+  language: __('Use a language code such as en or en-GB.', 'stillpress'),
+  login: __('Choose a login name.', 'stillpress'),
+  email: __('Enter a valid email address.', 'stillpress'),
+  displayName: __('Enter the name shown on your posts.', 'stillpress'),
+  password: __('Use 12 to 1024 characters.', 'stillpress'),
+});
 
 export default function Setup() {
   const navigate = useNavigate();
@@ -42,7 +43,7 @@ export default function Setup() {
       navigate('/');
     } catch (e) {
       const err = e as ApiError;
-      setProblem(err.error === 'csrf' ? err.message! : 'Could not start an empty site. Try again.');
+      setProblem(err.error === 'csrf' ? err.message! : __('Could not start an empty site. Try again.', 'stillpress'));
     }
   }
 
@@ -57,10 +58,10 @@ export default function Setup() {
     } catch (e) {
       const err = e as ApiError;
       if (err.error === 'csrf') setProblem(err.message!);
-      else if (err.status === 403) setErrors({ token: 'That token does not match the one in the server log.' });
-      else if (err.status === 400) setErrors({ [err.field!]: MESSAGES[err.field!] ?? 'Check this value.' });
+      else if (err.status === 403) setErrors({ token: __('That token does not match the one in the server log.', 'stillpress') });
+      else if (err.status === 400) setErrors({ [err.field!]: messages()[err.field!] ?? __('Check this value.', 'stillpress') });
       else if (err.status === 409) setProblem('already');
-      else setProblem('Setup failed. Check the server log and try again.');
+      else setProblem(__('Setup failed. Check the server log and try again.', 'stillpress'));
     } finally {
       setBusy(false);
     }
@@ -69,17 +70,17 @@ export default function Setup() {
   if (done) {
     return (
       <main className="page">
-        <h1>Your site is ready</h1>
-        <p className="muted">How do you want to begin?</p>
+        <h1>{__('Your site is ready', 'stillpress')}</h1>
+        <p className="muted">{__('How do you want to begin?', 'stillpress')}</p>
         {problem && <p role="alert" className="error">{problem}</p>}
         <div className="cards">
           <button type="button" className="card" onClick={startEmpty}>
-            <strong>Start empty</strong>
-            <span>Begin with a blank site and write your first post.</span>
+            <strong>{__('Start empty', 'stillpress')}</strong>
+            <span>{__('Begin with a blank site and write your first post.', 'stillpress')}</span>
           </button>
           <button type="button" className="card" onClick={() => navigate('/import')}>
-            <strong>Import from WordPress</strong>
-            <span>Bring posts, pages, comments and media from a WordPress export file.</span>
+            <strong>{__('Import from WordPress', 'stillpress')}</strong>
+            <span>{__('Bring posts, pages, comments and media from a WordPress export file.', 'stillpress')}</span>
           </button>
         </div>
       </main>
@@ -88,27 +89,27 @@ export default function Setup() {
 
   return (
     <main className="page narrow">
-      <h1>Set up Stillpress</h1>
+      <h1>{__('Set up Stillpress', 'stillpress')}</h1>
       {problem === 'already' ? (
-        <p role="alert" className="error">This site is already set up. <Link to="/login">Log in</Link> instead.</p>
+        <p role="alert" className="error">{__('This site is already set up.', 'stillpress')} <Link to="/login">{__('Log in instead', 'stillpress')}</Link></p>
       ) : problem && <p role="alert" className="error">{problem}</p>}
       <form onSubmit={submit} noValidate>
         <fieldset>
-          <legend>Site</legend>
-          <Field label="Setup token" autoComplete="off" spellCheck="false" {...field('token')}
-            hint="Printed in the server log as “Setup token: …”." />
-          <Field label="Site title" {...field('title')} />
-          <Field label="Language" hint="A code such as en or en-GB." {...field('language')} />
+          <legend>{__('Site', 'stillpress')}</legend>
+          <Field label={__('Setup token', 'stillpress')} autoComplete="off" spellCheck="false" {...field('token')}
+            hint={__('Printed in the server log as “Setup token: …”.', 'stillpress')} />
+          <Field label={__('Site title', 'stillpress')} {...field('title')} />
+          <Field label={__('Language', 'stillpress')} hint={__('A code such as en or en-GB.', 'stillpress')} {...field('language')} />
         </fieldset>
         <fieldset>
-          <legend>Administrator</legend>
-          <Field label="Login" autoComplete="username" {...field('login')} />
-          <Field label="Email" type="email" autoComplete="email" {...field('email')} />
-          <Field label="Display name" autoComplete="name" {...field('displayName')} />
-          <Field label="Password" type="password" autoComplete="new-password" minLength={12}
-            hint="At least 12 characters." {...field('password')} />
+          <legend>{__('Administrator', 'stillpress')}</legend>
+          <Field label={__('Login', 'stillpress')} autoComplete="username" {...field('login')} />
+          <Field label={__('Email', 'stillpress')} type="email" autoComplete="email" {...field('email')} />
+          <Field label={__('Display name', 'stillpress')} autoComplete="name" {...field('displayName')} />
+          <Field label={__('Password', 'stillpress')} type="password" autoComplete="new-password" minLength={12}
+            hint={__('At least 12 characters.', 'stillpress')} {...field('password')} />
         </fieldset>
-        <button type="submit" className="primary" disabled={busy}>{busy ? 'Creating…' : 'Create site'}</button>
+        <button type="submit" className="primary" disabled={busy}>{busy ? __('Creating…', 'stillpress') : __('Create site', 'stillpress')}</button>
       </form>
     </main>
   );

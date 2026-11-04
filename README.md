@@ -39,6 +39,7 @@ One install runs one site. Several sites means several installs.
   - Password login (Argon2id) with rate limits: 5 failures per account and 20 per client IP in 15 minutes, then 429 with `Retry-After`.
   - CSRF protection by [quarkus-rest-csrf](https://quarkus.io/guides/security-csrf-prevention): every state-changing admin API call must echo the `csrf-token` cookie in `X-CSRF-TOKEN`.
   - `/wp-admin` and `/wp-login.php` redirect to `/admin/`, so WordPress bookmarks keep working.
+  - The admin in English and Russian, per user: the header's language switch stores it (`PUT /admin/api/session/locale` with `{"locale":"en"|"ru"}`, anything else 400); `GET /admin/api/session` returns the effective `locale` (the user's choice, else `ru` when the site language starts with `ru`, else `en`). Setup and login follow the browser's language. The block editor uses WordPress's own Russian translation, a filtered snapshot in `src/main/webui/src/i18n/wp-ru.json`; refresh it after a Gutenberg upgrade with `mise run i18n:wp`.
 - `stillpress nginx-config`: the include for Mode 2, where nginx serves the published files (see below).
 
 Not yet: attachment pages redirect to their parent post instead of rendering (WordPress renders them), and gallery plugins, shortcodes such as `[gallery]`, search and sitemaps are later plans.

@@ -8,6 +8,7 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
@@ -20,6 +21,7 @@ import site.asm0dey.stillpress.account.SessionAuthMechanism;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
+import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TokenRepository;
 
 /**
@@ -40,6 +42,8 @@ public class AuthResource {
     @Inject
     TokenRepository tokens;
     @Inject
+    SettingRepository settings;
+    @Inject
     SecurityIdentity identity;
     @Context
     HttpServerRequest request;
@@ -48,7 +52,11 @@ public class AuthResource {
 
     public record NewPassword(String token, String password) {}
 
-    public record SessionUser(long id, String login, String displayName, String role) {}
+    public record SessionUser(long id, String login, String displayName, String role, String locale) {}
+
+    public record NewLocale(String locale) {}
+
+    private static final Set<String> LOCALES = Set.of("en", "ru");
 
     @POST
     @Path("login")
@@ -109,7 +117,25 @@ public class AuthResource {
     public SessionUser session() {
         long id = identity.getAttribute(SessionIdentityProvider.USER_ID);
         var u = users.findById(id).orElseThrow();
-        return new SessionUser(u.getId(), u.getLogin(), u.getDisplayName(), u.getRole());
+        // the user's own choice; otherwise the site language decides between the two admin languages
+        var locale = u.getLocale() != null
+                ? u.getLocale()
+                : settings.get("language").filter(l -> l.startsWith("ru")).map(l -> "ru").orElse("en");
+        return new SessionUser(u.getId(), u.getLogin(), u.getDisplayName(), u.getRole(), locale);
+    }
+
+    /**
+     * The admin language of the signed-in user; a preference, not site content, so it leaves the import open.
+     */
+    @PUT
+    @Path("session/locale")
+    @Authenticated
+    public Response setLocale(NewLocale l) {
+        if (l == null || l.locale() == null || !LOCALES.contains(l.locale())) {
+            return Response.status(400).entity(Map.of("error", "invalid_locale")).build();
+        }
+        users.setLocale(identity.getAttribute(SessionIdentityProvider.USER_ID), l.locale());
+        return Response.noContent().build();
     }
 
     @POST

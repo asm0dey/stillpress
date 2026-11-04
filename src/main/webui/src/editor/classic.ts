@@ -1,6 +1,7 @@
 import {
   type Block as BlockInstance, __unstableSerializeAndClean, createBlock, parse, serialize, setFreeformContentHandlerName,
 } from '@wordpress/blocks';
+import { __ } from '@wordpress/i18n';
 import { autop } from '@wordpress/autop';
 import { addFilter } from '@wordpress/hooks';
 import { type ComponentType, createElement, useEffect, useState } from 'react';
@@ -93,9 +94,9 @@ export const withClassicEditor = (BlockEdit: ComponentType<{ name: string }>) =>
     }, [classic, state]);
     if (!classic || state === 'ready') return createElement(BlockEdit, props);
     return state === 'loading'
-      ? createElement('p', { role: 'status' }, 'Loading the classic editor…')
-      : createElement('p', { role: 'alert' }, 'Could not load the classic editor. ',
-        createElement('button', { type: 'button', onClick: () => setState('loading') }, 'Try again'));
+      ? createElement('p', { role: 'status' }, __('Loading the classic editor…', 'stillpress'))
+      : createElement('p', { role: 'alert' }, __('Could not load the classic editor.', 'stillpress'), ' ',
+        createElement('button', { type: 'button', onClick: () => setState('loading') }, __('Try again', 'stillpress')));
   };
 addFilter('editor.BlockEdit', 'stillpress/classic-editor', withClassicEditor);
 

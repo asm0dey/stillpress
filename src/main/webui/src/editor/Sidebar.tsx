@@ -4,7 +4,9 @@ import {
   TextareaControl,
 } from '@wordpress/components';
 import { BlockInspector } from '@wordpress/block-editor';
-import { format, getSettings } from '@wordpress/date';
+import { getSettings } from '@wordpress/date';
+import { __, sprintf } from '@wordpress/i18n';
+import { formatLocal } from '../i18n/index.ts';
 import type { Item, SessionUser, TermView, UserView } from '../api.ts';
 
 /** The sidebar's part of what a save sends; tags are names, new ones are created on save. */
@@ -17,9 +19,10 @@ export interface Draft {
 export const isKnownTag = (tags: TermView[], name: string) =>
   tags.some((t) => t.name.toLowerCase() === name.trim().toLowerCase());
 
-const STATUS: Record<string, string> = {
-  draft: 'Draft', pending: 'Pending review', future: 'Scheduled', publish: 'Published', private: 'Private', trash: 'Trash',
-};
+const status = (s: string): string => ({
+  draft: __('Draft', 'stillpress'), pending: __('Pending review', 'stillpress'), future: __('Scheduled', 'stillpress'),
+  publish: __('Published', 'stillpress'), private: __('Private', 'stillpress'), trash: __('Trash', 'stillpress'),
+} as Record<string, string>)[s] ?? s;
 
 interface Props {
   item: Item;
@@ -37,8 +40,8 @@ interface Props {
 export default function Sidebar(props: Props) {
   return (
     <TabPanel className="sp-sidebar__tabs" tabs={[
-      { name: 'item', title: props.item.type === 'page' ? 'Page' : 'Post' },
-      { name: 'block', title: 'Block' },
+      { name: 'item', title: props.item.type === 'page' ? __('Page', 'stillpress') : __('Post', 'stillpress') },
+      { name: 'block', title: __('Block', 'stillpress') },
     ]}>
       {(tab) => (tab.name === 'block' ? <BlockInspector /> : <ItemPanel {...props} />)}
     </TabPanel>
@@ -51,70 +54,70 @@ function ItemPanel({ item, session, draft, onChange, categories, onAddCategory, 
   const zone = getSettings().timezone.string || 'UTC';
   return (
     <>
-      <PanelBody title="Status" initialOpen>
-        <p>{STATUS[item.status] ?? item.status}</p>
+      <PanelBody title={__('Status', 'stillpress')} initialOpen>
+        <p>{status(item.status)}</p>
         {canPublish && (
-          <SelectControl __next40pxDefaultSize label="Visibility" value={draft.visibility}
-            options={[{ label: 'Public', value: 'public' }, { label: 'Private', value: 'private' }]}
+          <SelectControl __next40pxDefaultSize label={__('Visibility', 'stillpress')} value={draft.visibility}
+            options={[{ label: __('Public', 'stillpress'), value: 'public' }, { label: __('Private', 'stillpress'), value: 'private' }]}
             onChange={(v) => onChange({ visibility: v as Draft['visibility'] })} />
         )}
         <div className="sp-field">
-          <span className="sp-label" id="sp-date-label">Publish</span>
+          <span className="sp-label" id="sp-date-label">{__('Publish', 'stillpress')}</span>
           <Dropdown popoverProps={{ placement: 'left-start' }}
             renderToggle={({ isOpen, onToggle }) => (
               <Button variant="tertiary" onClick={onToggle} aria-expanded={isOpen} aria-describedby="sp-date-label">
-                {draft.date ? format('F j, Y g:i a', draft.date) : 'Immediately'}
+                {draft.date ? formatLocal(draft.date) : __('Immediately', 'stillpress')}
               </Button>
             )}
             renderContent={() => (
               <div className="sp-date">
-                <DateTimePicker currentDate={draft.date ?? undefined} is12Hour={false}
+                <DateTimePicker currentDate={draft.date ?? undefined} is12Hour={false} startOfWeek={getSettings().l10n.startOfWeek}
                   onChange={(d) => onChange({ date: d, dateChanged: true })} />
-                <p className="hint">Time zone: {zone}</p>
+                <p className="hint">{sprintf(__('Time zone: %s', 'stillpress'), zone)}</p>
               </div>
             )} />
         </div>
-        <TextControl __next40pxDefaultSize label="Slug" value={draft.slug} help="The last part of the address."
+        <TextControl __next40pxDefaultSize label={__('Slug', 'stillpress')} value={draft.slug} help={__('The last part of the address.', 'stillpress')}
           onChange={(slug) => onChange({ slug })} />
       </PanelBody>
       {item.type === 'post' && (
         <>
-          <PanelBody title="Categories">
+          <PanelBody title={__('Categories', 'stillpress')}>
             <CategoryTree categories={categories} selected={draft.categories} onChange={(c) => onChange({ categories: c })} />
             {canPublish && <AddCategory categories={categories} onAdd={onAddCategory} />}
           </PanelBody>
-          <PanelBody title="Tags">
-            <FormTokenField __next40pxDefaultSize label="Add tag" value={draft.tags} suggestions={tags.map((t) => t.name)}
+          <PanelBody title={__('Tags', 'stillpress')}>
+            <FormTokenField __next40pxDefaultSize label={__('Add tag', 'stillpress')} value={draft.tags} suggestions={tags.map((t) => t.name)}
               // contributors cannot create tags, so they may only pick existing ones
               __experimentalValidateInput={canPublish ? undefined : (t: string) => isKnownTag(tags, t)}
               onChange={(v) => onChange({ tags: v.map((t) => (typeof t === 'string' ? t : t.value)) })} />
-            {!canPublish && <p className="hint">Only existing tags can be added.</p>}
+            {!canPublish && <p className="hint">{__('Only existing tags can be added.', 'stillpress')}</p>}
           </PanelBody>
-          <PanelBody title="Excerpt">
-            <TextareaControl label="Write an excerpt (optional)" value={draft.excerpt} onChange={(excerpt) => onChange({ excerpt })} />
+          <PanelBody title={__('Excerpt', 'stillpress')}>
+            <TextareaControl label={__('Write an excerpt (optional)', 'stillpress')} value={draft.excerpt} onChange={(excerpt) => onChange({ excerpt })} />
           </PanelBody>
         </>
       )}
       {item.type === 'page' && (
-        <PanelBody title="Page attributes">
-          <SelectControl __next40pxDefaultSize label="Parent page" value={String(draft.parentId ?? '')}
-            options={[{ label: '(no parent)', value: '' },
-              ...pages.filter((p) => p.id !== item.id).map((p) => ({ label: p.title || `(no title) #${p.id}`, value: String(p.id) }))]}
+        <PanelBody title={__('Page attributes', 'stillpress')}>
+          <SelectControl __next40pxDefaultSize label={__('Parent page', 'stillpress')} value={String(draft.parentId ?? '')}
+            options={[{ label: __('(no parent)', 'stillpress'), value: '' },
+              ...pages.filter((p) => p.id !== item.id).map((p) => ({ label: p.title || sprintf(__('(no title) #%d', 'stillpress'), p.id), value: String(p.id) }))]}
             onChange={(v) => onChange({ parentId: v ? Number(v) : null })} />
-          <TextControl __next40pxDefaultSize type="number" label="Order" value={String(draft.menuOrder)}
+          <TextControl __next40pxDefaultSize type="number" label={__('Order', 'stillpress')} value={String(draft.menuOrder)}
             onChange={(v) => onChange({ menuOrder: Number(v) || 0 })} />
         </PanelBody>
       )}
-      <PanelBody title="Author and discussion">
+      <PanelBody title={__('Author and discussion', 'stillpress')}>
         {editor && users ? (
-          <SelectControl __next40pxDefaultSize label="Author" value={String(draft.authorId ?? '')}
+          <SelectControl __next40pxDefaultSize label={__('Author', 'stillpress')} value={String(draft.authorId ?? '')}
             options={users.map((u) => ({ label: u.displayName || u.login, value: String(u.id) }))}
             onChange={(v) => onChange({ authorId: Number(v) })} />
         ) : (
-          <p><span className="sp-label">Author</span> {item.author ?? '—'}</p>
+          <p><span className="sp-label">{__('Author', 'stillpress')}</span> {item.author ?? '—'}</p>
         )}
-        <SelectControl __next40pxDefaultSize label="Comments" value={draft.commentStatus}
-          options={[{ label: 'Open', value: 'open' }, { label: 'Closed', value: 'closed' }]}
+        <SelectControl __next40pxDefaultSize label={__('Comments', 'stillpress')} value={draft.commentStatus}
+          options={[{ label: __('Open', 'stillpress'), value: 'open' }, { label: __('Closed', 'stillpress'), value: 'closed' }]}
           onChange={(v) => onChange({ commentStatus: v as Draft['commentStatus'] })} />
       </PanelBody>
     </>
@@ -135,14 +138,14 @@ function CategoryTree({ categories, selected, onChange }: {
         ...branch(c.id, depth + 1, seen),
       ];
     });
-  return <fieldset className="sp-categories"><legend className="sp-label">Categories</legend>{branch(null, 0, new Set())}</fieldset>;
+  return <fieldset className="sp-categories"><legend className="sp-label">{__('Categories', 'stillpress')}</legend>{branch(null, 0, new Set())}</fieldset>;
 }
 
 function AddCategory({ categories, onAdd }: { categories: TermView[]; onAdd: (name: string, parentId: number | null) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [parent, setParent] = useState('');
-  if (!open) return <Button variant="link" onClick={() => setOpen(true)}>Add new category</Button>;
+  if (!open) return <Button variant="link" onClick={() => setOpen(true)}>{__('Add new category', 'stillpress')}</Button>;
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
@@ -152,11 +155,11 @@ function AddCategory({ categories, onAdd }: { categories: TermView[]; onAdd: (na
   }
   return (
     <form onSubmit={submit} className="sp-add-category">
-      <TextControl __next40pxDefaultSize label="New category name" value={name} onChange={setName} />
-      <SelectControl __next40pxDefaultSize label="Parent category" value={parent}
-        options={[{ label: '— Parent category —', value: '' }, ...categories.map((c) => ({ label: c.name, value: String(c.id) }))]}
+      <TextControl __next40pxDefaultSize label={__('New category name', 'stillpress')} value={name} onChange={setName} />
+      <SelectControl __next40pxDefaultSize label={__('Parent category', 'stillpress')} value={parent}
+        options={[{ label: __('— Parent category —', 'stillpress'), value: '' }, ...categories.map((c) => ({ label: c.name, value: String(c.id) }))]}
         onChange={setParent} />
-      <Button variant="secondary" type="submit">Add new category</Button>
+      <Button variant="secondary" type="submit">{__('Add new category', 'stillpress')}</Button>
     </form>
   );
 }

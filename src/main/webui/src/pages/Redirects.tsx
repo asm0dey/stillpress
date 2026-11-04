@@ -1,15 +1,16 @@
 import { type FormEvent, useEffect, useState } from 'react';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { type ApiError, type RedirectView, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
 
 const PER_PAGE = 50;
 const EMPTY: RedirectView = { from: '', to: '', status: 301 };
-const MESSAGES: Record<string, string> = {
-  from: 'Start with / (a path) or ? (a query such as ?p=12), without .. segments.',
-  to: 'Use a path on this site starting with /, or a full http(s) address, different from the old address.',
-  status: 'Choose 301 or 302.',
-};
+const messages = (): Record<string, string> => ({
+  from: __('Start with / (a path) or ? (a query such as ?p=12), without .. segments.', 'stillpress'),
+  to: __('Use a path on this site starting with /, or a full http(s) address, different from the old address.', 'stillpress'),
+  status: __('Choose 301 or 302.', 'stillpress'),
+});
 
 /** The redirect map: searchable, with add and delete. Served by Stillpress, so changes apply at once. */
 export default function Redirects() {
@@ -22,7 +23,7 @@ export default function Redirects() {
 
   const load = (q = search, p = page) =>
     api<{ items: RedirectView[]; total: number }>(`/redirects?search=${encodeURIComponent(q)}&page=${p}`)
-      .then(setList, () => setMessage('Could not load the redirects.'));
+      .then(setList, () => setMessage(__('Could not load the redirects.', 'stillpress')));
   useEffect(() => { load(); }, []);
 
   async function add(e: FormEvent) {
@@ -35,9 +36,9 @@ export default function Redirects() {
       load();
     } catch (err) {
       const f = err as ApiError;
-      if (f.error === 'shadows_item') setErrors({ from: 'A published post or page lives at this address.' });
-      else if (f.field) setErrors({ [f.field]: MESSAGES[f.field] ?? 'Check this field.' });
-      else setMessage(f.error === 'csrf' ? f.message! : 'Could not add the redirect.');
+      if (f.error === 'shadows_item') setErrors({ from: __('A published post or page lives at this address.', 'stillpress') });
+      else if (f.field) setErrors({ [f.field]: messages()[f.field] ?? __('Check this field.', 'stillpress') });
+      else setMessage(f.error === 'csrf' ? f.message! : __('Could not add the redirect.', 'stillpress'));
     }
   }
 
@@ -48,7 +49,7 @@ export default function Redirects() {
       load();
     } catch (err) {
       const f = err as ApiError;
-      setMessage(f.error === 'csrf' ? f.message! : 'Could not delete the redirect.');
+      setMessage(f.error === 'csrf' ? f.message! : __('Could not delete the redirect.', 'stillpress'));
     }
   }
 
@@ -56,50 +57,50 @@ export default function Redirects() {
 
   return (
     <Shell>
-      <h1>Redirects</h1>
+      <h1>{__('Redirects', 'stillpress')}</h1>
       {message && <p role="alert" className="error">{message}</p>}
       <form role="search" onSubmit={(e) => { e.preventDefault(); setPage(1); load(search, 1); }}>
-        <Field label="Search redirects" name="search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Field label={__('Search redirects', 'stillpress')} name="search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
       </form>
       {list && (
         <>
-          <p className="muted" role="status">{list.total} redirect{list.total === 1 ? '' : 's'}</p>
+          <p className="muted" role="status">{sprintf(_n('%d redirect', '%d redirects', list.total, 'stillpress'), list.total)}</p>
           <table className="table">
-            <thead><tr><th>From</th><th>To</th><th>Status</th><th /></tr></thead>
+            <thead><tr><th>{__('From', 'stillpress')}</th><th>{__('To', 'stillpress')}</th><th>{__('Status', 'stillpress')}</th><th /></tr></thead>
             <tbody>
               {list.items.map((r) => (
                 <tr key={r.from}>
                   <td><code>{r.from}</code></td>
                   <td><code>{r.to}</code></td>
                   <td>{r.status}</td>
-                  <td><button type="button" aria-label={`Delete redirect from ${r.from}`} onClick={() => remove(r)}>Delete</button></td>
+                  <td><button type="button" aria-label={sprintf(__('Delete redirect from %s', 'stillpress'), r.from)} onClick={() => remove(r)}>{__('Delete', 'stillpress')}</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
           {pages > 1 && (
-            <nav aria-label="Pages">
-              <button type="button" disabled={page <= 1} onClick={() => { setPage(page - 1); load(search, page - 1); }}>Previous</button>{' '}
-              <span>Page {page} of {pages}</span>{' '}
-              <button type="button" disabled={page >= pages} onClick={() => { setPage(page + 1); load(search, page + 1); }}>Next</button>
+            <nav aria-label={__('Pagination', 'stillpress')}>
+              <button type="button" disabled={page <= 1} onClick={() => { setPage(page - 1); load(search, page - 1); }}>{__('Previous', 'stillpress')}</button>{' '}
+              <span>{sprintf(__('Page %1$d of %2$d', 'stillpress'), page, pages)}</span>{' '}
+              <button type="button" disabled={page >= pages} onClick={() => { setPage(page + 1); load(search, page + 1); }}>{__('Next', 'stillpress')}</button>
             </nav>
           )}
         </>
       )}
-      <h2>Add redirect</h2>
+      <h2>{__('Add redirect', 'stillpress')}</h2>
       <form onSubmit={add}>
-        <Field label="Old address" name="from" required value={form.from} error={errors.from}
-          hint="A decoded path such as /old-page/, or a query such as ?p=12." onChange={(e) => setForm({ ...form, from: e.target.value })} />
-        <Field label="New address" name="to" required value={form.to} error={errors.to}
+        <Field label={__('Old address', 'stillpress')} name="from" required value={form.from} error={errors.from}
+          hint={__('A decoded path such as /old-page/, or a query such as ?p=12.', 'stillpress')} onChange={(e) => setForm({ ...form, from: e.target.value })} />
+        <Field label={__('New address', 'stillpress')} name="to" required value={form.to} error={errors.to}
           onChange={(e) => setForm({ ...form, to: e.target.value })} />
         <div className="field">
-          <label htmlFor="status">Type</label>
+          <label htmlFor="status">{__('Type', 'stillpress')}</label>
           <select id="status" value={form.status} onChange={(e) => setForm({ ...form, status: Number(e.target.value) as 301 | 302 })}>
-            <option value={301}>301 (moved permanently)</option>
-            <option value={302}>302 (temporary)</option>
+            <option value={301}>{__('301 (moved permanently)', 'stillpress')}</option>
+            <option value={302}>{__('302 (temporary)', 'stillpress')}</option>
           </select>
         </div>
-        <button type="submit" className="primary">Add redirect</button>
+        <button type="submit" className="primary">{__('Add redirect', 'stillpress')}</button>
       </form>
     </Shell>
   );

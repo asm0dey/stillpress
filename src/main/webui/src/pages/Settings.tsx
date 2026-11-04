@@ -1,30 +1,31 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { __, sprintf } from '@wordpress/i18n';
 import { type ApiError, type SiteSettings, type TermView, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
 
-const PRESETS: { label: string; value: string }[] = [
-  { label: 'Day and name', value: '/%year%/%monthnum%/%day%/%postname%/' },
-  { label: 'Month and name', value: '/%year%/%monthnum%/%postname%/' },
-  { label: 'Post name', value: '/%postname%/' },
-  { label: 'Numeric', value: '/archives/%post_id%/' },
+const presets = (): { label: string; value: string }[] => [
+  { label: __('Day and name', 'stillpress'), value: '/%year%/%monthnum%/%day%/%postname%/' },
+  { label: __('Month and name', 'stillpress'), value: '/%year%/%monthnum%/%postname%/' },
+  { label: __('Post name', 'stillpress'), value: '/%postname%/' },
+  { label: __('Numeric', 'stillpress'), value: '/archives/%post_id%/' },
 ];
 const CUSTOM = 'custom';
 
-const MESSAGES: Record<string, string> = {
-  title: 'Enter a title.',
-  language: 'Use a language code such as en or ru-RU.',
-  homeUrl: 'Use a full address such as https://example.org, without a path.',
-  timezone: 'Use a time zone such as Europe/Berlin.',
-  postsPerPage: 'Use a number from 1 to 100.',
-  postsPerRss: 'Use a number from 1 to 100.',
-  permalinkStructure: 'Start and end with a slash, and include %postname% or %post_id%.',
-  categoryBase: 'Use one word or slug.',
-  tagBase: 'Use one word or slug, different from the category base.',
-  defaultCategory: 'Choose one of the categories.',
-  defaultCommentStatus: 'Choose open or closed.',
-};
+const messages = (): Record<string, string> => ({
+  title: __('Enter a title.', 'stillpress'),
+  language: __('Use a language code such as en or ru-RU.', 'stillpress'),
+  homeUrl: __('Use a full address such as https://example.org, without a path.', 'stillpress'),
+  timezone: __('Use a time zone such as Europe/Berlin.', 'stillpress'),
+  postsPerPage: __('Use a number from 1 to 100.', 'stillpress'),
+  postsPerRss: __('Use a number from 1 to 100.', 'stillpress'),
+  permalinkStructure: __('Start and end with a slash, and include %postname% or %post_id%.', 'stillpress'),
+  categoryBase: __('Use one word or slug.', 'stillpress'),
+  tagBase: __('Use one word or slug, different from the category base.', 'stillpress'),
+  defaultCategory: __('Choose one of the categories.', 'stillpress'),
+  defaultCommentStatus: __('Choose open or closed.', 'stillpress'),
+});
 
 export default function Settings() {
   const [form, setForm] = useState<SiteSettings | null>(null);
@@ -40,8 +41,8 @@ export default function Settings() {
     api<SiteSettings>('/settings').then((s) => {
       setForm(s);
       setSiteTitle(s.title);
-      setPreset(PRESETS.find((p) => p.value === s.permalinkStructure)?.value ?? CUSTOM);
-    }, () => setMessage('Could not load the settings.'));
+      setPreset(presets().find((p) => p.value === s.permalinkStructure)?.value ?? CUSTOM);
+    }, () => setMessage(__('Could not load the settings.', 'stillpress')));
     api<TermView[]>('/terms?taxonomy=category').then(setCategories, () => {});
   }, []);
 
@@ -66,82 +67,82 @@ export default function Settings() {
       setSaved(true);
     } catch (err) {
       const f = err as ApiError;
-      if (f.field) setErrors({ [f.field]: MESSAGES[f.field] ?? 'Check this field.' });
-      else setMessage(f.error === 'csrf' ? f.message! : 'Could not save the settings.');
+      if (f.field) setErrors({ [f.field]: messages()[f.field] ?? __('Check this field.', 'stillpress') });
+      else setMessage(f.error === 'csrf' ? f.message! : __('Could not save the settings.', 'stillpress'));
     }
   }
 
   return (
     <Shell>
-      <h1>Settings</h1>
+      <h1>{__('Settings', 'stillpress')}</h1>
       <form onSubmit={save}>
-        <Field label="Site title" name="title" required value={form.title} onChange={text('title')} error={errors.title} />
-        <Field label="Tagline" name="description" value={form.description} onChange={text('description')} />
-        <Field label="Language" name="language" required value={form.language} onChange={text('language')} error={errors.language} />
-        <Field label="Site address" name="homeUrl" required value={form.homeUrl} onChange={text('homeUrl')} error={errors.homeUrl}
-          hint="Changing it republishes the whole site." />
-        <Field label="Time zone" name="timezone" required value={form.timezone} onChange={text('timezone')} error={errors.timezone} />
-        <Field label="Posts per page" name="postsPerPage" type="number" min={1} max={100} required value={form.postsPerPage}
+        <Field label={__('Site title', 'stillpress')} name="title" required value={form.title} onChange={text('title')} error={errors.title} />
+        <Field label={__('Tagline', 'stillpress')} name="description" value={form.description} onChange={text('description')} />
+        <Field label={__('Language', 'stillpress')} name="language" required value={form.language} onChange={text('language')} error={errors.language} />
+        <Field label={__('Site address', 'stillpress')} name="homeUrl" required value={form.homeUrl} onChange={text('homeUrl')} error={errors.homeUrl}
+          hint={__('Changing it republishes the whole site.', 'stillpress')} />
+        <Field label={__('Time zone', 'stillpress')} name="timezone" required value={form.timezone} onChange={text('timezone')} error={errors.timezone} />
+        <Field label={__('Posts per page', 'stillpress')} name="postsPerPage" type="number" min={1} max={100} required value={form.postsPerPage}
           onChange={count('postsPerPage')} error={errors.postsPerPage} />
-        <Field label="Posts per feed" name="postsPerRss" type="number" min={1} max={100} required value={form.postsPerRss}
+        <Field label={__('Posts per feed', 'stillpress')} name="postsPerRss" type="number" min={1} max={100} required value={form.postsPerRss}
           onChange={count('postsPerRss')} error={errors.postsPerRss} />
         <fieldset>
-          <legend>Permalinks</legend>
+          <legend>{__('Permalinks', 'stillpress')}</legend>
           <div className="field">
-            <label htmlFor="preset">Structure</label>
+            <label htmlFor="preset">{__('Structure', 'stillpress')}</label>
             <select id="preset" value={preset} onChange={(e) => {
               setPreset(e.target.value);
               if (e.target.value !== CUSTOM) setForm({ ...form, permalinkStructure: e.target.value });
             }}>
-              {PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              <option value={CUSTOM}>Custom</option>
+              {presets().map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              <option value={CUSTOM}>{__('Custom', 'stillpress')}</option>
             </select>
           </div>
-          <Field label="Permalink structure" name="permalinkStructure" required value={form.permalinkStructure}
+          <Field label={__('Permalink structure', 'stillpress')} name="permalinkStructure" required value={form.permalinkStructure}
             onChange={(e) => { setPreset(CUSTOM); text('permalinkStructure')(e); }} error={errors.permalinkStructure}
-            hint="A new structure applies only to posts published afterwards. Existing permalinks never change." />
-          <Field label="Category base" name="categoryBase" required value={form.categoryBase} onChange={text('categoryBase')}
-            error={errors.categoryBase} hint="Changing a base redirects the old archive addresses and republishes the site." />
-          <Field label="Tag base" name="tagBase" required value={form.tagBase} onChange={text('tagBase')} error={errors.tagBase} />
+            hint={__('A new structure applies only to posts published afterwards. Existing permalinks never change.', 'stillpress')} />
+          <Field label={__('Category base', 'stillpress')} name="categoryBase" required value={form.categoryBase} onChange={text('categoryBase')}
+            error={errors.categoryBase} hint={__('Changing a base redirects the old archive addresses and republishes the site.', 'stillpress')} />
+          <Field label={__('Tag base', 'stillpress')} name="tagBase" required value={form.tagBase} onChange={text('tagBase')} error={errors.tagBase} />
         </fieldset>
         <fieldset>
-          <legend>Writing</legend>
+          <legend>{__('Writing', 'stillpress')}</legend>
           <div className="field">
-            <label htmlFor="default-category">Default post category</label>
+            <label htmlFor="default-category">{__('Default post category', 'stillpress')}</label>
             <select id="default-category" value={form.defaultCategory ?? ''} aria-invalid={errors.defaultCategory ? 'true' : undefined}
               aria-describedby={errors.defaultCategory ? 'default-category-error' : 'default-category-hint'}
               onChange={(e) => setForm({ ...form, defaultCategory: e.target.value ? Number(e.target.value) : null })}>
-              <option value="">Created on the first post (Uncategorized)</option>
+              <option value="">{__('Created on the first post (Uncategorized)', 'stillpress')}</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             {errors.defaultCategory
               ? <p id="default-category-error" className="error">{errors.defaultCategory}</p>
-              : <p id="default-category-hint" className="hint">Posts published without a category go here.</p>}
+              : <p id="default-category-hint" className="hint">{__('Posts published without a category go here.', 'stillpress')}</p>}
           </div>
           <div className="field">
-            <label htmlFor="comments">Comments on new items</label>
+            <label htmlFor="comments">{__('Comments on new items', 'stillpress')}</label>
             <select id="comments" value={form.defaultCommentStatus}
               onChange={(e) => setForm({ ...form, defaultCommentStatus: e.target.value as SiteSettings['defaultCommentStatus'] })}>
-              <option value="open">Open</option>
-              <option value="closed">Closed</option>
+              <option value="open">{__('Open', 'stillpress')}</option>
+              <option value="closed">{__('Closed', 'stillpress')}</option>
             </select>
           </div>
         </fieldset>
         {message && <p role="alert" className="error">{message}</p>}
-        {saved && <p role="status">Saved. Changes that affect every page are being published.</p>}
-        <button type="submit" className="primary">Save settings</button>
+        {saved && <p role="status">{__('Saved. Changes that affect every page are being published.', 'stillpress')}</p>}
+        <button type="submit" className="primary">{__('Save settings', 'stillpress')}</button>
       </form>
       <ResetSite title={siteTitle} />
     </Shell>
   );
 }
 
-const RESET_MESSAGES: Record<string, string> = {
-  invalid_credentials: 'The password is wrong.',
-  rate_limited: 'Too many wrong passwords. Wait a few minutes and try again.',
-  import_running: 'An import is running. Reset after it ends.',
-  files: 'The site was reset, but some files could not be removed. See the server log.',
-};
+const resetMessages = (): Record<string, string> => ({
+  invalid_credentials: __('The password is wrong.', 'stillpress'),
+  rate_limited: __('Too many wrong passwords. Wait a few minutes and try again.', 'stillpress'),
+  import_running: __('An import is running. Reset after it ends.', 'stillpress'),
+  files: __('The site was reset, but some files could not be removed. See the server log.', 'stillpress'),
+});
 
 function ResetSite({ title }: { title: string }) {
   const navigate = useNavigate();
@@ -159,8 +160,8 @@ function ResetSite({ title }: { title: string }) {
       navigate('/');
     } catch (err) {
       const f = err as ApiError;
-      setMessage(f.field === 'confirm' ? 'Type the site title exactly.'
-        : f.error === 'csrf' ? f.message! : RESET_MESSAGES[f.error ?? ''] ?? 'Could not reset the site.');
+      setMessage(f.field === 'confirm' ? __('Type the site title exactly.', 'stillpress')
+        : f.error === 'csrf' ? f.message! : resetMessages()[f.error ?? ''] ?? __('Could not reset the site.', 'stillpress'));
     } finally {
       setBusy(false);
     }
@@ -169,18 +170,17 @@ function ResetSite({ title }: { title: string }) {
   return (
     <section className="danger" aria-labelledby="reset-heading">
       <hr />
-      <h2 id="reset-heading">Reset site</h2>
+      <h2 id="reset-heading">{__('Reset site', 'stillpress')}</h2>
       <p>
-        Deletes all posts, pages, media, users other than you, categories, redirects and settings. This cannot be
-        undone; copy the data directory first if you may want it back.
+        {__('Deletes all posts, pages, media, users other than you, categories, redirects and settings. This cannot be undone; copy the data directory first if you may want it back.', 'stillpress')}
       </p>
       <form onSubmit={reset}>
-        <Field label="Your password" name="reset-password" type="password" autoComplete="current-password" required
+        <Field label={__('Your password', 'stillpress')} name="reset-password" type="password" autoComplete="current-password" required
           value={password} onChange={(e) => setPassword(e.target.value)} />
-        <Field label={`Type the site title (${title}) to confirm`} name="reset-confirm" required autoComplete="off"
+        <Field label={sprintf(__('Type the site title (%s) to confirm', 'stillpress'), title)} name="reset-confirm" required autoComplete="off"
           value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         {message && <p role="alert" className="error">{message}</p>}
-        <button type="submit" className="danger" disabled={busy || !password || confirm !== title}>Reset site</button>
+        <button type="submit" className="danger" disabled={busy || !password || confirm !== title}>{__('Reset site', 'stillpress')}</button>
       </form>
     </section>
   );
