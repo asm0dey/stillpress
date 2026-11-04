@@ -69,6 +69,7 @@ Split into three plans (agreed 2026-11-04):
 - 02b: the import screen stops polling while a CLI import runs in another process (reload needed).
 - 02b: `Import.tsx` uses `status!` where a local alias would narrow; `catch` blocks cast `e as ApiError` instead of a type guard.
 - 02c: possible HTTP/2 cleartext (h2c, prior knowledge) bodies without `Content-Length` bypass `BodyLimitFilter`; check with `curl --http2-prior-knowledge`, or set `quarkus.http.http2=false`.
+- 02c: the `quarkus-rest-csrf` token cookie is unsigned double-submit; a same-site sibling subdomain could plant a token cookie and submit a matching multipart form to `/admin/api/import`. Set `quarkus.rest-csrf.token-signature-key` from a persisted secret (the Tink-managed secrets work).
 - 02c: set-password hashes the new password before consuming the token, so an invalid token still costs an Argon2 hash on an anonymous endpoint.
 - 02c: issuing a set-password link leaves the user's earlier links valid.
 - 02c: `LoginLimiter.prune()` walks both maps on every call under one lock.
