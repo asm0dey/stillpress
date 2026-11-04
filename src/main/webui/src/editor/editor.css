@@ -24,7 +24,6 @@
   font: 600 2rem/1.25 Georgia, serif; border: 1px solid transparent; border-radius: var(--radius); background: var(--color-card);
 }
 .sp-title:hover { border-color: var(--color-border); }
-.sp-title-static { max-width: 650px; margin: var(--space-4) auto; }
 .sp-canvas { flex: 1; min-height: 400px; margin: 0 var(--space-3) var(--space-3); background: var(--color-card); border: 1px solid var(--color-border); }
 .sp-canvas > div { height: 100%; }
 

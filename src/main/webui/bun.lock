@@ -6,6 +6,7 @@
       "name": "stillpress-admin",
       "dependencies": {
         "@wordpress/api-fetch": "8.1.0",
+        "@wordpress/autop": "5.1.0",
         "@wordpress/block-editor": "20.0.0",
         "@wordpress/block-library": "12.1.0",
         "@wordpress/blocks": "17.1.0",
@@ -22,6 +23,7 @@
         "react": "19.3.1",
         "react-dom": "19.3.1",
         "react-router": "8.5.1",
+        "tinymce": "4.9.11",
       },
       "devDependencies": {
         "@types/bun": "1.4.4",
@@ -629,6 +631,8 @@
     "temml": ["temml@0.10.34", "", {}, "sha512-f3b5CaPwPvMviA+CtHy0qoIGWvzpRrNpXmGRc/Y1jc9gAYy+xOlndJFyn7Vfcz7cBcS8QRvv8z0EEH59sHCQxg=="],
 
     "tinyglobby": ["tinyglobby@0.2.17", "", { "dependencies": { "fdir": "^6.5.0", "picomatch": "^4.0.4" } }, "sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g=="],
+
+    "tinymce": ["tinymce@4.9.11", "", {}, "sha512-nkSLsax+VY5DBRjMFnHFqPwTnlLEGHCco82FwJF2JNH6W+5/ClvNC1P4uhD5lXPDNiDykSHR0XJdEh7w/ICHzA=="],
 
     "tldts": ["tldts@7.4.19", "", { "dependencies": { "tldts-core": "^7.4.19" }, "bin": { "tldts": "bin/cli.js" } }, "sha512-48dH6aSpQnpbzDUc4vIQZ1VjB8tkK+e8c1yx05/SZK+rkssgjEOlxDd/yU8/a4vGYQ9vRgJr9dwMq9TJ0b3X2Q=="],
 

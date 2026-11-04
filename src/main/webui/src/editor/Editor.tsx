@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link, useNavigate, useParams } from 'react-router';
 import '@wordpress/format-library';
 import { registerCoreBlocks } from '@wordpress/block-library';
-import { type Block as BlockInstance, createBlock, parse, serialize } from '@wordpress/blocks';
+import { type Block as BlockInstance, createBlock, serialize } from '@wordpress/blocks';
 import {
   BlockCanvas, BlockEditorKeyboardShortcuts, BlockEditorProvider, BlockList, BlockSettingsMenuControls, Inserter,
   store as blockEditorStore,
@@ -17,6 +17,7 @@ import { installWordPressApi } from './wpapi.ts';
 import { picked, upload, uploadError } from './MediaLibrary.tsx';
 import Sidebar, { type Draft } from './Sidebar.tsx';
 import { Edits } from './edits.ts';
+import { bodyFormatOf, bodyOf, installClassicEditor, toBlocks } from './classic.ts';
 import '@wordpress/components/build-style/style.css';
 import '@wordpress/block-editor/build-style/style.css';
 // format-library does not export its stylesheet
@@ -34,6 +35,9 @@ registerCoreBlocks();
 const CANVAS_ASSETS = { styles: `<style>${componentsCss}${contentCss}${blocksCss}${blocksEditorCss}${blocksThemeCss}</style>`, scripts: '' };
 const CANVAS_STYLES = [{ css: 'body { font-family: Georgia, serif; font-size: 1.125rem; line-height: 1.6; padding: 24px; }' }];
 const AUTOSAVE_MS = 60_000;
+
+const hasClassic = (blocks: BlockInstance[]): boolean =>
+  blocks.some((b) => b.name === 'core/freeform' || hasClassic(b.innerBlocks));
 
 let installedFor: number | null = null;
 
@@ -115,8 +119,9 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   const [autosaveAt, setAutosaveAt] = useState<string | null>(null);
   const [editingRef, setEditingRef] = useState<number | null>(null);
   const edits = useRef(new Edits(''));
-  const latest = useRef({ title, blocks, excerpt: '' });
-  latest.current = { title, blocks, excerpt: draft?.excerpt ?? '' };
+  const opened = useRef({ serialized: '', body: '' });
+  const latest = useRef({ title, blocks, excerpt: '', format: item?.bodyFormat });
+  latest.current = { title, blocks, excerpt: draft?.excerpt ?? '', format: item?.bodyFormat };
 
   const role = session.role;
   const editor = role === 'administrator' || role === 'editor';
@@ -130,6 +135,8 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
         ]);
         setCategories(cats);
         setTags(tagList);
+        // the Classic block's edit modal needs TinyMCE the moment it opens
+        if (it.bodyFormat === 'classic') await installClassicEditor();
         load(it, tagList);
         setAutosaveAt(it.autosave?.createdAt ?? null);
         if (it.type === 'page') allPages().then(setPages, () => {});
@@ -144,10 +151,11 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   function load(it: Item, tagList: TermView[]) {
     setItem(it);
     setTitle(it.title);
-    const parsed = it.bodyFormat === 'blocks' ? parse(it.body) : [];
+    const parsed = toBlocks(it.body, it.bodyFormat);
     setBlocks(parsed);
     setDraft(draftOf(it, tagList));
-    edits.current = new Edits(serialize(parsed));
+    opened.current = { serialized: serialize(parsed), body: it.body };
+    edits.current = new Edits(opened.current.serialized);
     setDirty(false);
   }
 
@@ -172,17 +180,19 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     return () => window.removeEventListener('beforeunload', warn);
   }, [unsaved]);
 
-  const classic = item?.bodyFormat === 'classic';
+  // a Classic block inserted into a blocks post
+  useEffect(() => { if (hasClassic(blocks)) installClassicEditor(); }, [blocks]);
 
   const autosave = useCallback(async () => {
-    if (!edits.current.needsAutosave || classic) return;
-    const { title: t, blocks: b, excerpt } = latest.current;
+    const { title: t, blocks: b, excerpt, format } = latest.current;
+    // the autosave carries no format; the preview renders it in the item's stored one
+    if (!edits.current.needsAutosave || bodyFormatOf(b) !== format) return;
     const mark = edits.current.mark();
     try {
-      await api(`/items/${id}/autosave`, { method: 'PUT', body: { title: t, body: serialize(b), excerpt } });
+      await api(`/items/${id}/autosave`, { method: 'PUT', body: { title: t, body: bodyOf(b, opened.current), excerpt } });
       edits.current.autosaved(mark);
     } catch { /* retried at the next tick */ }
-  }, [id, classic]);
+  }, [id]);
 
   useEffect(() => {
     const timer = setInterval(autosave, AUTOSAVE_MS);
@@ -193,7 +203,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     try {
       const a = await api<{ title: string; body: string; excerpt: string }>(`/items/${id}/autosave`);
       setTitle(a.title);
-      setBlocks(parse(a.body));
+      setBlocks(toBlocks(a.body, latest.current.format ?? 'blocks'));
       setDraft((d) => d && { ...d, excerpt: a.excerpt ?? '' });
       markDirty();
       setAutosaveAt(null);
@@ -253,11 +263,12 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
         }
       }
       const mark = edits.current.mark();
-      const body = serialize(blocks);
+      const serialized = serialize(blocks);
+      const body = bodyOf(blocks, opened.current);
       const saved = await api<Item>(`/items/${id}`, {
         method: 'PUT',
         body: {
-          title, slug: draft.slug, body: classic ? undefined : body, bodyFormat: item.bodyFormat,
+          title, slug: draft.slug, body, bodyFormat: bodyFormatOf(blocks),
           excerpt: draft.excerpt, status, localDate: draft.dateChanged ? draft.date : undefined,
           categories: item.type === 'post' ? draft.categories : undefined,
           tags: item.type === 'post' ? await tagIds(draft.tags) : undefined,
@@ -268,7 +279,8 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
         },
       });
       setItem(saved);
-      edits.current.saved(mark, body);
+      edits.current.saved(mark, serialized);
+      opened.current = { serialized, body };
       // sidebar changes made while the save was in flight stay in the form
       if (!edits.current.dirty) setDraft((d) => d && { ...draftOf(saved, tags), tags: d.tags });
       setDirty(edits.current.dirty);
@@ -304,6 +316,8 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     __experimentalReusableBlocks: reusable ?? [],
     __experimentalBlockPatterns: [],
     __unstableResolvedAssets: CANVAS_ASSETS,
+    // the Classic block copies these into TinyMCE's iframe
+    styles: CANVAS_STYLES,
     onNavigateToEntityRecord: ({ postId, postType }: { postId: string | number; postType: string }) => {
       if (postType === 'wp_block') setEditingRef(Number(postId));
     },
@@ -321,12 +335,12 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   const saveBar = (
     <div className="sp-editor__actions">
       {revisions > 0 && <Button variant="tertiary" onClick={() => navigate(`/edit/${id}/revisions`)}>Revisions ({revisions})</Button>}
-      {!classic && <Button variant="tertiary" onClick={preview}>Preview</Button>}
-      {!classic && !published && <Button variant="secondary" disabled={busy} onClick={() => save('draft')}>Save draft</Button>}
-      {!classic && !canPublish && (
+      {bodyFormatOf(blocks) === item.bodyFormat && <Button variant="tertiary" onClick={preview}>Preview</Button>}
+      {!published && <Button variant="secondary" disabled={busy} onClick={() => save('draft')}>Save draft</Button>}
+      {!canPublish && (
         <Button variant="primary" disabled={busy} onClick={() => save('pending')}>Submit for review</Button>
       )}
-      {!classic && canPublish && (
+      {canPublish && (
         <Button variant="primary" disabled={busy} onClick={() => save(target)}>
           {published ? (future && item.status !== 'future' ? 'Schedule' : 'Update') : future ? 'Schedule' : 'Publish'}
         </Button>
@@ -349,31 +363,18 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
           <Button variant="link" onClick={() => setAutosaveAt(null)}>Dismiss</Button>
         </div>
       )}
-      {classic && <div role="status" className="sp-notice">Classic content: editing arrives with the Classic block</div>}
     </>
   );
 
-  const header = (inserter: boolean) => (
+  const header = (
     <header className="sp-editor__bar">
       <Link to={back} onClick={(e) => { if (unsaved && !confirm('Leave without saving your changes?')) e.preventDefault(); }}>
         ← {item.type === 'page' ? 'Pages' : 'Posts'}
       </Link>
-      {inserter && <Inserter />}
+      <Inserter />
       {saveBar}
     </header>
   );
-
-  if (classic) {
-    return (
-      <div className="sp-editor">
-        {header(false)}
-        <div className="sp-editor__main"><div className="sp-editor__content">
-          {notices}
-          <h1 className="sp-title-static">{title || '(no title)'}</h1>
-        </div></div>
-      </div>
-    );
-  }
 
   const sidebar = (
     <aside className="sp-editor__sidebar" aria-label="Settings">
@@ -387,12 +388,12 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
       <div className="sp-editor">
         {editingRef !== null ? (
           <ReusableWorkspace id={editingRef} settings={settings} onBack={() => setEditingRef(null)}
-            header={header(true)} sidebar={sidebar} notices={notices} />
+            header={header} sidebar={sidebar} notices={notices} />
         ) : (
           <BlockEditorProvider value={blocks} settings={settings}
             onInput={changeBlocks} onChange={changeBlocks}>
             <BlockEditorKeyboardShortcuts.Register />
-            {header(true)}
+            {header}
             <div className="sp-editor__main">
               <div className="sp-editor__content">
                 {notices}

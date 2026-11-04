@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@wordpress/api-fetch": "8.1.0",
+    "@wordpress/autop": "5.1.0",
     "@wordpress/block-editor": "20.0.0",
     "@wordpress/block-library": "12.1.0",
     "@wordpress/blocks": "17.1.0",
@@ -25,7 +26,8 @@
     "@wordpress/notices": "6.1.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "react-router": "8.5.1"
+    "react-router": "8.5.1",
+    "tinymce": "4.9.11"
   },
   "devDependencies": {
     "@types/bun": "1.4.4",
