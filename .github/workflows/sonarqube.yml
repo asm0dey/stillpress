@@ -47,10 +47,10 @@ jobs:
             -Dsonar.projectKey=asm0dey_stillpress
             -Dsonar.sources=src/main
             -Dsonar.tests=src/test,src/main/webui/src
-            -Dsonar.test.inclusions=src/test/**,src/main/webui/src/**/*.test.ts
+            -Dsonar.test.inclusions=src/test/**,src/main/webui/src/**/*.test.ts,src/main/webui/src/**/*.test.tsx,src/main/webui/src/testapi.ts,src/main/webui/src/editor/testdom.ts
             -Dsonar.java.binaries=target/classes
             -Dsonar.java.test.binaries=target/test-classes
-            -Dsonar.exclusions=src/main/webui/node_modules/**,src/main/webui/dist/**,src/main/webui/coverage/**,**/*.test.ts
+            -Dsonar.exclusions=src/main/webui/node_modules/**,src/main/webui/dist/**,src/main/webui/coverage/**,**/*.test.ts,**/*.test.tsx,src/main/webui/src/testapi.ts,src/main/webui/src/editor/testdom.ts
             -Dsonar.coverage.jacoco.xmlReportPaths=target/jacoco-report/jacoco.xml
             -Dsonar.javascript.lcov.reportPaths=src/main/webui/coverage/lcov.info
             -Dsonar.issue.ignore.multicriteria=feedProlog
