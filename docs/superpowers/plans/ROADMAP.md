@@ -19,8 +19,8 @@ Migration order from the spec (§10): the blog site goes first (plans 01-04), th
 Split into three plans (agreed 2026-11-04):
 
 - **02a admin foundation** (done; `2026-11-04-stillpress-02a-admin-foundation.md`, results in `2026-11-04-stillpress-02a-results.md`): Mode 2 nginx include, setup wizard with token and WXR upload, admin shell (Quinoa + Bun), `/wp-admin` redirects, password login with rate limiting, users and roles, CLI password reset, server-side import-once guard.
-- **02b editing and publishing**: editor, WordPress API calls translated in the browser, classic block, reusable blocks, media library, statuses and scheduling, incremental and background republish, preview, revisions, admin i18n.
-  - Scheduled publishing: choose with the user at plan time between in-process db-scheduler (the precedent in four projects) and quarkus-scheduler.
+- **02b editing and publishing** (done; `2026-11-04-stillpress-02b-editing-publishing.md`, results in `2026-11-04-stillpress-02b-results.md`): editor, WordPress API calls translated in the browser, classic block, reusable blocks, media library, statuses and scheduling, incremental and background republish, preview, revisions, admin i18n, site settings, reset, and back-office parity for a site started empty.
+  - Scheduled publishing: db-scheduler (chosen at plan time). Replicas stay possible on PostgreSQL; H2 means a single node.
 - **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications.
   - Secrets stored at rest (TOTP seeds, SMTP password, Turnstile secret, ALTCHA HMAC key) are encrypted with Google Tink: a keyset, per-row AEAD, and a keyed HMAC for anything looked up by value (precedent `encryption-tink`).
 
@@ -57,17 +57,17 @@ Split into three plans (agreed 2026-11-04):
 
 ### Carried over from 02a (acceptance run)
 
-- 02b: an author who opens `/admin/users` directly sees "Could not load the users." and the Add user form; hide screens the role cannot use.
+- Done in 02b: an author who opens `/admin/users` directly sees "Could not load the users." and the Add user form; hide screens the role cannot use.
 - 02c: set-password links are built from the imported site URL, so before cutover they point at the live WordPress host; invites and email reset reuse the same builder and should use the admin's own host until cutover.
 
 ### Carried over from 02a (code reviews)
 
-- 02b: in Mode 2 nginx's `^~ /admin` keeps `client_max_body_size 1g`, so nginx spools large anonymous bodies to disk before Stillpress answers 413; split it per location (1g only for `/admin/api/import` and the media upload).
-- 02b: new upload endpoints under `/admin/api/` must be added to `BodyLimitFilter`'s exclusions or they get 413.
-- 02b: admin shell: the route gate's `ready` stays true across navigation; the dashboard's 401 goes to `/login` without `next`; no cancellation of stale responses; field errors are not announced (no focus move, no `aria-live`).
-- 02b: users screen: create lacks trim and length checks (a 61-character login gives 500); a duplicate-login race gives 500, not 409; duplicate emails are accepted; setup's upgrade path ignores the typed email and display name.
-- 02b: the import screen stops polling while a CLI import runs in another process (reload needed).
-- 02b: `Import.tsx` uses `status!` where a local alias would narrow; `catch` blocks cast `e as ApiError` instead of a type guard.
+- Done in 02b: in Mode 2 nginx's `^~ /admin` keeps `client_max_body_size 1g`, so nginx spools large anonymous bodies to disk before Stillpress answers 413; split it per location (1g only for `/admin/api/import` and the media upload).
+- Done in 02b: new upload endpoints under `/admin/api/` must be added to `BodyLimitFilter`'s exclusions or they get 413.
+- Done in 02b: admin shell: the route gate's `ready` stays true across navigation; the dashboard's 401 goes to `/login` without `next`; no cancellation of stale responses; field errors are not announced (no focus move, no `aria-live`).
+- Done in 02b: users screen: create lacks trim and length checks (a 61-character login gives 500); a duplicate-login race gives 500, not 409; duplicate emails are accepted; setup's upgrade path ignores the typed email and display name.
+- Done in 02b: the import screen stops polling while a CLI import runs in another process (reload needed).
+- Done in 02b: `Import.tsx` uses `status!` where a local alias would narrow; `catch` blocks cast `e as ApiError` instead of a type guard.
 - 02c: possible HTTP/2 cleartext (h2c, prior knowledge) bodies without `Content-Length` bypass `BodyLimitFilter`; check with `curl --http2-prior-knowledge`, or set `quarkus.http.http2=false`.
 - 02c: the `quarkus-rest-csrf` token cookie is unsigned double-submit; a same-site sibling subdomain could plant a token cookie and submit a matching multipart form to `/admin/api/import`. Set `quarkus.rest-csrf.token-signature-key` from a persisted secret (the Tink-managed secrets work).
 - 02c: set-password hashes the new password before consuming the token, so an invalid token still costs an Argon2 hash on an anonymous endpoint.
@@ -76,6 +76,14 @@ Split into three plans (agreed 2026-11-04):
 - 02c: setup returns 500 on a request without a `Host` header; IPv6 brackets in `home_url` are unchecked.
 - Docs: behind a CDN or load balancer, overwriting `X-Forwarded-For` with `$remote_addr` makes every client share one address; the README needs a line when that setup is supported.
 - Docs: `open_file_cache` at http level delays the release swap until `open_file_cache_valid` expires.
+
+### Carried over from 02b
+
+The open items from the 02b ledger, grouped by owner. Each was reviewed and accepted as minor when it was found.
+
+- 02c: no unique index on `lower(email)` (concurrent creates can share an email), and one email error text is misleading; an over-long password counts against the account's login bucket; "pending review" email notifications.
+- Plan 03: the editor shows galleries in one column, and layout settings reach the editor without the global-styles CSS that the style generator will provide; the home page `<title>` repeats the site title instead of "Title – Tagline".
+- Plan 04: in the Classic block's canvas a YouTube iframe shows "Error 153" (blob: canvas, no Referer), imported embed previews are cropped and `[caption]` shows raw in TinyMCE (`wpeditimage` ships with PHP).
 
 ## Plan 03: Themes & Site Editor
 
@@ -171,6 +179,23 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - nginx (02a): the `root` path is unquoted in the template; HEAD is untested through nginx; small Mode 1/Mode 2 differences (POST to a static file gives 405, `%2F` is decoded by nginx, a bare `?p` is served by nginx).
 - Tests (02a): `PostgresAccountsTest` waits on futures without a timeout; `postgres:18` is written both in the test and in the codegen config; every `@QuarkusTest` augmentation runs `bun install` and a Vite build; the root-skip in `ReleaseSwitcherTest` checks `user.name`, not the uid.
 - Admin API: `ImportResource` builds `Map.of("error", e.getMessage())`, which throws (500) when the exception has no message. `api.ts`: the `CSRF_MESSAGE` doc comment sits between `ApiError`'s comment and the interface.
+
+### Replicas (PostgreSQL only)
+
+- The in-memory login limiter and the import progress are per process; a second replica has its own.
+- Only one node publishes at a time (row lock on `publish_lock`), and its `output/` must be synced to the other nodes by an external tool; Stillpress does not copy releases.
+- CLI `publish` beside a live server is now safe: it takes the same row lock as the server's publish task.
+
+### From 02b
+
+- Publishing speed: an incremental publish re-renders every `/page/N/` and the feed of each listing the item appears in. On the real blog a one-post title edit took about 25 % of a full publish (the plan expected under 10 %). Re-render only the pages whose entries changed when the order did not, and build feed items from fragments.
+- Publishing: H2 `LOCK_TIMEOUT=1h` is set for every connection, not only the lock's; the scheduler's `shutdownMaxWait` is the 30-minute default; `PublishLock` uses raw SQL, and its rollback in `finally` can mask the work's exception; `PublishQueue.snapshot` aggregates in Java and `done` binds one parameter per row; a failed after-commit schedule only logs (the sweep covers it); an incremental publish does not warn about permalink collisions; `ImportJob` marks the guard done and queues the publish in separate transactions; the publish failure message (which may contain paths) is shown to every role; the progress total leaves out media; media removed from `<data>/media` stays in incremental releases (a delete feature must queue `all`).
+- Permalinks and terms: `PermalinkStructure.render` throws on null fields; permalink inference picks the first category by our id, not WordPress's `term_id`; `?` redirect keys other than `p`, `page_id` and `attachment_id`, and %-encoded `from` values, never match; a path `to` containing `?#%` is mangled; term PUT replaces everything, unlike items; moving a base runs N×depth queries, is not checked against reserved paths and leaves no redirects for `/page/N/` and `/feed/` under the old base; the parent select does not hide descendants.
+- Uploads and media: a corrupt image header gives 500 instead of no dimensions; a file part without a filename gives 500; a contributor gets 403 only after the whole multipart body is spooled; authors can edit the title and alt of anyone's media (WordPress: their own); `compareAndSet` catches SQL class 23, not only 23505; `MediaService.store` closes the import before the extension check (safe by rollback); the oEmbed proxy has no response size cap; in Mode 2 a just-uploaded image is 404 in the editor until the media publish lands; the WXR upload is moved across filesystems without a reservation or fsync, and a failed `registerInterposedSynchronization` leaks an empty reserved file.
+- Import and reset: the `/import` route is gated on the state being closed, not on `importAllowed`; the shell's Import link flickers, hides silently when `/site` fails, and appears only after a reload following Reset; a set-password link also closes the import (kept: a token write is a write); `reset --yes` while serving leaves no setup token until restart; if deleting `import_state` in `finally` fails, the site stays closed until the next reset; the 500-file reset path is untested.
+- Editor and admin UI: about 15 MB of unused upload-media workers ship in the jar, and the entry chunk is 298 of 300 KB; the author select is administrator-only (editors cannot list users); a fragile `node_modules` CSS path; the translator lacks `media?include` and `OPTIONS settings` (console warnings); no focus move after a save error, and a repeated field error is not re-announced; the sidebar draft is not refreshed while a newer edit is pending; the block list is serialized on every change; `__experimentalValidateInput`; autosave and preview pause between Convert and Save; lightningcss `errorRecovery` is global; floatpanel z-index flattening; the restore screen shows a generic message without the list of violations, and a refused autosave is silent; broad cache invalidation after a block save; "Add new block" writes an empty row at once; no error boundary for a failed lazy chunk; the revisions screen has no "no differences" message, runs `diffLines` without `maxEditLength`, keeps its notice after a reload and shows browser time, not site time; the Classic block drops `&nbsp;` spacer paragraphs; TinyMCE and the import report stay English for server-written texts; the language switch reloads the page; the dashboard publish card lacks a stale-response guard; `Gate` blanks the tree on every navigation and `/session` is fetched up to three times; the Settings "(Uncategorized)" label is not localized; unused `type ApiError` imports in 14 files.
+- HTML policy (script-capable content): the test oracle does not flag `animate`/`set`, `javascript:` in mid-value or `style` `url(javascript:)` (the policy does); CSS-escaped `expression()` (old IE only); the generator's tag list lacks `i code small u s font nobr`; the stray-end-tag rule depends on jsoup's error wording; `<table><caption></b>` is refused although it is harmless.
+- Tests: `rolledBackRequestsLeaveNoTask`'s publish half, `PostgresJobsTest` (`<= 1`), `importStillAllowedRightAfterSetup` and `cliPublishAndTaskNeverOverlap` can pass without testing anything; no PostgreSQL coverage for `PublishLock` and `scheduled_tasks`; `JobsTest`'s control test relies on a spinning reader; `parallelAutosavesLeaveOneAutosave` and the concurrent-save test need PostgreSQL or real contention; no end-to-end 409 `import_running`; incremental publishing lacks tests that the previous release is unchanged, of failure paths and of category reassignment and term delete/reparent equivalence; refused block writes are not asserted to leave no revision or queue row; no go-live default-category or script/style excerpt tests; no contract test pinning the revision view keys; `AdminShellTest.siteRouteStillServesRoot` depends on another class's release; `MediaResourceTest` uses UTC, not the site zone; Spotless in the IDE flags `SessionAuthTest` while the CLI passes.
 
 ## Not in scope
 
