@@ -71,7 +71,7 @@ public class HtmlCheck {
      * The fragment checks, and when they pass, the rendered body. A rendered finding then comes from the reusable
      * blocks shown; when all faulty ones belong to editors, the message says so.
      */
-    private List<String> body(String source, String format, Function<Long, Optional<String>> lookup) {
+    List<String> body(String source, String format, Function<Long, Optional<String>> lookup) {
         var own = HtmlPolicy.fragment(source);
         if (!own.isEmpty() || source == null || source.isBlank()) {
             return own;
@@ -85,8 +85,14 @@ public class HtmlCheck {
         return editors ? rendered.stream().map(v -> v + EDITORS_BLOCK).toList() : rendered;
     }
 
+    /**
+     * The published form: violations, and balance so it cannot swallow what follows it on the page.
+     */
     private List<String> rendered(String source, String format, Function<Long, Optional<String>> lookup) {
-        return HtmlPolicy.violations(views.html(source, format, lookup));
+        var html = views.html(source, format, lookup);
+        var out = new LinkedHashSet<>(HtmlPolicy.inPublished(html));
+        out.addAll(HtmlPolicy.balanced(html));
+        return List.copyOf(out);
     }
 
     /**

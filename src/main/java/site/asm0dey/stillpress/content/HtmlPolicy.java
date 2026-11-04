@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import module java.base;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Comment;
+import org.jsoup.nodes.Element;
+import org.jsoup.parser.Parser;
 import site.asm0dey.stillpress.blocks.Block;
 import site.asm0dey.stillpress.blocks.BlockParser;
 import site.asm0dey.stillpress.blocks.ClassicContent;
@@ -35,6 +37,8 @@ public final class HtmlPolicy {
             List.of("youtube.com", "youtube-nocookie.com", "youtu.be", "vimeo.com", "player.vimeo.com");
     // block attributes a renderer may write into a link
     private static final Set<String> URL_KEYS = Set.of("url", "href", "src", "link");
+    // jsoup's parse error for an end tag with no open element: "Unexpected EndTag token [</div>] when in state …"
+    private static final Pattern STRAY_END_TAG = Pattern.compile("Unexpected EndTag token \\[</([^>\\s]+)");
     private static final Pattern IGNORED = Pattern.compile("[\\s\\p{Cntrl}]");
 
     private HtmlPolicy() {
@@ -72,26 +76,85 @@ public final class HtmlPolicy {
             }
         });
         var all = new ArrayList<>(BlockParser.delimiters(body));
+        var inserted = insertionPointsInHtml(body, all);
         Collections.sort(all);
         Collections.sort(asComments);
-        return all.equals(asComments) ? List.of() : List.of("block comment inside HTML");
+        return all.equals(asComments) && inserted ? List.of() : List.of("block comment inside HTML");
+    }
+
+    /**
+     * Whether, where each delimiter stands, a block's rendered HTML (which may start with a letter) is read as HTML
+     * content: not glued to a preceding {@code <}, {@code </} or {@code <!}, and not inside SVG or MathML.
+     */
+    private static boolean insertionPointsInHtml(String body, List<String> delimiters) {
+        int from = 0;
+        for (var d : delimiters) {
+            int at = body.indexOf(d, from);
+            from = at + d.length();
+            var id = "sp-insert-" + UUID.randomUUID();
+            var doc = Jsoup.parse(body.substring(0, at) + "x<sp-sentinel id=\"" + id + "\"></sp-sentinel>");
+            var sentinel = doc.getElementById(id);
+            if (sentinel == null || !sentinel.normalName().equals("sp-sentinel")) {
+                return false;
+            }
+            for (var e : sentinel.parents()) {
+                if (Set.of("svg", "math").contains(e.normalName())) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /**
      * {@code unclosed markup at the end} unless every tag, attribute, comment and raw-text element the fragment opens
      * is closed, so whatever follows it on a page (template markup, the next fragment) is parsed as written. A sentinel
      * element appended to the fragment must come out as the last child of {@code body}. The sentinel is a custom
-     * element, which, unlike {@code <b>}, does not break out of SVG or MathML.
+     * element, which, unlike {@code <b>}, does not break out of SVG or MathML; it follows a letter, so a fragment
+     * ending in {@code <} fails too. An end tag the fragment never opened
+     * ({@code stray </div> end tag}) would close the page's own container instead, so it is refused too; a stray
+     * {@code </p>} or {@code </br>} only adds an empty element.
      */
     public static List<String> balanced(String fragment) {
         if (fragment == null || fragment.isEmpty()) {
             return List.of();
         }
         var id = "sp-sentinel-" + UUID.randomUUID();
-        var doc = Jsoup.parse(fragment + "<sp-sentinel id=\"" + id + "\"></sp-sentinel>");
+        var parser = Parser.htmlParser().setTrackErrors(Integer.MAX_VALUE);
+        // the leading "x" turns a trailing "<" or "</" into a tag, as the next fragment's first letter would
+        var doc = Jsoup.parse(fragment + "x<sp-sentinel id=\"" + id + "\"></sp-sentinel>", "", parser);
+        var out = new LinkedHashSet<String>();
+        for (var error : parser.getErrors()) {
+            var m = STRAY_END_TAG.matcher(error.getErrorMessage());
+            if (m.find() && !Set.of("p", "br", "sp-sentinel").contains(m.group(1).toLowerCase(Locale.ROOT))) {
+                out.add("stray </" + m.group(1).toLowerCase(Locale.ROOT) + "> end tag");
+            }
+        }
         var sentinel = doc.getElementById(id);
-        var closed = sentinel != null && sentinel.parent() == doc.body() && sentinel.nextSibling() == null;
-        return closed ? List.of() : List.of("unclosed markup at the end");
+        // a trailing "<" makes "x<sp-sentinel" one tag name that still carries the id
+        if (sentinel == null || !sentinel.normalName().equals("sp-sentinel")) {
+            out.add("unclosed markup at the end");
+            return List.copyOf(out);
+        }
+        // open <p>s are harmless (wpautop leaves one): the next block-level element closes them by implied end tag
+        for (Element e = sentinel; e != doc.body(); e = e.parent()) {
+            if (e.nextSibling() != null || e != sentinel && !e.normalName().equals("p") || e.parent() == null) {
+                out.add("unclosed markup at the end");
+                break;
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    /**
+     * Violations of HTML as it is served: the markup only, no block delimiters or shortcodes left to expand.
+     */
+    public static List<String> inPublished(String html) {
+        var out = new LinkedHashSet<String>();
+        if (html != null && !html.isEmpty()) {
+            html(html, out);
+        }
+        return List.copyOf(out);
     }
 
     /**
@@ -101,6 +164,10 @@ public final class HtmlPolicy {
     public static List<String> fragment(String fragment) {
         var out = new LinkedHashSet<>(violations(fragment));
         out.addAll(balanced(fragment));
+        // what an excerpt or classic body publishes as; block bodies are also judged rendered (HtmlCheck)
+        if (fragment != null && !fragment.isEmpty()) {
+            out.addAll(balanced(ClassicContent.toHtml(fragment)));
+        }
         out.addAll(structure(fragment));
         return List.copyOf(out);
     }

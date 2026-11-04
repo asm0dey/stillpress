@@ -5,8 +5,8 @@ import module java.base;
 /**
  * Test helper: a whole export collected in memory through the streaming {@link WxrReader}.
  */
-record WxrDocument(WxrSite site, List<WxrAuthor> authors, List<WxrTerm> terms, List<WxrItem> items) {
-    static WxrDocument read(InputStream in) {
+public record WxrDocument(WxrSite site, List<WxrAuthor> authors, List<WxrTerm> terms, List<WxrItem> items) {
+    public static WxrDocument read(InputStream in) {
         var site = new WxrSite[1];
         var authors = new ArrayList<WxrAuthor>();
         var terms = new ArrayList<WxrTerm>();

@@ -144,4 +144,40 @@ class HtmlPolicyTest {
         );
         assertThat(HtmlPolicy.balanced(null)).isEmpty();
     }
+
+    @Test
+    void balanceIsJudgedOnThePublishedForm() {
+        // wpautop leaves "<li<br />" open as a start tag
+        assertThat(HtmlPolicy.fragment("<li <p><li ")).containsExactly("unclosed markup at the end");
+        // wpautop puts "</p><pre" inside the alt value, leaving "</pre>" with nothing to close
+        assertThat(HtmlPolicy.fragment("<img alt=\"<pre\" src=x> t </pre>")).containsExactly("stray </pre> end tag");
+        // wpautop leaves the last paragraph open; the next block-level element closes it
+        assertThat(HtmlPolicy.balanced("<p>one</p>\n<p>two")).isEmpty();
+        assertThat(HtmlPolicy.fragment("First line\n\nSecond <em>line</em>")).isEmpty();
+        assertThat(HtmlPolicy.balanced("<p><a href=\"/x\">open")).containsExactly("unclosed markup at the end");
+    }
+
+    @Test
+    void counterexamplesFoundByPropertyTests() {
+        // a stray end tag would close the archive entry's own <div>
+        assertThat(HtmlPolicy.balanced("</div src=' onerror=alert(1)>' onerror=alert(1)>"))
+            .containsExactly("stray </div> end tag");
+        assertThat(HtmlPolicy.balanced("<p>a</p></p>a</br>")).isEmpty();
+        // a block ending in "<" next to one starting with a letter forms a tag
+        for (var end : List.of("math onclick=<", "a</", "a<!", "a<!-")) {
+            assertThat(HtmlPolicy.balanced(end)).as(end).contains("unclosed markup at the end");
+        }
+        assertThat(HtmlPolicy.balanced("1 < 2")).isEmpty();
+        // a "<" right before a block reference glues onto the block's first letters
+        assertThat(HtmlPolicy.structure("<<!-- wp:block {\"ref\":7} /-->&#x3c;")).containsExactly(
+                "block comment inside HTML"
+        );
+        assertThat(HtmlPolicy.structure("<svg><!-- wp:block {\"ref\":7} /--></svg>"))
+            .containsExactly("block comment inside HTML");
+        assertThat(HtmlPolicy.structure("1 < <!-- wp:block {\"ref\":7} /-->")).isEmpty();
+        // served block HTML expands no shortcodes: "</<" opens a bogus comment, so nothing here is live
+        var served = "[caption id=\"a\" width=\"300\"]</<img src=x alt='' onerror=alert(1)>[/caption]";
+        assertThat(HtmlPolicy.inPublished(served)).isEmpty();
+        assertThat(HtmlPolicy.violations(served)).containsExactly("onerror attribute on <img>");
+    }
 }

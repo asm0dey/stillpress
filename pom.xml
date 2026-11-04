@@ -26,6 +26,7 @@
         <quarkus-jooq.version>2.2.0</quarkus-jooq.version>
         <jooq.version>3.21.9</jooq.version>
         <testcontainers.version>2.0.5</testcontainers.version>
+        <jetcheck.version>0.3.0</jetcheck.version>
         <postgresql.version>42.7.14</postgresql.version>
         <db.codegen.schema>public</db.codegen.schema>
         <surefire-plugin.version>3.6.1</surefire-plugin.version>
@@ -140,6 +141,12 @@
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
             <version>3.27.7</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>jetCheck</artifactId>
+            <version>${jetcheck.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>

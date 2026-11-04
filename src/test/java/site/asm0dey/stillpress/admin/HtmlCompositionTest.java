@@ -178,4 +178,32 @@ class HtmlCompositionTest {
     private static RequestSpecification as(String cookie) {
         return csrf().contentType(JSON).cookie("sp_session", cookie);
     }
+
+    @Test
+    void sampleImportedPostsSaveUnchanged() {
+        var doc = site.asm0dey.stillpress.wxr.WxrDocument.read(getClass()
+            .getClassLoader()
+            .getResourceAsStream("wxr/sample-blog.xml")
+        );
+        var authorId = users.findByLogin("author").orElseThrow().getId();
+        var posts = doc
+            .items()
+            .stream()
+            .filter(i -> "post".equals(i.postType()))
+            .toList();
+        assertThat(posts).isNotEmpty();
+        for (var i : posts) {
+            var p = ItemsResourceTest.create(author, "post");
+            db
+                .update(ITEM)
+                .set(ITEM.BODY, i.content())
+                .set(ITEM.EXCERPT, i.excerpt())
+                .set(ITEM.BODY_FORMAT, i.content().contains("<!-- wp:") ? "blocks" : "classic")
+                .set(ITEM.AUTHOR_ID, authorId)
+                .where(ITEM.ID.eq(p.getLong("id")))
+                .execute();
+            var stored = ItemsResourceTest.get(author, p.getLong("id"));
+            ItemsResourceTest.update(author, stored, Map.of("title", i.title())).then().statusCode(200);
+        }
+    }
 }
