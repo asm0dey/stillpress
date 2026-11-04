@@ -70,6 +70,12 @@ test('a 403 on save surfaces as an apiFetch error with its status', async () => 
     .rejects.toEqual({ code: 'forbidden', message: 'forbidden', data: { status: 403 } });
 });
 
+test('an unsafe_html refusal keeps its violations for the editor to list', async () => {
+  reply = () => json({ error: 'unsafe_html', field: 'body', violations: ['<script> element'] }, 400);
+  await expect(call({ path: '/wp/v2/blocks/3', method: 'PUT', data: { content: '<script></script>' } }))
+    .rejects.toEqual({ code: 'unsafe_html', message: 'unsafe_html', data: { status: 400, violations: ['<script> element'] } });
+});
+
 test('OPTIONS answers Allow from the role and the block\'s canEdit', async () => {
   const allow = async (path: string) => ((await call({ path, method: 'OPTIONS', parse: false })) as Response).headers.get('allow');
   expect(await allow('/wp/v2/blocks')).toEqual('GET, POST');

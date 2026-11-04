@@ -100,6 +100,13 @@ public final class Capabilities {
         return r != CONTRIBUTOR;
     }
 
+    /**
+     * WordPress's {@code unfiltered_html}: saving HTML that can run script.
+     */
+    public static boolean canPostUnfilteredHtml(Role r) {
+        return editor(r);
+    }
+
     public static boolean canRepublish(Role r) {
         return r == ADMINISTRATOR;
     }

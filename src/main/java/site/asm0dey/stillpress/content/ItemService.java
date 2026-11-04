@@ -76,18 +76,40 @@ public class ItemService {
     ) {}
 
     /**
-     * A refused request: 400 (with the offending {@code field}), 403, 404 or 409.
+     * A refused request: 400 (with the offending {@code field}, and for {@code unsafe_html} the {@code violations}),
+     * 403, 404 or 409.
      */
     public static final class Refused extends RuntimeException {
         public final int status;
         public final String error;
         public final String field;
+        public final List<String> violations;
 
         public Refused(int status, String error, String field) {
+            this(status, error, field, null);
+        }
+
+        public Refused(int status, String error, String field, List<String> violations) {
             super(error);
             this.status = status;
             this.error = error;
             this.field = field;
+            this.violations = violations;
+        }
+
+        /**
+         * The JSON error body: {@code error}, then {@code field} and {@code violations} when present.
+         */
+        public Map<String, Object> body() {
+            var body = new LinkedHashMap<String, Object>();
+            body.put("error", error);
+            if (field != null) {
+                body.put("field", field);
+            }
+            if (violations != null) {
+                body.put("violations", violations);
+            }
+            return body;
         }
     }
 
@@ -151,7 +173,6 @@ public class ItemService {
      */
     @Transactional
     public ItemRecord update(long id, Update u, Actor a) {
-        guard.close();
         var r = items
             .lock(id)
             .orElseThrow(() -> new Refused(404, "not_found", null));
@@ -161,6 +182,8 @@ public class ItemService {
         if (!Capabilities.canEdit(a.role(), a.userId(), r)) {
             throw forbidden();
         }
+        HtmlPolicy.check(a.role(), u.title(), u.body(), u.excerpt());
+        guard.close();
         var wasPublished = "publish".equals(r.getStatus());
         var now = now();
         var dateChanged = u.localDate() != null && !u.localDate().equals(permalinks.localDate(r));
@@ -301,7 +324,6 @@ public class ItemService {
 
     @Transactional
     public void autosave(long id, Actor a, String title, String body, String excerpt) {
-        guard.close();
         // the lock keeps two autosaves of one user from both inserting
         var r = items
             .lock(id)
@@ -309,6 +331,8 @@ public class ItemService {
         if (!Capabilities.canEdit(a.role(), a.userId(), r)) {
             throw forbidden();
         }
+        HtmlPolicy.check(a.role(), title, body, excerpt);
+        guard.close();
         revisions.autosave("item", id, a.userId(), title, body, excerpt);
     }
 

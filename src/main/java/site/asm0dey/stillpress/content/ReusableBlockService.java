@@ -47,8 +47,9 @@ public class ReusableBlockService {
 
     @Transactional
     public void autosave(long ref, ItemService.Actor a, String title, String content) {
-        guard.close();
         editable(ref, a);
+        HtmlPolicy.check(a.role(), title, content, null);
+        guard.close();
         revisions.autosave(OBJECT_TYPE, ref, a.userId(), title, content, null);
     }
 
@@ -65,10 +66,11 @@ public class ReusableBlockService {
     }
 
     private ReusableBlockRecord create(String title, String content, ItemService.Actor a) {
-        guard.close();
         if (!Capabilities.canCreateBlock(a.role())) {
             throw forbidden();
         }
+        HtmlPolicy.check(a.role(), title, content, null);
+        guard.close();
         var r = blocks.create(
                 Objects.requireNonNullElse(title, ""),
                 Objects.requireNonNullElse(content, ""),
@@ -86,11 +88,12 @@ public class ReusableBlockService {
             LocalDateTime expectedModifiedAt,
             ItemService.Actor a
     ) {
-        guard.close();
         var r = editable(ref, a);
         if (expectedModifiedAt != null && !Objects.equals(r.getModifiedAt(), expectedModifiedAt)) {
             throw new ItemService.Refused(409, "conflict", null);
         }
+        HtmlPolicy.check(a.role(), title, content, null);
+        guard.close();
         Optional.ofNullable(title).ifPresent(r::setTitle);
         Optional.ofNullable(content).ifPresent(r::setContent);
         r.setModifiedAt(now());

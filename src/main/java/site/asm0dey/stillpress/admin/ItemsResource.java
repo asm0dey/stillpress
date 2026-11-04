@@ -94,12 +94,7 @@ public class ItemsResource {
 
     @ServerExceptionMapper
     public Response refused(ItemService.Refused e) {
-        var body = new LinkedHashMap<String, String>();
-        body.put("error", e.error);
-        if (e.field != null) {
-            body.put("field", e.field);
-        }
-        return Response.status(e.status).entity(body).build();
+        return Response.status(e.status).entity(e.body()).build();
     }
 
     @GET

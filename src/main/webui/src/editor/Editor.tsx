@@ -55,7 +55,11 @@ const FIELD_ERRORS: Record<string, string> = {
   authorId: 'That author no longer exists.',
 };
 
-interface Message { kind: 'status' | 'alert'; text: string }
+interface Message { kind: 'status' | 'alert'; text: string; list?: string[] }
+
+/** The 400 unsafe_html refusal: the role lacks unfiltered_html, nothing was saved. */
+const UNSAFE_HTML = 'This post contains HTML your role cannot publish:';
+type WpError = { code?: string; data?: { status?: number; violations?: string[] } };
 
 function draftOf(item: Item, tags: TermView[]): Draft {
   return {
@@ -253,9 +257,12 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
         try {
           await wpDispatch(coreStore).saveEditedEntityRecord(r.kind, r.name, r.key, { throwOnError: true });
         } catch (e) {
-          setMessage({ kind: 'alert', text: (e as { data?: { status?: number } })?.data?.status === 403
-            ? 'You cannot edit reusable blocks; the post was not saved'
-            : 'A reusable block could not be saved; the post was not saved.' });
+          const err = e as WpError;
+          setMessage(err.code === 'unsafe_html'
+            ? { kind: 'alert', text: 'A reusable block in this post contains HTML your role cannot publish; the post was not saved:', list: err.data?.violations }
+            : { kind: 'alert', text: err.data?.status === 403
+              ? 'You cannot edit reusable blocks; the post was not saved'
+              : 'A reusable block could not be saved; the post was not saved.' });
           return;
         }
       }
@@ -288,7 +295,9 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
       const err = e as ApiError;
       setMessage({
         kind: 'alert',
-        text: err.status === 409 ? 'Someone else changed this post. Reload to see their version; your text stays in this tab.'
+        list: err.error === 'unsafe_html' ? err.violations : undefined,
+        text: err.error === 'unsafe_html' ? UNSAFE_HTML
+          : err.status === 409 ? 'Someone else changed this post. Reload to see their version; your text stays in this tab.'
           : err.status === 403 ? 'You cannot make this change.'
           : err.error === 'csrf' ? err.message!
           : err.field ? FIELD_ERRORS[err.field] ?? `Check the ${err.field} field.`
@@ -350,6 +359,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
       {message && (
         <div role={message.kind} className={message.kind === 'alert' ? 'sp-notice sp-notice--error' : 'sp-notice'}>
           {message.text}
+          {message.list && <ul>{message.list.map((v) => <li key={v}>{v}</li>)}</ul>}
           {message.kind === 'alert' && <Button variant="link" onClick={() => setMessage(null)}>Dismiss</Button>}
         </div>
       )}
@@ -466,7 +476,9 @@ function MakeReusable() {
       setPending(null);
       setName('');
     } catch (e) {
-      setError((e as { data?: { status?: number } })?.data?.status === 403 ? 'You cannot create reusable blocks.' : 'Could not create the reusable block.');
+      const err = e as WpError;
+      setError(err.code === 'unsafe_html' ? `This block contains HTML your role cannot publish: ${err.data?.violations?.join(', ')}`
+        : err.data?.status === 403 ? 'You cannot create reusable blocks.' : 'Could not create the reusable block.');
     }
   }
   return (

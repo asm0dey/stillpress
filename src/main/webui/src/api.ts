@@ -9,6 +9,8 @@ export interface ApiError {
   error?: string;
   field?: string;
   message?: string;
+  /** with error 'unsafe_html': what the author's role may not save */
+  violations?: string[];
 }
 
 /** GET /session */
@@ -94,7 +96,8 @@ export async function api<T = void>(
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    const e: ApiError = { status: res.status, error: data?.error, field: data?.field, message: data?.message };
+    const e: ApiError = { status: res.status, error: data?.error, field: data?.field, message: data?.message,
+      violations: data?.violations };
     // every 400 our endpoints send names an error; a bare one is the CSRF guard's refusal
     if (res.status === 400 && !e.error && !e.field) {
       e.error = 'csrf';

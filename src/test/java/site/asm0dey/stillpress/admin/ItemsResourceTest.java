@@ -120,6 +120,37 @@ class ItemsResourceTest {
     }
 
     @Test
+    void authorScriptIs400AndChangesNothingAndKeepsImportOpen() {
+        var item = create(author1, "post");
+        // a fresh site: the create above settled the origin, so reopen it
+        settings.delete("import_state");
+        update(author1, item, Map.of("title", "t", "body", "<p onclick=\"go()\">a</p>"))
+            .then()
+            .statusCode(400)
+            .body("error", equalTo("unsafe_html"))
+            .body("field", equalTo("body"))
+            .body("violations", org.hamcrest.Matchers.contains("onclick attribute on <p>"));
+        as(author1)
+            .body(Map.of("title", "<script>x</script>", "body", "", "excerpt", ""))
+            .put("/admin/api/items/" + item.getLong("id") + "/autosave")
+            .then()
+            .statusCode(400)
+            .body("violations", org.hamcrest.Matchers.contains("<script> element"));
+        assertThat(get(author1, item.getLong("id")).getString("body")).isEqualTo("");
+        assertThat(db.fetchCount(REVISION, REVISION.OBJECT_ID.eq(item.getLong("id")))).isEqualTo(0);
+        assertThat(settings.get("import_state")).isNotPresent();
+    }
+
+    @Test
+    void editorMaySaveScript() {
+        var item = create(author1, "post");
+        update(editor, item, Map.of("body", "<p onclick=\"go()\">a</p>"))
+            .then()
+            .statusCode(200)
+            .body("body", equalTo("<p onclick=\"go()\">a</p>"));
+    }
+
+    @Test
     void authorCannotCreatePage() {
         as(author1).body(Map.of("type", "page")).post("/admin/api/items").then().statusCode(403);
     }

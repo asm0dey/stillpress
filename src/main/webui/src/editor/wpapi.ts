@@ -102,7 +102,7 @@ async function wpError(r: Response) {
   return {
     code: b?.code ?? b?.error ?? 'unknown_error',
     message: b?.message ?? b?.error ?? `The request failed (${r.status}).`,
-    data: { status: r.status },
+    data: { status: r.status, ...(b?.violations && { violations: b.violations as string[] }) },
   };
 }
 

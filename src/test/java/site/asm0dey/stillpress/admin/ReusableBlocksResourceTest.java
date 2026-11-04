@@ -132,6 +132,27 @@ class ReusableBlocksResourceTest {
         as(author1).get("/admin/api/blocks/" + b.getLong("id")).then().body("content", equalTo("one"));
     }
 
+    @Test
+    void authorScriptInOwnBlockIs400EditorIs200() {
+        as(author1)
+            .body(Map.of("title", "T", "content", "<script>x</script>"))
+            .post("/admin/api/blocks")
+            .then()
+            .statusCode(400)
+            .body("error", equalTo("unsafe_html"))
+            .body("violations", org.hamcrest.Matchers.contains("<script> element"));
+        var b = create(author1, "one");
+        put(author1, b, "<script>x</script>").then().statusCode(400).body("error", equalTo("unsafe_html"));
+        as(author1)
+            .body(Map.of("title", "T", "content", "<script>x</script>"))
+            .put("/admin/api/blocks/" + b.getLong("id") + "/autosave")
+            .then()
+            .statusCode(400);
+        as(author1).get("/admin/api/blocks/" + b.getLong("id")).then().body("content", equalTo("one"));
+        var editor = sessions.create(users.create("editor", "e@example.org", "Ed", Role.EDITOR).getId());
+        put(editor, b, "<script>x</script>").then().statusCode(200).body("content", equalTo("<script>x</script>"));
+    }
+
     private JsonPath create(String cookie, String content) {
         return as(cookie)
             .body(Map.of("title", "T", "content", content))
