@@ -7,7 +7,7 @@ import module java.base;
 import module java.net.http;
 
 /**
- * The editor's embed preview ({@code /wp-json/oembed/1.0/proxy}): only {@code https} URLs on an allow-listed provider
+ * The editor's embed preview ({@code GET /admin/api/oembed}): only {@code https} URLs on an allow-listed provider
  * host (exactly, or a subdomain of it) are looked up; anything else is refused without an outbound request.
  */
 @Singleton

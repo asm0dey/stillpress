@@ -1,5 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
+import static io.restassured.RestAssured.given;
 import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -71,20 +72,41 @@ class ReusableBlocksResourceTest {
     }
 
     @Test
-    void staleUpdateIs409AndAutosaveShowsUntilSaved() {
+    void staleExpectedModifiedAtIs409() {
+        var b = create(author1, "one");
+        put(author1, b, "two").then().statusCode(200);
+        put(author1, b, "three").then().statusCode(409).body("error", equalTo("conflict"));
+        as(author1).get("/admin/api/blocks/" + b.getLong("id")).then().body("content", equalTo("two"));
+        // no expectedModifiedAt: the editor's in-post save, last writer wins
+        as(author1)
+            .body(Map.of("content", "four"))
+            .put("/admin/api/blocks/" + b.getLong("id"))
+            .then()
+            .statusCode(200)
+            .body("content", equalTo("four"))
+            .body("title", equalTo("T"));
+    }
+
+    @Test
+    void autosaveRoundTrip() {
         var b = create(author1, "one");
         var path = "/admin/api/blocks/" + b.getLong("id");
-        var saved = put(author1, b, "two").then().statusCode(200).extract().jsonPath();
-        put(author1, b, "three").then().statusCode(409).body("error", equalTo("conflict"));
         as(author1).body(Map.of("title", "T", "content", "draft")).put(path + "/autosave").then().statusCode(204);
         as(author1)
             .get(path)
             .then()
             .statusCode(200)
-            .body("content", equalTo("two"))
+            .body("content", equalTo("one"))
             .body("autosave.createdAt", notNullValue());
         as(author1).get(path + "/autosave").then().statusCode(200).body("content", equalTo("draft"));
-        put(author1, saved, "four").then().statusCode(200).body("autosave", nullValue());
+        as(author2).get(path + "/autosave").then().statusCode(404);
+        as(author2).body(Map.of("title", "T", "content", "x")).put(path + "/autosave").then().statusCode(403);
+        put(author1, b, "saved").then().statusCode(200).body("autosave", nullValue());
+    }
+
+    @Test
+    void anonymousOEmbedIs401() {
+        given().get("/admin/api/oembed?url=https://youtu.be/x").then().statusCode(401);
     }
 
     @Test
@@ -101,6 +123,13 @@ class ReusableBlocksResourceTest {
         );
         as(author2).post(path + "/revisions/" + first + "/restore").then().statusCode(403);
         assertThat(as(author1).get(path + "/revisions").then().extract().jsonPath().getList("id")).hasSize(3);
+    }
+
+    @Test
+    void authorEditingOthersBlockIs403AndChangesNothing() {
+        var b = create(author1, "one");
+        put(author2, b, "taken").then().statusCode(403).body("error", equalTo("forbidden"));
+        as(author1).get("/admin/api/blocks/" + b.getLong("id")).then().body("content", equalTo("one"));
     }
 
     private JsonPath create(String cookie, String content) {

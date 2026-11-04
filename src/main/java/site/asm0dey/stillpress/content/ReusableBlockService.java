@@ -32,7 +32,7 @@ public class ReusableBlockService {
     /**
      * Creates ({@code ref == null}) or updates a block; a null title or content keeps the stored value. Refused with
      * 403 past the actor's capabilities, 404 for an unknown ref, 409 when the block changed since
-     * {@code expectedModifiedAt}.
+     * {@code expectedModifiedAt}; a null {@code expectedModifiedAt} skips that check (the editor's in-post saves).
      */
     @Transactional
     public ReusableBlockRecord save(
@@ -42,15 +42,7 @@ public class ReusableBlockService {
             LocalDateTime expectedModifiedAt,
             ItemService.Actor a
     ) {
-        return ref == null ? create(title, content, a) : update(ref, title, content, true, expectedModifiedAt, a);
-    }
-
-    /**
-     * Last writer wins: the WordPress REST slice, whose client sends no modification time.
-     */
-    @Transactional
-    public ReusableBlockRecord overwrite(long ref, String title, String content, ItemService.Actor a) {
-        return update(ref, title, content, false, null, a);
+        return ref == null ? create(title, content, a) : update(ref, title, content, expectedModifiedAt, a);
     }
 
     @Transactional
@@ -69,7 +61,7 @@ public class ReusableBlockService {
             .find(revisionId)
             .filter(v -> OBJECT_TYPE.equals(v.getObjectType()) && v.getObjectId() == ref && !v.getAutosave())
             .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
-        return update(ref, rev.getTitle(), rev.getBody(), false, null, a);
+        return update(ref, rev.getTitle(), rev.getBody(), null, a);
     }
 
     private ReusableBlockRecord create(String title, String content, ItemService.Actor a) {
@@ -91,13 +83,12 @@ public class ReusableBlockService {
             long ref,
             String title,
             String content,
-            boolean check,
             LocalDateTime expectedModifiedAt,
             ItemService.Actor a
     ) {
         guard.close();
         var r = editable(ref, a);
-        if (check && !Objects.equals(r.getModifiedAt(), expectedModifiedAt)) {
+        if (expectedModifiedAt != null && !Objects.equals(r.getModifiedAt(), expectedModifiedAt)) {
             throw new ItemService.Refused(409, "conflict", null);
         }
         Optional.ofNullable(title).ifPresent(r::setTitle);
