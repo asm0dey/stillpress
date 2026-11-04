@@ -98,7 +98,7 @@ Data lives in `./data`, or wherever `STILLPRESS_DATA_DIR` points: the H2 databas
 
 ### Database
 
-The default is an embedded H2 file, with nothing to install. The database kind is fixed when the app is built, so PostgreSQL needs its own build; the URL and credentials are runtime settings. The jOOQ dialect follows the datasource kind automatically.
+The default is an embedded H2 file, with nothing to install. Its URL is set for the `dev`, `test` and `prod` profiles only, so a custom profile must include `prod` (for example `QUARKUS_PROFILE=prod,staging`) or set `quarkus.datasource.jdbc.url` itself. The database kind is fixed when the app is built, so PostgreSQL needs its own build; the URL and credentials are runtime settings. The jOOQ dialect follows the datasource kind automatically.
 
 ```bash
 mise exec -- mvn package -DskipTests -Dquarkus.datasource.db-kind=postgresql
