@@ -16,6 +16,12 @@ import site.asm0dey.stillpress.importer.ImportRunningException;
 public class ResetCommand implements Callable<Integer> {
     @Option(names = "--yes", description = "Really delete; without it, only show what would go")
     boolean yes;
+    @Option(
+            names = "--force",
+            description = "With --yes: also reset when an import is marked as running. Only when the server is stopped"
+            + " and no import runs, e.g. after a crash mid-import"
+    )
+    boolean force;
     @Spec
     CommandSpec spec;
     @Inject
@@ -39,9 +45,15 @@ public class ResetCommand implements Callable<Integer> {
         }
         boolean filesOk;
         try {
-            filesOk = reset.wipe();
+            filesOk = reset.wipe(force);
         } catch (ImportRunningException e) {
-            spec.commandLine().getErr().println("An import is running; reset after it ends. Nothing was deleted.");
+            spec
+                .commandLine()
+                .getErr()
+                .println(
+                        "An import is marked as running. Nothing was deleted. If it stopped mid-way, stop the server"
+                        + " and any import, then run `stillpress reset --yes --force`."
+                );
             return 1;
         }
         if (!filesOk) {

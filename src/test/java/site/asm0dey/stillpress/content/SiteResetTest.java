@@ -126,6 +126,9 @@ class SiteResetTest {
     void resetLeavesOnlyTheAdministratorAndWizardSettings() throws Exception {
         fill();
         assertThat(reset.reset(adminId, null)).isTrue();
+        // closed during the file steps, open again once reset returns
+        assertThat(guard.state()).isEmpty();
+        assertThat(guard.importable()).isTrue();
         assertThat(tablesWithRows()).containsExactlyInAnyOrder("author", "setting");
         assertThat(db.select(SCHEDULED_TASKS.TASK_NAME).from(SCHEDULED_TASKS).fetch(SCHEDULED_TASKS.TASK_NAME))
             .containsOnly(Jobs.PUBLISH_SWEEP);

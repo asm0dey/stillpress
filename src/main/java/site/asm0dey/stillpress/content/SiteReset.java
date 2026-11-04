@@ -16,6 +16,7 @@ import site.asm0dey.stillpress.publish.PublishLock;
 import site.asm0dey.stillpress.publish.ReleaseSwitcher;
 import site.asm0dey.stillpress.publish.SitePublisher;
 import site.asm0dey.stillpress.store.SessionRepository;
+import site.asm0dey.stillpress.store.SettingRepository;
 
 /**
  * Wipes an experiment: back to the state right after the wizard's first step ({@link #reset}), or to a fresh install
@@ -30,7 +31,8 @@ public class SiteReset {
             Map.of("posts_per_page", "10", "posts_per_rss", "10", "category_base", "category", "tag_base", "tag");
     // the row every publish locks (created by V4); reset holds the lock on it while it runs
     private static final String LOCK_ROW = "publish_lock";
-    private static final Set<String> KEPT = Set.of("title", "language", "home_url", "timezone", LOCK_ROW);
+    private static final Set<String> KEPT =
+            Set.of("title", "language", "home_url", "timezone", LOCK_ROW, ImportGuard.STATE);
     private static final Logger LOG = Logger.getLogger(SiteReset.class);
     @Inject
     DSLContext db;
@@ -42,6 +44,8 @@ public class SiteReset {
     SitePublisher publisher;
     @Inject
     DataDir dataDir;
+    @Inject
+    SettingRepository settings;
 
     /**
      * Keeps one administrator (password kept, {@code source_id} cleared so the next import merges by login), the
@@ -52,7 +56,7 @@ public class SiteReset {
      * @throws ImportRunningException while an import runs; nothing changes
      */
     public boolean reset(long keepAdministratorId, String keepSession) {
-        return run(() -> {
+        return run(false, () -> {
             clearContent();
             db
                 .deleteFrom(SESSION)
@@ -75,11 +79,19 @@ public class SiteReset {
      * @return false when the rows are wiped but a file step failed (logged)
      */
     public boolean wipe() {
-        return run(() -> {
+        return wipe(false);
+    }
+
+    /**
+     * @param force the operator asserts no import runs and the server is stopped: a {@code running} state left by a
+     *        crash is cleared instead of refusing
+     */
+    public boolean wipe(boolean force) {
+        return run(force, () -> {
             clearContent();
             db.deleteFrom(SESSION).execute();
             db.deleteFrom(AUTHOR).execute();
-            db.deleteFrom(SETTING).where(SETTING.KEY.ne(LOCK_ROW)).execute();
+            db.deleteFrom(SETTING).where(SETTING.KEY.notIn(LOCK_ROW, ImportGuard.STATE)).execute();
         });
     }
 
@@ -89,18 +101,23 @@ public class SiteReset {
         IMPORT_RUNNING
     }
 
-    private boolean run(Runnable rows) {
+    private boolean run(boolean force, Runnable rows) {
         var outcome = lock.holding(() -> {
             var importRunning = QuarkusTransaction
                 .requiringNew()
                 .call(() -> {
                     // claims the import_state row, so an import cannot start while this runs; refuses a running one
+                    if (force) {
+                        settings.delete(ImportGuard.STATE);
+                    }
                     try {
                         guard.close();
                     } catch (ImportRunningException e) {
                         return true;
                     }
                     rows.run();
+                    // closed (not just done) until the files are gone, so no import lands in import/ or media/ first
+                    settings.put(ImportGuard.STATE, "closed");
                     return false;
                 });
             if (importRunning) {
@@ -112,6 +129,11 @@ public class SiteReset {
             } catch (IOException | RuntimeException e) {
                 LOG.error("Reset the database, but cleaning up the files failed", e);
                 return Outcome.FILES_FAILED;
+            } finally {
+                // import opens again only now
+                QuarkusTransaction
+                    .requiringNew()
+                    .run(() -> settings.delete(ImportGuard.STATE));
             }
         });
         // thrown out here: QuarkusTransaction and the lock would wrap it

@@ -66,12 +66,16 @@ class ResetCommandTest {
 
     @Test
     void runningImportExits1() {
-        store.reset();
-        users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
         settings.put(ImportGuard.STATE, "running");
+        var authors = users.all().size();
         assertThat(run("--yes")).isOne();
-        assertThat(err.toString()).contains("An import is running");
-        assertThat(users.all()).hasSize(1);
+        assertThat(err.toString()).contains("--force");
+        assertThat(users.all()).hasSize(authors);
+        assertThat(guard.state()).hasValue("running");
+        assertThat(run("--yes", "--force")).isZero();
+        assertThat(users.all()).isEmpty();
+        assertThat(db.fetchCount(ITEM)).isZero();
+        assertThat(guard.state()).isEmpty();
     }
 
     private int run(String... args) {

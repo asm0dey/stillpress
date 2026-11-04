@@ -77,6 +77,7 @@ stillpress verify-urls --source https://old-blog.example --target http://localho
 stillpress user reset-password <login>  # print a single-use set-password link (valid 24 h); login or email
 stillpress reset                       # show what a reset would delete (row counts, data directory); exits 1
 stillpress reset --yes                 # delete everything, users and settings included; the next serve prints a setup token
+stillpress reset --yes --force         # the same after a crash mid-import left it marked running; stop the server first
 ```
 
 On first start, `serve` logs a setup token (`Setup token: …`); open `/admin`, enter it in the wizard and create the site there, empty or from a WXR upload. The token exists only until the first administrator has a password.
