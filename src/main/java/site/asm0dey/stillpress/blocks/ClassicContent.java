@@ -44,6 +44,43 @@ public final class ClassicContent {
         return s.replaceAll("[^A-Za-z0-9_-]", "");
     }
 
+    /**
+     * {@code replaceAll("(?<!<br />)\\s*\n", "<br />\n")} in one pass; the regex is quadratic on a long whitespace run.
+     * Each whitespace run up to its last newline becomes one break; a run right after {@code <br />} keeps its first
+     * character, as the regex can only start matching one later.
+     */
+    static String lineBreaks(String s) {
+        var sb = new StringBuilder(s.length());
+        int i = 0;
+        while (i < s.length()) {
+            if (!isSpace(s.charAt(i))) {
+                sb.append(s.charAt(i++));
+                continue;
+            }
+            int end = i;
+            int lastNewline = -1;
+            while (end < s.length() && isSpace(s.charAt(end))) {
+                if (s.charAt(end) == '\n') {
+                    lastNewline = end;
+                }
+                end++;
+            }
+            int start = s.startsWith("<br />", i - 6) ? i + 1 : i;
+            if (lastNewline >= start) {
+                sb.append(s, i, start).append("<br />\n").append(s, lastNewline + 1, end);
+            } else {
+                sb.append(s, i, end);
+            }
+            i = end;
+        }
+        return sb.toString();
+    }
+
+    // \s without UNICODE_CHARACTER_CLASS
+    private static boolean isSpace(char c) {
+        return c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r';
+    }
+
     static String attr(String s) {
         return s
             .replace("&", "&amp;")
@@ -183,7 +220,7 @@ public final class ClassicContent {
             .matcher(text)
             .replaceAll(m -> Matcher.quoteReplacement(m.group().replace("\n", "<WPPreserveNewline />")));
         text = text.replace("<br>", "<br />").replace("<br/>", "<br />");
-        text = text.replaceAll("(?<!<br />)\\s*\n", "<br />\n");
+        text = lineBreaks(text);
         text = text.replace("<WPPreserveNewline />", "\n");
         text = text.replaceAll("(</?" + ALL_BLOCKS + "[^>]*>)\\s*<br />", "$1");
         text = text.replaceAll("<br />(\\s*</?(?:p|li|div|dl|dd|dt|th|pre|td|ul|ol)[^>]*>)", "$1");

@@ -1,7 +1,11 @@
 package site.asm0dey.stillpress.blocks;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import module java.base;
+import org.jetbrains.jetCheck.Generator;
+import org.jetbrains.jetCheck.IntDistribution;
+import org.jetbrains.jetCheck.PropertyChecker;
 import org.junit.jupiter.api.Test;
 
 class ClassicContentTest {
@@ -74,6 +78,27 @@ class ClassicContentTest {
     @Test
     void captionWithManySlashesDoesNotOverflowTheStack() {
         assertThat(ClassicContent.toHtml("[caption x" + "/a".repeat(200_000) + "]")).contains("[caption x/a/a");
+    }
+
+    @Test
+    void lineBreaksMatchesWordPressRegex() {
+        var text = Generator
+            .listsOf(
+                    IntDistribution.uniform(0, 20),
+                    Generator.sampledFrom(" ", "\t", "\n", "\r", "a", "<br />", "<br /", ">")
+            )
+            .map(t -> String.join("", t));
+        PropertyChecker
+            .customized()
+            .withIterationCount(5_000)
+            .silent()
+            .forAll(text, s -> ClassicContent.lineBreaks(s).equals(s.replaceAll("(?<!<br />)\\s*\n", "<br />\n")));
+    }
+
+    @Test
+    void lineBreaksIsLinearOnLongWhitespace() {
+        var s = "a" + " ".repeat(1_000_000) + "b\n";
+        assertTimeoutPreemptively(Duration.ofSeconds(1), () -> ClassicContent.lineBreaks(s));
     }
 
     @Test
