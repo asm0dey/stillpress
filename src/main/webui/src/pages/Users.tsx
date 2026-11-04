@@ -1,61 +1,63 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { Field } from '../Field.jsx';
-import Shell from '../Shell.jsx';
+import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
+import { type ApiError, type Role, type UserView, api } from '../api.ts';
+import { Field } from '../Field.tsx';
+import Shell from '../Shell.tsx';
 
-const ROLES = ['administrator', 'editor', 'author', 'contributor'];
-const EMPTY = { login: '', email: '', displayName: '', role: 'author' };
+interface NewUser { login: string; email: string; displayName: string; role: Role }
+
+const ROLES: Role[] = ['administrator', 'editor', 'author', 'contributor'];
+const EMPTY: NewUser = { login: '', email: '', displayName: '', role: 'author' };
 
 export default function Users() {
-  const [users, setUsers] = useState(null);
-  const [message, setMessage] = useState(null);
-  const [link, setLink] = useState(null);
+  const [users, setUsers] = useState<UserView[] | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [link, setLink] = useState<{ login: string; url: string } | null>(null);
   const [form, setForm] = useState(EMPTY);
 
-  const load = () => api('/users').then(setUsers, () => setMessage('Could not load the users.'));
+  const load = () => api<UserView[]>('/users').then(setUsers, () => setMessage('Could not load the users.'));
   useEffect(() => { load(); }, []);
 
-  async function changeRole(u, role) {
+  async function changeRole(u: UserView, role: Role) {
     setMessage(null);
     try {
       await api(`/users/${u.id}/role`, { method: 'PUT', body: { role } });
     } catch (e) {
-      setMessage(e.error === 'last_administrator'
+      setMessage((e as ApiError).error === 'last_administrator'
         ? 'There must be at least one administrator with a password.' : 'Could not change the role.');
     }
     load();
   }
 
-  async function showLink(u) {
+  async function showLink(u: UserView) {
     setMessage(null);
     try {
-      const { url } = await api(`/users/${u.id}/password-link`, { method: 'POST' });
+      const { url } = await api<{ url: string }>(`/users/${u.id}/password-link`, { method: 'POST' });
       await copy(u.login, url);
     } catch {
       setMessage('Could not create the link.');
     }
   }
 
-  async function copy(login, url) {
+  async function copy(login: string, url: string) {
     // the link is shown either way: clipboard access can be refused
     setLink({ login, url: new URL(url, location.origin).href });
     await navigator.clipboard?.writeText(new URL(url, location.origin).href).catch(() => {});
   }
 
-  async function add(e) {
+  async function add(e: FormEvent) {
     e.preventDefault();
     setMessage(null);
     try {
-      const { setPasswordUrl } = await api('/users', { method: 'POST', body: form });
+      const { setPasswordUrl } = await api<{ setPasswordUrl: string }>('/users', { method: 'POST', body: form });
       await copy(form.login, setPasswordUrl);
       setForm(EMPTY);
       load();
-    } catch (err) {
-      setMessage(err.error === 'login_taken' ? 'That login is already taken.' : 'Check the fields and try again.');
+    } catch (e) {
+      setMessage((e as ApiError).error === 'login_taken' ? 'That login is already taken.' : 'Check the fields and try again.');
     }
   }
 
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const set = (k: keyof NewUser) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
 
   return (
     <Shell>
@@ -77,7 +79,7 @@ export default function Users() {
                 <td>{u.displayName}</td>
                 <td>{u.email}</td>
                 <td>
-                  <select aria-label={`Role of ${u.login}`} value={u.role} onChange={(e) => changeRole(u, e.target.value)}>
+                  <select aria-label={`Role of ${u.login}`} value={u.role} onChange={(e) => changeRole(u, e.target.value as Role)}>
                     {ROLES.map((r) => <option key={r}>{r}</option>)}
                   </select>
                 </td>

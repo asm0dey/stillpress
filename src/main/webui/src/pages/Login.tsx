@@ -1,26 +1,27 @@
-import { useState } from 'react';
+import { type FormEvent, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { api } from '../api.js';
-import { Field } from '../Field.jsx';
+import { type ApiError, api } from '../api.ts';
+import { Field } from '../Field.tsx';
 
 export default function Login() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
-  async function submit(e) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError(null);
+    setError(undefined);
     try {
       await api('/login', { method: 'POST', body: { login, password } });
       const next = params.get('next');
       // only a path inside the admin; anything else could leave the site
       navigate(next?.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true });
-    } catch (err) {
+    } catch (e) {
+      const err = e as ApiError;
       setError(err.status === 429 ? 'Too many attempts. Wait a few minutes and try again.'
         : err.status === 401 ? 'The login or password is incorrect.' : 'Login failed. Try again.');
     } finally {

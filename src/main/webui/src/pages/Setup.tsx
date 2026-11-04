@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { type ChangeEvent, type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { api } from '../api.js';
-import { Field } from '../Field.jsx';
+import { type ApiError, api } from '../api.ts';
+import { Field } from '../Field.tsx';
 
-const MESSAGES = {
+interface Form {
+  token: string; title: string; language: string; login: string; email: string; displayName: string;
+  password: string;
+}
+
+const MESSAGES: Record<string, string> = {
   token: 'Enter the setup token printed in the server log.',
   title: 'Give the site a title.',
   language: 'Use a language code such as en or en-GB.',
@@ -15,23 +20,23 @@ const MESSAGES = {
 
 export default function Setup() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<Form>({
     token: '', title: '', language: 'en', login: '', email: '', displayName: '', password: '',
   });
-  const [errors, setErrors] = useState({});
-  const [problem, setProblem] = useState(null);
+  const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
+  const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
 
-  const field = (name) => ({
+  const field = (name: keyof Form) => ({
     name,
     value: form[name],
-    onChange: (e) => setForm({ ...form, [name]: e.target.value }),
+    onChange: (e: ChangeEvent<HTMLInputElement>) => setForm({ ...form, [name]: e.target.value }),
     error: errors[name],
     required: true,
   });
 
-  async function submit(e) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setErrors({});
@@ -39,9 +44,10 @@ export default function Setup() {
     try {
       await api('/setup', { method: 'POST', body: form });
       setDone(true);
-    } catch (err) {
+    } catch (e) {
+      const err = e as ApiError;
       if (err.status === 403) setErrors({ token: 'That token does not match the one in the server log.' });
-      else if (err.status === 400) setErrors({ [err.field]: MESSAGES[err.field] ?? 'Check this value.' });
+      else if (err.status === 400) setErrors({ [err.field!]: MESSAGES[err.field!] ?? 'Check this value.' });
       else if (err.status === 409) setProblem('already');
       else setProblem('Setup failed. Check the server log and try again.');
     } finally {

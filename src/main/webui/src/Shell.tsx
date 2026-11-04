@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { api } from './api.js';
+import { type ReactNode, useEffect, useState } from 'react';
+import { type Role, type SessionUser, api } from './api.ts';
 
 /** The admin header; the Users and Import links show for administrators only. */
-export default function Shell({ children }) {
+export default function Shell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const [role, setRole] = useState(null);
+  const [role, setRole] = useState<Role | null>(null);
   useEffect(() => {
-    api('/session').then((s) => setRole(s.role), () => {});
+    api<SessionUser>('/session').then((s) => setRole(s.role), () => {});
   }, []);
 
   async function logout() {

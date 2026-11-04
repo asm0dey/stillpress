@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { api } from '../api.js';
-import Shell from '../Shell.jsx';
+import { type ApiError, type Site, api } from '../api.ts';
+import Shell from '../Shell.tsx';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [site, setSite] = useState(null);
-  const [error, setError] = useState(null);
+  const [site, setSite] = useState<Site | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api('/site').then(setSite, (e) => (e.status === 401 ? navigate('/login') : setError('Could not load the site.')));
+    api<Site>('/site').then(setSite, (e: ApiError) => (e.status === 401 ? navigate('/login') : setError('Could not load the site.')));
   }, []);
 
   return (

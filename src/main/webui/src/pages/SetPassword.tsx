@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { type FormEvent, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { api } from '../api.js';
-import { Field } from '../Field.jsx';
+import { type ApiError, api } from '../api.ts';
+import { Field } from '../Field.tsx';
 
 export default function SetPassword() {
   const [params] = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [errors, setErrors] = useState({});
-  const [state, setState] = useState('form');
+  const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({});
+  const [state, setState] = useState<'form' | 'done' | 'expired' | 'failed'>('form');
 
-  async function submit(e) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     if (password !== confirm) {
       setErrors({ confirm: 'The passwords do not match.' });
@@ -20,7 +20,8 @@ export default function SetPassword() {
     try {
       await api('/set-password', { method: 'POST', body: { token: params.get('token'), password } });
       setState('done');
-    } catch (err) {
+    } catch (e) {
+      const err = e as ApiError;
       if (err.status === 400) setErrors({ password: 'Use 12 to 1024 characters.' });
       else setState(err.status === 410 ? 'expired' : 'failed');
     }

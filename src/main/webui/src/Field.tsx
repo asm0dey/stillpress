@@ -1,7 +1,9 @@
-import { useId } from 'react';
+import { type ComponentProps, useId } from 'react';
 
 /** A labelled input whose error text is tied to it with aria-describedby. */
-export function Field({ label, error, hint, ...input }) {
+type FieldProps = Omit<ComponentProps<'input'>, 'id'> & { label: string; error?: string; hint?: string };
+
+export function Field({ label, error, hint, ...input }: FieldProps) {
   const id = useId();
   const described = [hint && id + '-hint', error && id + '-error'].filter(Boolean).join(' ') || undefined;
   return (
