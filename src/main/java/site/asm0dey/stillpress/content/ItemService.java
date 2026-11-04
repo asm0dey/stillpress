@@ -236,6 +236,9 @@ public class ItemService {
             terms.setForItem(id, "post_tag", u.tags());
         }
         r.setStatus(status);
+        if ("publish".equals(status)) {
+            categoriesChanged |= permalinks.ensureCategory(r);
+        }
         // the permalink is fixed at first publish and moves only with what it is built from
         var pathChanged = slugChanged
                 || dateChanged

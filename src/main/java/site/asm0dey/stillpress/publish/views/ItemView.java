@@ -81,13 +81,24 @@ public record ItemView(
         if (excerptHtml != null && !excerptHtml.isBlank()) {
             return excerptHtml;
         }
-        var words = Jsoup.parse(contentHtml == null ? "" : contentHtml).text().trim().split("\\s+");
-        if (words.length == 1 && words[0].isEmpty()) {
-            return "";
-        }
-        var text = String.join(" ", Arrays.copyOf(words, Math.min(words.length, 55)));
-        text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-        return words.length > 55 ? text + " [&hellip;]" : text;
+        return trimmed(contentHtml, " [&hellip;]");
+    }
+
+    /**
+     * WordPress's {@code wp_trim_words}: the first 55 words of {@code html} with tags stripped and whitespace
+     * collapsed, escaped for HTML, followed by {@code more} when the text was cut.
+     */
+    static String trimmed(String html, String more) {
+        var words = Arrays
+            .stream(Jsoup.parse(html == null ? "" : html).text().split("[\\s\\p{Z}]+"))
+            .filter(w -> !w.isEmpty())
+            .toList();
+        var text = String
+            .join(" ", words.subList(0, Math.min(words.size(), 55)))
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;");
+        return words.size() > 55 ? text + more : text;
     }
 
     /**

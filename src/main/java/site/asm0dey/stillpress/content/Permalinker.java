@@ -8,21 +8,28 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.store.RedirectRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
+import site.asm0dey.stillpress.store.TermRepository;
 
 /**
  * Slugs, permalinks and the redirects a moved permalink leaves, shared by the editor and go-live.
  */
 @ApplicationScoped
 public class Permalinker {
+    private static final int MAX_ATTEMPTS = 1000;
     @Inject
     DSLContext db;
     @Inject
     SettingRepository settings;
     @Inject
     RedirectRepository redirects;
+    @Inject
+    TermRepository terms;
+    @Inject
+    TermService termService;
 
     /**
      * Whether posts' permalinks contain {@code token}, such as {@code %category%}.
@@ -57,9 +64,18 @@ public class Permalinker {
         if (base.isEmpty()) {
             base = String.valueOf(r.getSourceId());
         }
+        ensureCategory(r);
         var slug = base;
         var permalink = permalink(r, slug);
         for (int n = 2; slugTaken(r, slug) || taken(permalink, r.getId()); n++) {
+            if (n > MAX_ATTEMPTS) {
+                // a structure with neither %postname% nor %post_id% never gets unique
+                throw new IllegalStateException("No free permalink for '"
+                        + base
+                        + "' after "
+                        + MAX_ATTEMPTS
+                        + " tries");
+            }
             slug = base + "-" + n;
             permalink = permalink(r, slug);
         }
@@ -73,6 +89,42 @@ public class Permalinker {
         } else if (old != null && !old.equals(permalink)) {
             redirects.put(old, permalink);
         }
+    }
+
+    /**
+     * A post that goes public without a category gets the site's default one, as WordPress does; true when it did.
+     * The default is setting {@code default_category}, else "Uncategorized" ("Без рубрики" on a Russian site),
+     * created on first use and remembered in the setting. Never at setup: the import guard needs an empty
+     * {@code term} table.
+     */
+    public boolean ensureCategory(ItemRecord r) {
+        if (!"post".equals(r.getType()) || r.getId() == null || !terms.idsForItem(r.getId(), "category").isEmpty()) {
+            return false;
+        }
+        terms.setForItem(r.getId(), "category", List.of(defaultCategory()));
+        return true;
+    }
+
+    private long defaultCategory() {
+        var chosen = settings
+            .get("default_category")
+            .map(Long::valueOf)
+            .flatMap(terms::findById)
+            .filter(t -> "category".equals(t.getTaxonomy()));
+        if (chosen.isPresent()) {
+            return chosen.get().getId();
+        }
+        var name = settings.get("language").orElse("en").startsWith("ru") ? "Без рубрики" : "Uncategorized";
+        var term = terms
+            .findBySlug("category", Slugs.title(name))
+            .orElseGet(() -> termService.createTerm(
+                    "category",
+                    name,
+                    null,
+                    new ItemService.Actor(0, Role.ADMINISTRATOR)
+            ));
+        settings.put("default_category", String.valueOf(term.getId()));
+        return term.getId();
     }
 
     public String uniqueSlug(ItemRecord r, String base) {

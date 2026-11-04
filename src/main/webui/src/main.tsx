@@ -9,6 +9,7 @@ import SetPassword from './pages/SetPassword.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 import Users from './pages/Users.tsx';
 import Import from './pages/Import.tsx';
+import Settings from './pages/Settings.tsx';
 
 const PUBLIC = ['/setup', '/login', '/set-password'];
 
@@ -50,6 +51,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/set-password" element={<SetPassword />} />
           <Route path="/" element={<Dashboard />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/import" element={<Import />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

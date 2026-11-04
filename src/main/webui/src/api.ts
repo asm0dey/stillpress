@@ -15,6 +15,14 @@ export interface ApiError {
 export interface SessionUser { id: number; login: string; displayName: string; role: Role }
 /** GET /site */
 export interface Site { title: string; homeUrl: string; language: string; items: number; comments: number; importAllowed: boolean }
+/** GET and PUT /settings */
+export interface SiteSettings {
+  title: string; description: string; language: string; homeUrl: string; timezone: string;
+  postsPerPage: number; postsPerRss: number; permalinkStructure: string; categoryBase: string; tagBase: string;
+  defaultCategory: number | null; defaultCommentStatus: 'open' | 'closed';
+}
+/** GET /terms */
+export interface TermView { id: number; name: string; slug: string; parentId: number | null }
 /** GET /users */
 export interface UserView {
   id: number; login: string; displayName: string; email: string; role: Role; hasPassword: boolean;

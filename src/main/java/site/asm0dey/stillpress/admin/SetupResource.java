@@ -27,7 +27,7 @@ import site.asm0dey.stillpress.store.SettingRepository;
  */
 @Path("/admin/api/setup")
 public class SetupResource {
-    private static final Pattern LANGUAGE = Pattern.compile("^[a-z]{2,3}(-[A-Z]{2})?$");
+    static final Pattern LANGUAGE = Pattern.compile("^[a-z]{2,3}(-[A-Z]{2})?$");
     private static final Map<String, String> DEFAULTS =
             Map.of("posts_per_page", "10", "posts_per_rss", "10", "category_base", "category", "tag_base", "tag");
     // one install = one process; held across the commit so a second caller sees the first administrator

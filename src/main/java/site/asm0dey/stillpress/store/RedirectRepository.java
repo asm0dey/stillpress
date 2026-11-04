@@ -5,6 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.db.tables.records.RedirectRecord;
 
 @ApplicationScoped
@@ -14,6 +15,29 @@ public class RedirectRepository {
 
     public Optional<RedirectRecord> find(String key) {
         return db.selectFrom(REDIRECT).where(REDIRECT.FROM_PATH.eq(key)).fetchOptional();
+    }
+
+    /**
+     * {@link #put} for many at once, in three statements: redirects that led to a key now lead to its target, then
+     * each key and each target stops redirecting, then the keys redirect to their targets.
+     * shortcut: one statement holds every path as a bind value, so a site with tens of thousands of terms would hit
+     * PostgreSQL's parameter limit; chunk then.
+     */
+    public void putAll(Map<String, String> moves) {
+        if (moves.isEmpty()) {
+            return;
+        }
+        db
+            .update(REDIRECT)
+            .set(REDIRECT.TO_PATH, DSL.case_(REDIRECT.TO_PATH).mapValues(moves))
+            .where(REDIRECT.TO_PATH.in(moves.keySet()))
+            .execute();
+        var both = new HashSet<>(moves.keySet());
+        both.addAll(moves.values());
+        db.deleteFrom(REDIRECT).where(REDIRECT.FROM_PATH.in(both)).execute();
+        var insert = db.insertInto(REDIRECT, REDIRECT.FROM_PATH, REDIRECT.TO_PATH, REDIRECT.STATUS_CODE);
+        moves.forEach((from, to) -> insert.values(from, to, 301));
+        insert.execute();
     }
 
     /**

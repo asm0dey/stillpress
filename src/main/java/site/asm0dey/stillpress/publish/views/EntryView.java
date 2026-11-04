@@ -7,9 +7,16 @@ import module java.base;
  */
 public record EntryView(String title, String permalinkEncoded, Instant publishedAt, String excerptHtml) {
     /**
-     * The one place an archive entry's excerpt is chosen.
+     * The one place an archive entry's excerpt is chosen: the stored one, else the automatic one (WordPress's
+     * {@code wp_trim_excerpt}). Feeds keep the stored excerpt.
      */
     public static EntryView of(ItemView v) {
-        return new EntryView(v.title(), v.permalinkEncoded(), v.publishedAt(), v.excerptHtml());
+        var stored = v.excerptHtml() != null && !v.excerptHtml().isBlank();
+        return new EntryView(
+                v.title(),
+                v.permalinkEncoded(),
+                v.publishedAt(),
+                stored ? v.excerptHtml() : ItemView.trimmed(v.contentHtml(), " […]")
+        );
     }
 }
