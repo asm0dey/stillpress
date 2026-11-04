@@ -1,4 +1,4 @@
-import { type ReactNode, StrictMode, useEffect, useState } from 'react';
+import { type ReactNode, StrictMode, Suspense, lazy, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { type ApiError, api } from './api.ts';
@@ -12,6 +12,10 @@ import Import from './pages/Import.tsx';
 import Settings from './pages/Settings.tsx';
 import Terms from './pages/Terms.tsx';
 import Redirects from './pages/Redirects.tsx';
+import Items from './pages/Items.tsx';
+
+// Gutenberg is large: only the editor route downloads it
+const Editor = lazy(() => import('./editor/Editor.tsx'));
 
 const PUBLIC = ['/setup', '/login', '/set-password'];
 
@@ -58,6 +62,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/categories" element={<Terms taxonomy="category" />} />
           <Route path="/tags" element={<Terms taxonomy="post_tag" />} />
           <Route path="/redirects" element={<Redirects />} />
+          <Route path="/posts" element={<Items type="post" />} />
+          <Route path="/pages" element={<Items type="page" />} />
+          <Route path="/edit/:id" element={<Suspense fallback={<p role="status">Loading the editor…</p>}><Editor /></Suspense>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Gate>

@@ -1,0 +1,58 @@
+/* The editor screen: a bar, the canvas and a settings sidebar, filling the window. Uses theme.css's tokens. */
+
+/* theme.css sizes bare controls for the admin forms; Gutenberg's components size their own */
+:where(.sp-editor, .components-popover, .components-modal__frame) :is(button, input, select, textarea) { min-height: 0; }
+:where(.sp-editor, .components-popover, .components-modal__frame) .components-button:hover:not(.is-primary, .is-pressed) { background: transparent; }
+
+.sp-editor { display: flex; flex-direction: column; height: 100vh; }
+.sp-editor__bar {
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--color-border); background: var(--color-card);
+}
+.sp-editor__actions { display: flex; align-items: center; gap: var(--space-2); margin-inline-start: auto; }
+.sp-editor__main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; flex: 1; min-height: 0; }
+.sp-editor__content { display: flex; flex-direction: column; min-height: 0; overflow: auto; background: var(--color-muted); }
+.sp-editor__sidebar { border-inline-start: 1px solid var(--color-border); overflow: auto; background: var(--color-card); }
+@media (max-width: 782px) {
+  .sp-editor { height: auto; }
+  .sp-editor__main { grid-template-columns: 1fr; }
+  .sp-canvas { min-height: 70vh; }
+}
+
+.sp-title {
+  display: block; width: 100%; max-width: 650px; margin: var(--space-4) auto var(--space-2); padding: var(--space-2) var(--space-3);
+  font: 600 2rem/1.25 Georgia, serif; border: 1px solid transparent; border-radius: var(--radius); background: var(--color-card);
+}
+.sp-title:hover { border-color: var(--color-border); }
+.sp-title-static { max-width: 650px; margin: var(--space-4) auto; }
+.sp-canvas { flex: 1; min-height: 400px; margin: 0 var(--space-3) var(--space-3); background: var(--color-card); border: 1px solid var(--color-border); }
+.sp-canvas > div { height: 100%; }
+
+.sp-notice {
+  margin: var(--space-2) var(--space-3) 0; padding: var(--space-2) var(--space-3); border-inline-start: 4px solid var(--color-accent);
+  background: var(--color-card); font-size: var(--text-sm);
+}
+.sp-notice--error { border-color: var(--color-destructive); color: var(--color-destructive); }
+
+.sp-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.sp-label { display: block; font-size: 11px; font-weight: 500; text-transform: uppercase; margin-bottom: var(--space-1); }
+.sp-field { margin-bottom: var(--space-3); }
+.sp-date { padding: var(--space-3); }
+.sp-categories { border: 0; padding: 0; margin: 0 0 var(--space-2); max-height: 240px; overflow: auto; }
+.sp-add-category { margin-top: var(--space-2); }
+.sp-sidebar__tabs .components-tab-panel__tabs { border-bottom: 1px solid var(--color-border); }
+.sp-modal-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-3); }
+.sp-snackbars { position: fixed; bottom: var(--space-4); left: var(--space-4); z-index: 100000; }
+
+.sp-media__bar { display: flex; align-items: flex-end; gap: var(--space-3); margin-bottom: var(--space-3); }
+.sp-media__body { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: var(--space-3); }
+.sp-media__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--space-2); }
+.sp-media__grid button {
+  display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 1; padding: 0; overflow: hidden;
+  border: 2px solid var(--color-border); border-radius: var(--radius); background: var(--color-muted); cursor: pointer;
+}
+.sp-media__grid button.is-selected { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary); }
+.sp-media__grid img { width: 100%; height: 100%; object-fit: cover; }
+.sp-media__grid span { padding: var(--space-2); font-size: var(--text-sm); word-break: break-all; }
+.sp-media__details { border-inline-start: 1px solid var(--color-border); padding-inline-start: var(--space-3); }
+.sp-media__footer { display: flex; justify-content: flex-end; align-items: center; gap: var(--space-3); margin-top: var(--space-3); }

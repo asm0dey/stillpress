@@ -14,7 +14,27 @@ export interface ApiError {
 /** GET /session */
 export interface SessionUser { id: number; login: string; displayName: string; role: Role }
 /** GET /site */
-export interface Site { title: string; homeUrl: string; language: string; items: number; comments: number; importAllowed: boolean }
+export interface Site {
+  title: string; homeUrl: string; language: string; items: number; comments: number; importAllowed: boolean;
+  timezone: string; permalinkStructure: string;
+}
+export type ItemStatus = 'draft' | 'pending' | 'future' | 'publish' | 'private' | 'trash';
+/** GET /items/{id}; date is in the site's time zone */
+export interface Item {
+  id: number; type: 'post' | 'page'; title: string; slug: string | null; status: ItemStatus; body: string;
+  bodyFormat: 'blocks' | 'classic'; excerpt: string; date: string | null; permalink: string | null;
+  categories: number[]; tags: number[]; authorId: number | null; author: string | null; parentId: number | null;
+  commentStatus: 'open' | 'closed'; menuOrder: number | null; modifiedAt: string; autosave: { createdAt: string } | null;
+}
+/** One row of GET /items */
+export interface ItemSummary {
+  id: number; type: 'post' | 'page'; title: string; status: ItemStatus; author: string | null;
+  date: string | null; modified: string; permalink: string | null;
+}
+/** GET /media/{id}, POST /media */
+export interface Media {
+  id: number; url: string | null; mimeType: string | null; width: number | null; height: number | null; title: string | null; alt: string | null;
+}
 /** GET and PUT /settings */
 export interface SiteSettings {
   title: string; description: string; language: string; homeUrl: string; timezone: string;
@@ -47,6 +67,11 @@ export interface ImportStatus {
   contentLeft: boolean;
 }
 
+/** The csrf-token cookie (set by any API GET), which every non-GET echoes in X-CSRF-TOKEN. */
+export function csrfToken(): string | undefined {
+  return document.cookie.match(/(?:^|; )csrf-token=([^;]*)/)?.[1];
+}
+
 /**
  * Calls the admin JSON API. Every request echoes the csrf-token cookie (set by any API GET) in X-CSRF-TOKEN; a
  * FormData body goes as multipart (the browser sets its Content-Type), anything else as JSON. Non-2xx throws an
@@ -57,7 +82,7 @@ export async function api<T = void>(
   { method = 'GET', body }: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  const token = document.cookie.match(/(?:^|; )csrf-token=([^;]*)/)?.[1];
+  const token = csrfToken();
   if (token) headers['X-CSRF-TOKEN'] = token;
   const form = body instanceof FormData;
   if (body !== undefined && !form) headers['Content-Type'] = 'application/json';

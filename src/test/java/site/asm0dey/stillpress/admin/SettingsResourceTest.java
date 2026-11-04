@@ -144,6 +144,17 @@ class SettingsResourceTest {
     }
 
     @Test
+    void siteShowsZoneAndStructureToAnyUser() {
+        settings.put("permalink_structure", "/%postname%/");
+        as(editor)
+            .get("/admin/api/site")
+            .then()
+            .statusCode(200)
+            .body("timezone", equalTo("Europe/Moscow"))
+            .body("permalinkStructure", equalTo("/%postname%/"));
+    }
+
+    @Test
     void editorIs403() {
         as(editor).get("/admin/api/settings").then().statusCode(403);
         put(editor, current()).then().statusCode(403);

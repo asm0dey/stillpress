@@ -113,3 +113,8 @@ section.danger { margin-top: var(--space-6); }
 .publish progress { width: 100%; max-width: 480px; height: var(--space-3); accent-color: var(--color-accent); }
 
 .field select, .field textarea { width: 100%; min-height: var(--control-height); padding: var(--space-2) var(--space-3); font: inherit; border: 1px solid var(--color-input-border); border-radius: var(--radius); background: var(--color-card); color: var(--color-foreground); }
+
+.heading-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
+.heading-row h1 { margin: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.tabs button[aria-pressed='true'] { background: var(--color-primary); color: var(--color-on-primary); border-color: var(--color-primary); }

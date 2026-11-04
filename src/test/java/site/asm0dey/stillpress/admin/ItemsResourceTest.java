@@ -225,7 +225,8 @@ class ItemsResourceTest {
         update(editor, byEditor, Map.of("title", "Handed over", "authorId", author2Id))
             .then()
             .statusCode(200)
-            .body("authorId", equalTo((int) author2Id));
+            .body("authorId", equalTo((int) author2Id))
+            .body("author", equalTo("author2"));
         var own = create(author1, "post");
         update(author1, own, Map.of("title", "Mine", "authorId", author2Id)).then().statusCode(403);
         assertThat(get(author1, own.getLong("id")).getString("title")).isEqualTo("");

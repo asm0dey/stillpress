@@ -2,7 +2,10 @@ import { Link, useNavigate } from 'react-router';
 import { type ReactNode, useEffect, useState } from 'react';
 import { type Role, type SessionUser, type Site, api } from './api.ts';
 
-/** The admin header; Categories and Tags show for editors and administrators, the rest for administrators only. */
+/**
+ * The admin header: Posts for everyone; Pages, Categories and Tags for editors and administrators; the rest for
+ * administrators only.
+ */
 export default function Shell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [role, setRole] = useState<Role | null>(null);
@@ -22,6 +25,8 @@ export default function Shell({ children }: { children: ReactNode }) {
       <header className="bar">
         <nav>
           <Link to="/" className="brand">Stillpress</Link>
+          {role && <Link to="/posts">Posts</Link>}
+          {(role === 'administrator' || role === 'editor') && <Link to="/pages">Pages</Link>}
           {(role === 'administrator' || role === 'editor') && <Link to="/categories">Categories</Link>}
           {(role === 'administrator' || role === 'editor') && <Link to="/tags">Tags</Link>}
           {role === 'administrator' && <Link to="/redirects">Redirects</Link>}

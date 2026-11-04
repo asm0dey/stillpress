@@ -18,7 +18,7 @@ class AdminShellTest {
 
     @Test
     void spaServedForClientRoutes() {
-        for (var path : new String[] {"/admin/", "/admin/setup", "/admin/users"}) {
+        for (var path : new String[] {"/admin/", "/admin/setup", "/admin/users", "/admin/posts", "/admin/edit/1"}) {
             given()
                 .get(path)
                 .then()
