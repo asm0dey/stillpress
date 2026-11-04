@@ -20,7 +20,9 @@ Split into three plans (agreed 2026-11-04):
 
 - **02a admin foundation** (done; `2026-11-04-stillpress-02a-admin-foundation.md`, results in `2026-11-04-stillpress-02a-results.md`): Mode 2 nginx include, setup wizard with token and WXR upload, admin shell (Quinoa + Bun), `/wp-admin` redirects, password login with rate limiting, users and roles, CLI password reset, server-side import-once guard.
 - **02b editing and publishing**: editor, WP REST slice, classic block, reusable blocks, media library, statuses and scheduling, incremental and background republish, preview, revisions, admin i18n.
+  - Scheduled publishing: choose with the user at plan time between in-process db-scheduler (the precedent in four projects) and quarkus-scheduler.
 - **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications.
+  - Secrets stored at rest (TOTP seeds, SMTP password, Turnstile secret, ALTCHA HMAC key) are encrypted with Google Tink: a keyset, per-row AEAD, and a keyed HMAC for anything looked up by value (precedent `encryption-tink`).
 
 - Serving Mode 2, the default: one-time generated nginx include (static root at `output/current`, `try_files $uri $uri/ @stillpress` fallback, proxied `/admin`, login, API, preview and legacy query URLs) plus an example nginx setup; the acceptance run goes through nginx (§6.2 item 9, ADR 0004). Mode 1 (Stillpress serves everything) ships in plan 01 and stays supported.
 - Setup wizard at `/admin` with one-time setup token; wizard screens for Start empty and WXR upload (§6.4).
@@ -163,7 +165,7 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - CLI: `--help` is not wired; `nginx-config --help` prints "Unknown option" before the usage.
 - Build: the schema test covers only the `setting` table; some dependency versions are inline instead of properties; nothing enforces that runtime jOOQ equals the code-generation jOOQ; the dialect test checks the Quarkus mapping, not the property expansion.
 - Licence: `LICENSE` was reflowed and carries no explicit "or later" statement.
-- Accounts (02a): `findByLoginOrEmail` lower-cases in Java and SQL separately (non-ASCII emails may disagree); `setRoleKeepingAdministrator` locks without `ORDER BY` and has no concurrency test; `PasswordsTest` lacks the 11-character case; a CSRF test asserts only "not 403"; only `AuthResourceTest` resets the shared login limiter; no rollback test for the set-password transaction; no test that no setup token is printed when an administrator already exists.
+- Accounts (02a): `findByLoginOrEmail` lower-cases in Java and SQL separately (non-ASCII emails may disagree); `setRoleKeepingAdministrator` locks without `ORDER BY` and has no concurrency test; `PasswordsTest` lacks the 11-character case; only `AuthResourceTest` resets the shared login limiter; no rollback test for the set-password transaction; no test that no setup token is printed when an administrator already exists.
 - Import (02a): an old job's `finally` can briefly race a fast retry's `start()`; the upload file stays in `<data>/import` if the thread fails to start; no test for a publish failing after content was written; the admin media cap rejects a negative value only when an import starts and its test proves only a cap of 0.
 - nginx (02a): the `root` path is unquoted in the template; HEAD is untested through nginx; small Mode 1/Mode 2 differences (POST to a static file gives 405, `%2F` is decoded by nginx, a bare `?p` is served by nginx).
 - Tests (02a): `PostgresAccountsTest` waits on futures without a timeout; `postgres:18` is written both in the test and in the codegen config; every `@QuarkusTest` augmentation runs `bun install` and a Vite build.
