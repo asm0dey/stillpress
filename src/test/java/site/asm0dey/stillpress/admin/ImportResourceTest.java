@@ -5,6 +5,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.nullValue;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
@@ -70,6 +71,19 @@ class ImportResourceTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    @Test
+    void rejectedUploadLeavesTheRunningImportAlone() {
+        var gate = fetcher.hold();
+        try {
+            upload(sampleBytes()).then().statusCode(202);
+            upload(sampleBytes()).then().statusCode(409);
+            as(adminCookie).get("/admin/api/import").then().body("state", equalTo("running")).body("error", nullValue());
+        } finally {
+            gate.countDown();
+        }
+        awaitStatus("done"::equals);
     }
 
     @Test

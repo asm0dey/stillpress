@@ -27,7 +27,7 @@ public class ImportJob {
     DataDir dataDir;
     @Inject
     ItemRepository store;
-    // true from begin() until the outcome is persisted, so "running" without it means a dead import (or the CLI)
+    // true from a successful begin() until the outcome is persisted: "running" without it is a dead import (or the CLI)
     private volatile boolean live;
     private volatile int items, media;
     private volatile String report, error;
@@ -39,34 +39,29 @@ public class ImportJob {
     public record Status(String state, int items, int media, String report, String error, boolean contentLeft) {}
 
     /**
-     * Moves {@code wxr} into the data directory and starts the import; returns at once.
+     * Moves {@code wxr} into the data directory and starts the import; returns at once. A refused start changes
+     * nothing; synchronized with {@link #status} so no poll sees this import begun but not yet live.
      */
-    public void start(Path wxr, ImportOptions options) throws AlreadyImportedException {
+    public synchronized void start(Path wxr, ImportOptions options) throws AlreadyImportedException {
+        guard.begin();
         live = true;
-        try {
-            guard.begin();
-        } catch (AlreadyImportedException e) {
-            live = false;
-            throw e;
-        }
         items = 0;
         media = 0;
         report = null;
         error = null;
-        Path file;
         try {
             var dir = Files.createDirectories(dataDir.root().resolve("import"));
-            file = Files.move(wxr, dir.resolve(System.currentTimeMillis() + ".xml"));
-        } catch (IOException e) {
+            var file = Files.move(wxr, dir.resolve(System.currentTimeMillis() + ".xml"));
+            // a plain thread: no request context or transaction leaks in; the importer opens its own
+            Thread
+                .ofVirtual()
+                .name("wxr-import")
+                .start(() -> run(file, options));
+        } catch (IOException | RuntimeException e) {
             fail(e);
             live = false;
-            throw new UncheckedIOException(e);
+            throw e instanceof IOException io ? new UncheckedIOException(io) : (RuntimeException) e;
         }
-        // a plain thread: no request context or transaction leaks in; the importer opens its own
-        Thread
-            .ofVirtual()
-            .name("wxr-import")
-            .start(() -> run(file, options));
     }
 
     private void run(Path file, ImportOptions options) {
@@ -125,7 +120,7 @@ public class ImportJob {
     /**
      * The state is the persisted one, so an import run by the CLI or before a restart shows too.
      */
-    public Status status() {
+    public synchronized Status status() {
         var state = guard.state().orElse("idle");
         var problem = state.equals("running") && !live ? NOT_RUNNING_HERE : error;
         return new Status(state, items, media, report, problem, !store.contentEmpty());

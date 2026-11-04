@@ -15,6 +15,7 @@ import module java.base;
 public class FakeMediaFetcher implements MediaFetcher {
     private volatile String failOn;
     private volatile String errorOn;
+    private volatile CountDownLatch gate;
     private final Set<String> missing = ConcurrentHashMap.newKeySet();
     private final List<String> fetched = new CopyOnWriteArrayList<>();
 
@@ -30,6 +31,14 @@ public class FakeMediaFetcher implements MediaFetcher {
         errorOn = suffix;
     }
 
+    /**
+     * Every fetch waits until the returned latch is counted down (or {@link #reset}).
+     */
+    public CountDownLatch hold() {
+        gate = new CountDownLatch(1);
+        return gate;
+    }
+
     public void missing(String suffix) {
         missing.add(suffix);
     }
@@ -41,6 +50,10 @@ public class FakeMediaFetcher implements MediaFetcher {
     public void reset() {
         failOn = null;
         errorOn = null;
+        if (gate != null) {
+            gate.countDown();
+            gate = null;
+        }
         missing.clear();
         fetched.clear();
     }
@@ -49,6 +62,14 @@ public class FakeMediaFetcher implements MediaFetcher {
     public Optional<byte[]> fetch(URI source) {
         var s = source.toString();
         fetched.add(s);
+        var g = gate;
+        if (g != null) {
+            try {
+                g.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         if (failOn != null && s.endsWith(failOn)) {
             throw new UncheckedIOException(new IOException("boom: " + s));
         }
