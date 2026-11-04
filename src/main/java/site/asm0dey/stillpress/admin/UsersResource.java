@@ -99,9 +99,9 @@ public class UsersResource {
             return error(409, "email_taken");
         }
         guard.close();
-        long id;
+        AuthorRecord created;
         try {
-            id = users.create(login, email, name, role).getId();
+            created = users.create(login, email, name, role);
         } catch (DataAccessException e) {
             if (!"23505".equals(e.sqlState())) {
                 throw e;
@@ -109,6 +109,10 @@ public class UsersResource {
             // a concurrent create took the login; thrown, so the transaction rolls back
             throw new WebApplicationException(error(409, "login_taken"));
         }
+        // a full publish renders every author's archive, the new user's empty one too
+        queue.base("/author/" + created.getSlug() + "/");
+        jobs.requestPublish();
+        var id = created.getId();
         return Response.status(201).entity(Map.of("id", id, "setPasswordUrl", links.issue(id))).build();
     }
 

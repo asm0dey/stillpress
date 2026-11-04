@@ -1,6 +1,9 @@
 package site.asm0dey.stillpress.publish;
 
+import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
+import static site.asm0dey.stillpress.Csrf.csrf;
+import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.ITEM_TERM;
 import static site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK;
@@ -11,13 +14,19 @@ import module java.base;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.content.ItemService;
+import site.asm0dey.stillpress.content.ReusableBlockService;
 import site.asm0dey.stillpress.content.TermService;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
+import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.FragmentRepository;
+import site.asm0dey.stillpress.store.ReusableBlockRepository;
+import site.asm0dey.stillpress.store.SessionRepository;
 
 @QuarkusTest
 class IncrementalPublishTest {
@@ -38,6 +47,18 @@ class IncrementalPublishTest {
     TermService terms;
     @Inject
     PublishLock lock;
+    @Inject
+    ItemService items;
+    @Inject
+    ReusableBlockService blockService;
+    @Inject
+    ReusableBlockRepository blocks;
+    @Inject
+    AuthorRepository users;
+    @Inject
+    SessionRepository sessions;
+    @Inject
+    Jobs jobs;
 
     @BeforeEach
     void publishedSample() throws Exception {
@@ -140,6 +161,105 @@ class IncrementalPublishTest {
         assertThat(trees.getFirst()).isEqualTo(trees.getLast());
         assertThat(trees.getFirst()).containsKey("category/trips/europe/index.html");
         assertThat(trees.getFirst().keySet()).noneMatch(k -> k.startsWith("category/travel/"));
+    }
+
+    /**
+     * Each change goes through the service (or endpoint) that makes it, which queues what it changed; nothing in the
+     * test deletes fragments or queues rows for it.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "user created",
+            "display name",
+            "default category",
+            "go live",
+            "trash",
+            "restore",
+            "block save"
+    })
+    void incrementalEqualsFullAfterServiceSave(String change) {
+        var admin = users.create("boss", "boss@example.org", "Boss", Role.ADMINISTRATOR).getId();
+        var cookie = sessions.create(admin);
+        var actor = new ItemService.Actor(admin, Role.ADMINISTRATOR);
+        var post = itemId(5994);
+        // held throughout so the publish each save asks for cannot take the queue before this test reads it
+        var trees = lock.holding(() -> {
+            switch (change) {
+                case "go live" -> db.update(ITEM).set(ITEM.STATUS, "future").where(ITEM.ID.eq(post)).execute();
+                case "restore" -> items.trash(post, actor);
+                default -> {
+                }
+            }
+            queue.snapshot().ifPresent(queue::done);
+            publisher.publishAll();
+            switch (change) {
+                case "user created" -> csrf()
+                    .contentType(JSON)
+                    .cookie("sp_session", cookie)
+                    .body(Map.of("login", "newbie", "email", "n@example.org", "displayName", "Newbie", "role", "author")
+                    )
+                    .post("/admin/api/users")
+                    .then()
+                    .statusCode(201);
+                case "display name" -> {
+                    var author = db
+                        .selectFrom(AUTHOR)
+                        .where(AUTHOR.ID.eq(db.select(ITEM.AUTHOR_ID).from(ITEM).where(ITEM.ID.eq(post))))
+                        .fetchOne();
+                    csrf()
+                        .contentType(JSON)
+                        .cookie("sp_session", cookie)
+                        .body(Map.of("displayName", "Renamed", "email", author.getEmail()))
+                        .put("/admin/api/users/" + author.getId())
+                        .then()
+                        .statusCode(204);
+                }
+                case "default category" -> {
+                    var r = items.create("post", admin);
+                    items.update(
+                            r.getId(),
+                            new ItemService.Update(
+                                    "Fresh",
+                                    null,
+                                    "<p>x</p>",
+                                    null,
+                                    null,
+                                    "publish",
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    null,
+                                    r.getModifiedAt()
+                            ),
+                            actor
+                    );
+                }
+                case "go live" -> jobs.goLive(post + "@0");
+                case "trash" -> items.trash(post, actor);
+                case "restore" -> items.restore(post, actor);
+                case "block save" -> {
+                    var b = blocks.find(6001L).orElseThrow();
+                    blockService.save(6001L, b.getTitle(), "<p>Changed block</p>", b.getModifiedAt(), actor);
+                }
+                default -> throw new IllegalArgumentException(change);
+            }
+            var inc = queue.snapshot().map(batch -> {
+                var t = tree(publisher.publish(batch).release());
+                queue.done(batch);
+                return t;
+            }).orElseGet(() -> {
+                try {
+                    return tree(dataDir.current().toRealPath());
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            });
+            return List.of(inc, tree(publisher.publishAll().release()));
+        });
+        assertThat(trees.getFirst()).isEqualTo(trees.getLast());
     }
 
     @Test
