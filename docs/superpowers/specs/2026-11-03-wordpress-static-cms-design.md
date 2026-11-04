@@ -94,7 +94,9 @@ without PHP.
 
 - **Quarkus** (Java 25 LTS), Maven.
 - **mise** manages every tool for the whole project (Java, Maven, Bun),
-  pinned in `mise.toml`; common tasks are mise tasks.
+  pinned in `mise.toml`; common tasks are mise tasks. When mise tasks are
+  not enough, go-task is installed as a mise tool and its `Taskfile.yml`
+  holds those tasks.
 - **Admin front end built with Bun**, integrated via **Quarkus Quinoa**
   (Vite). Known wrinkle: Quinoa only supports Bun by downloading its own
   copy (`quarkus.quinoa.package-manager-install.bun-version`); keep that
