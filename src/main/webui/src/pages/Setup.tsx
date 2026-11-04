@@ -60,6 +60,7 @@ export default function Setup() {
       if (err.error === 'csrf') setProblem(err.message!);
       else if (err.status === 403) setErrors({ token: __('That token does not match the one in the server log.', 'stillpress') });
       else if (err.status === 400) setErrors({ [err.field!]: messages()[err.field!] ?? __('Check this value.', 'stillpress') });
+      else if (err.error === 'email_taken') setErrors({ email: __('Another user has this email.', 'stillpress') });
       else if (err.status === 409) setProblem('already');
       else setProblem(__('Setup failed. Check the server log and try again.', 'stillpress'));
     } finally {
