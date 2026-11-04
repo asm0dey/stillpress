@@ -3,7 +3,8 @@ package site.asm0dey.stillpress.account;
 import module java.base;
 
 /**
- * Validation of a user's login, email and display name, shared by user creation ({@code POST /admin/api/users})
+ * Validation of a user's login, email and display name, shared by the setup wizard, user creation
+ * ({@code POST /admin/api/users})
  * and profile edits ({@code PUT /admin/api/users/{id}}). Callers pass the
  * trimmed values and store them trimmed; limits are the {@code author} columns'.
  */

@@ -119,6 +119,28 @@ class SetupResourceTest {
     }
 
     @Test
+    void upgradeToAnEmailAnotherUserHasIs409() {
+        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).getId();
+        users.create("other", "ADMIN0@example.org", "Other", Role.AUTHOR);
+        setup(token.current().orElseThrow()).then().statusCode(409).body("error", equalTo("email_taken"));
+        assertThat(users.findById(id).orElseThrow().getRole()).isEqualTo(Role.AUTHOR.id());
+        assertThat(token.current()).isPresent();
+    }
+
+    @Test
+    void userFieldsFollowTheUsersScreensRules() {
+        var t = token.current().orElseThrow();
+        var body = body(t, "ad#min");
+        post(body).then().statusCode(400).body("error", equalTo("invalid")).body("field", equalTo("login"));
+        body.put("login", "  admin0 ");
+        body.put("email", " admin0@example.org ");
+        body.put("displayName", " Admin ");
+        post(body).then().statusCode(201);
+        var u = users.findByLogin("admin0").orElseThrow();
+        assertThat(List.of(u.getEmail(), u.getDisplayName())).containsExactly("admin0@example.org", "Admin");
+    }
+
+    @Test
     void wrongTokenIs403() {
         setup("not-the-token").then().statusCode(403).body("error", equalTo("bad_token"));
     }

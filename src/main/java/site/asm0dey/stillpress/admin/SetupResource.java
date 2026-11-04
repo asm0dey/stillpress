@@ -15,6 +15,7 @@ import module java.base;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SessionAuthMechanism;
+import site.asm0dey.stillpress.account.UserFields;
 import site.asm0dey.stillpress.content.SiteReset;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
@@ -65,19 +66,37 @@ public class SetupResource {
     }
 
     @POST
-    public Response setup(Setup s) {
+    public Response setup(Setup sent) {
         String raw;
         LOCK.lock();
         try {
             if (users.anyAdministratorWithPassword()) {
                 return error(409, Map.of("error", "already_set_up"));
             }
-            if (s == null || !token.matches(s.token())) {
+            if (sent == null || !token.matches(sent.token())) {
                 return error(403, Map.of("error", "bad_token"));
             }
+            var s = new Setup(
+                    sent.token(),
+                    sent.title(),
+                    sent.language(),
+                    UserFields.trim(sent.login()),
+                    UserFields.trim(sent.email()),
+                    UserFields.trim(sent.displayName()),
+                    sent.password(),
+                    sent.timezone()
+            );
             var field = invalidField(s);
             if (field != null) {
                 return error(400, Map.of("error", "invalid", "field", field));
+            }
+            // an upgraded imported author keeps its row; anyone else's email is taken
+            var upgraded = users
+                .findByLogin(s.login())
+                .map(u -> u.getId())
+                .orElse(-1L);
+            if (users.emailTaken(s.email(), upgraded)) {
+                return error(409, Map.of("error", "email_taken"));
             }
             var hash = Passwords.hash(s.password());
             // scheme and authority are the client's when a trusted proxy forwarded them
@@ -151,13 +170,13 @@ public class SetupResource {
         if (s.language() == null || !LANGUAGE.matcher(s.language()).matches()) {
             return "language";
         }
-        if (blank(s.login()) || !s.login().equals(s.login().strip()) || s.login().length() > 60) {
+        if (!UserFields.validLogin(s.login())) {
             return "login";
         }
-        if (blank(s.email()) || s.email().indexOf('@') < 1 || s.email().length() > 100) {
+        if (!UserFields.validEmail(s.email())) {
             return "email";
         }
-        if (blank(s.displayName()) || s.displayName().length() > 250) {
+        if (!UserFields.validDisplayName(s.displayName())) {
             return "displayName";
         }
         try {
