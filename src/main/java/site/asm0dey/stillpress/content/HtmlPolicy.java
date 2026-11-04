@@ -39,6 +39,10 @@ public final class HtmlPolicy {
     private static final Set<String> URL_KEYS = Set.of("url", "href", "src", "link");
     // jsoup's parse error for an end tag with no open element: "Unexpected EndTag token [</div>] when in state …"
     private static final Pattern STRAY_END_TAG = Pattern.compile("Unexpected EndTag token \\[</([^>\\s]+)");
+    private static final Set<String> PAGE_ELEMENTS = Set.of("html", "head", "body");
+    // HTML's formatting elements: their end tags run the adoption agency, which only closes formatting elements
+    private static final Set<String> FORMATTING =
+            Set.of("a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u");
     private static final Pattern IGNORED = Pattern.compile("[\\s\\p{Cntrl}]");
 
     private HtmlPolicy() {
@@ -120,28 +124,56 @@ public final class HtmlPolicy {
             return List.of();
         }
         var id = "sp-sentinel-" + UUID.randomUUID();
+        var wrapperId = "sp-wrapper-" + UUID.randomUUID();
         var parser = Parser.htmlParser().setTrackErrors(Integer.MAX_VALUE);
-        // the leading "x" turns a trailing "<" or "</" into a tag, as the next fragment's first letter would
-        var doc = Jsoup.parse(fragment + "x<sp-sentinel id=\"" + id + "\"></sp-sentinel>", "", parser);
+        // inside a <div>, as on a page; the leading "x" turns a trailing "<" or "</" into a tag, as the next
+        // fragment's first letter would
+        var input = "<div id=\""
+                + wrapperId
+                + "\">"
+                + fragment
+                + "x<sp-sentinel id=\""
+                + id
+                + "\"></sp-sentinel></div>";
+        var doc = Jsoup.parse(input, "", parser);
         var out = new LinkedHashSet<String>();
+        var sentinel = doc.getElementById(id);
+        var wrapper = doc.getElementById(wrapperId);
         for (var error : parser.getErrors()) {
             var m = STRAY_END_TAG.matcher(error.getErrorMessage());
-            if (m.find() && !Set.of("p", "br", "sp-sentinel").contains(m.group(1).toLowerCase(Locale.ROOT))) {
-                out.add("stray </" + m.group(1).toLowerCase(Locale.ROOT) + "> end tag");
+            // the wrapper's own </div> is stray when the fragment left a table open; reported as unclosed below
+            if (!m.find() || error.getPosition() >= input.length() - "</div>".length()) {
+                continue;
+            }
+            var name = m.group(1).toLowerCase(Locale.ROOT);
+            // misnested formatting (<b><i>x</b></i>) was opened here; the adoption agency never pops past it
+            var misnested = FORMATTING.contains(name) && !doc.getElementsByTag(name).isEmpty();
+            if (!Set.of("p", "br", "sp-sentinel").contains(name) && !misnested) {
+                out.add("stray </" + name + "> end tag");
             }
         }
-        var sentinel = doc.getElementById(id);
         // a trailing "<" makes "x<sp-sentinel" one tag name that still carries the id
         if (sentinel == null || !sentinel.normalName().equals("sp-sentinel")) {
             out.add("unclosed markup at the end");
             return List.copyOf(out);
         }
+        if (wrapper != null && !sentinel.parents().contains(wrapper)) {
+            // the fragment closed the <div> around it, as it would the page's own container
+            out.add("stray </div> end tag");
+            return List.copyOf(out);
+        }
         // open <p>s are harmless (wpautop leaves one): the next block-level element closes them by implied end tag
-        for (Element e = sentinel; e != doc.body(); e = e.parent()) {
-            if (e.nextSibling() != null || e != sentinel && !e.normalName().equals("p") || e.parent() == null) {
+        for (Element e = sentinel; e != wrapper; e = e.parent()) {
+            if (e == null || e.nextSibling() != null || e != sentinel && !e.normalName().equals("p")) {
                 out.add("unclosed markup at the end");
                 break;
             }
+        }
+        // </body> or </html> moves what follows out of the page's body
+        var outside =
+                doc.childNodeSize() > 1 || doc.body().parent().childNodeSize() > 2 || doc.body().childNodeSize() > 1;
+        if (outside || wrapper == null || wrapper.parent() != doc.body()) {
+            out.add("unclosed markup at the end");
         }
         return List.copyOf(out);
     }
@@ -208,6 +240,10 @@ public final class HtmlPolicy {
         for (var el : Jsoup.parse(html).getAllElements()) {
             var tag = el.normalName();
             if (ELEMENTS.contains(tag)) {
+                out.add("<" + tag + "> element");
+            }
+            // browsers merge these attributes onto the page's own <html>, <head> or <body>
+            if (PAGE_ELEMENTS.contains(tag) && el.attributesSize() > 0) {
                 out.add("<" + tag + "> element");
             }
             for (var a : el.attributes()) {

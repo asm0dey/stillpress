@@ -84,9 +84,8 @@ class HtmlPolicyTest {
         )) {
             assertThat(HtmlPolicy.violations(payload)).as(payload).isNotEmpty();
         }
-        assertThat(HtmlPolicy.violations("<p>x</p><body onload=alert(1)>")).containsExactly(
-                "onload attribute on <body>"
-        );
+        assertThat(HtmlPolicy.violations("<p>x</p><body onload=alert(1)>"))
+            .containsExactlyInAnyOrder("<body> element", "onload attribute on <body>");
         assertThat(HtmlPolicy.violations("<p>a</p><meta http-equiv=refresh content=0>")).containsExactly(
                 "<meta> element"
         );
@@ -160,9 +159,13 @@ class HtmlPolicyTest {
     @Test
     void counterexamplesFoundByPropertyTests() {
         // a stray end tag would close the archive entry's own <div>
-        assertThat(HtmlPolicy.balanced("</div src=' onerror=alert(1)>' onerror=alert(1)>"))
-            .containsExactly("stray </div> end tag");
+        assertThat(HtmlPolicy.balanced("</div src=' onerror=alert(1)>' onerror=alert(1)>")).contains(
+                "stray </div> end tag"
+        );
         assertThat(HtmlPolicy.balanced("<p>a</p></p>a</br>")).isEmpty();
+        // found by the round-5 hunt: </body> moves the rest of the post out of the page's body
+        assertThat(HtmlPolicy.fragment("</body\f<html style=\"display:none\"><!-- /wp:paragraph -->"))
+            .contains("stray </body> end tag");
         // a block ending in "<" next to one starting with a letter forms a tag
         for (var end : List.of("math onclick=<", "a</", "a<!", "a<!-")) {
             assertThat(HtmlPolicy.balanced(end)).as(end).contains("unclosed markup at the end");
@@ -179,5 +182,28 @@ class HtmlPolicyTest {
         var served = "[caption id=\"a\" width=\"300\"]</<img src=x alt='' onerror=alert(1)>[/caption]";
         assertThat(HtmlPolicy.inPublished(served)).isEmpty();
         assertThat(HtmlPolicy.violations(served)).containsExactly("onerror attribute on <img>");
+    }
+
+    @Test
+    void pageElementsWithAttributesAreRefused() {
+        assertThat(HtmlPolicy.violations("<html style=\"display:none\">")).containsExactly("<html> element");
+        assertThat(HtmlPolicy.violations("<body hidden>")).containsExactly("<body> element");
+        assertThat(HtmlPolicy.violations("x<body style=\"background:url(https://evil.example/a.png)\">"))
+            .containsExactly("<body> element");
+        assertThat(HtmlPolicy.violations("<p>a</p>")).isEmpty();
+    }
+
+    @Test
+    void misnestedFormattingIsAcceptedStrayBlockEndTagsAreNot() {
+        for (var misnested : List.of("<strong><em>x</strong></em>", "<a href=\"/x\"><b>bold</a></b>", "<b><p>x</b></p>")) {
+            assertThat(HtmlPolicy.balanced(misnested)).as(misnested).isEmpty();
+        }
+        for (var stray : List.of("a</div>", "a</li>", "a</td>")) {
+            assertThat(HtmlPolicy.balanced(stray)).as(stray).isNotEmpty();
+        }
+        assertThat(HtmlPolicy.balanced("<div>a</div></div>")).contains("stray </div> end tag");
+        assertThat(HtmlPolicy.balanced("a</body><!-- c -->")).contains("stray </body> end tag");
+        assertThat(HtmlPolicy.balanced("a</html>b")).isNotEmpty();
+        assertThat(HtmlPolicy.balanced("<table><tr><td>x")).containsExactly("unclosed markup at the end");
     }
 }
