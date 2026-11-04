@@ -34,6 +34,8 @@
 
 - Optimistic concurrency: every item and reusable-block update carries `expectedModifiedAt`; a mismatch is **409** `{"error":"conflict"}` and changes nothing.
 - Permalinks of new items come from setting `permalink_structure` (WordPress tokens `%year% %monthnum% %day% %hour% %minute% %second% %postname% %post_id% %category% %author%`); default `/%year%/%monthnum%/%day%/%postname%/`. The import infers it from the imported posts. Pages are `/<ancestor slugs>/<slug>/`. An item gets its permalink when it is first published. When a published item's permalink changes, the old path gets a 301 to the new one in the redirect map.
+- Everything an import fills in can also be set in the admin, so a site started empty is a full peer of an imported one: site settings (Task 6b), users, categories and tags, redirects (Task 6c), item author, comment status and page order (Tasks 4, 7).
+- New items get a WordPress-style public id: `source_id` = `coalesce(max(source_id), 0) + 1` in the insert. It cannot collide with imported ids, whose `?p=N` redirects already exist. The id feeds `guid` = `<home_url>/?p=<source_id>` (set at creation, never changed, as WordPress does) and, on publish, the redirects `?p=<source_id>` (and `?page_id=<source_id>` for pages) → permalink.
 - Site time zone: setting `timezone` (IANA id). The wizard stores the browser's `Intl.DateTimeFormat().resolvedOptions().timeZone`; missing means `UTC`. `published_local` = `published_at` in that zone.
 - Revisions: one per save of an item or reusable block (author, time). The newest **25** are kept per object (setting `revisions_keep`). Autosave: one per object and user, written about every **60 s** while there are unsaved edits, replaced on each autosave, deleted on save; not a revision.
 - Publish queue rows: `kind` is one of `item` (ref = item id), `base` (ref = listing base path, e.g. `/category/travel/`), `media`, `all`. A save that changes the public site inserts its rows **in the same transaction** as the save.
@@ -320,8 +322,8 @@ git push
 - Produces:
   - `final class Capabilities { static boolean canEdit(Role r, long userId, ItemRecord item); static boolean canSetStatus(Role r, long userId, ItemRecord item, String status); static boolean canCreate(Role r, String type); static boolean canCreateBlock(Role r); static boolean canEditBlock(Role r, long userId, ReusableBlockRecord block) /* owner (author and up) or editor/administrator */; static boolean canUpload(Role r); static boolean canRepublish(Role r); }` — exactly the Global Constraints table.
   - `@ApplicationScoped class ItemService` (all `@Transactional`):
-    - `ItemRecord create(String type /*post|page*/, long authorId)` → `draft`, empty title and body, `body_format` `blocks`.
-    - `ItemRecord update(long id, Update u, Actor actor)`; `record Update(String title, String slug, String body, String bodyFormat, String excerpt, String status, LocalDateTime localDate /* site zone; null = keep */, List<Long> categories, List<Long> tags, Long parentId, LocalDateTime expectedModifiedAt) {}`; `record Actor(long userId, Role role) {}`. Rules, in order:
+    - `ItemRecord create(String type /*post|page*/, long authorId)` → `draft`, empty title and body, `body_format` `blocks`, `comment_status` from setting `default_comment_status` (`open` when absent), public id and `guid` per Global Constraints.
+    - `ItemRecord update(long id, Update u, Actor actor)`; `record Update(String title, String slug, String body, String bodyFormat, String excerpt, String status, LocalDateTime localDate /* site zone; null = keep */, List<Long> categories, List<Long> tags, Long parentId, Long authorId /* editors and administrators only */, String commentStatus /* open|closed */, Integer menuOrder, LocalDateTime expectedModifiedAt) {}`; `record Actor(long userId, Role role) {}`. Rules, in order:
       1. Conflict check (409).
       2. Capabilities (403).
       3. Slug: blank → `Slugs.title(title)`, else `Slugs.title(slug)`; made unique among items of that type (`-2`, `-3`…).
@@ -381,6 +383,11 @@ class CapabilitiesTest {
   }
   @Test void duplicateTitlesGetUniqueSlugs() { /* two posts "Same" published same day → "same", "same-2" */ }
   @Test void trashUnpublishesAndRestoreGivesDraft() { }
+  @Test void newItemIdSkipsImportedIdsAndGetsShortlink() {
+    // after importSample (max source id S): a new published post has guid "<home>/?p=<S+1>" and redirect "?p=<S+1>" → its permalink;
+    // the imported "?p=5994" redirect is unchanged
+  }
+  @Test void editorReassignsAuthorButAuthorCannot() { /* editor PUT authorId → saved; author1 PUT authorId author2 → 403 */ }
   @Test void listShowsOnlyOwnForAuthorsAndCountsByStatus() { }
   @Test void restoringRevisionOfPublishedItemRepublishes() { }
 }
@@ -531,7 +538,7 @@ A site started empty in the wizard must work as a blog without any WordPress imp
 **Interfaces:**
 - Consumes: `SettingRepository`, `TermRepository.create`, `PublishQueue.all()`, `Jobs.requestPublish()`, `PermalinkStructure`.
 - Produces:
-  - `GET /admin/api/settings` / `PUT /admin/api/settings` (`@RolesAllowed("administrator")`): `{"title","description","language","timezone","postsPerPage","postsPerRss","permalinkStructure","defaultCategory"}`. Validation: language as in setup; timezone a `ZoneId`; both counts 1–100; `permalinkStructure` starts and ends with `/` and contains `%postname%` or `%post_id%`; `defaultCategory` an existing category id or null. A bad field → 400 `{"error":"invalid","field"}`. Saving title, description, language or either count enqueues `all` (spec §6.2.1: a settings change triggers the background full republish). A permalink-structure change applies only to items published afterwards: existing permalinks never change (spec §9), and the screen says so.
+  - `GET /admin/api/settings` / `PUT /admin/api/settings` (`@RolesAllowed("administrator")`): `{"title","description","language","homeUrl","timezone","postsPerPage","postsPerRss","permalinkStructure","categoryBase","tagBase","defaultCategory","defaultCommentStatus"}`. Validation: language as in setup; timezone a `ZoneId`; both counts 1–100; `permalinkStructure` starts and ends with `/` and contains `%postname%` or `%post_id%`; `defaultCategory` an existing category id or null. A bad field → 400 `{"error":"invalid","field"}`. `homeUrl` is an absolute `http(s)` URL without a path; `categoryBase`/`tagBase` are one non-empty slug each and differ from each other. Saving title, description, language, `homeUrl`, either count or either base enqueues `all`; a base change also adds a 301 from each old archive base to the new one (spec §6.2.1: a settings change triggers the background full republish). A permalink-structure change applies only to items published afterwards: existing permalinks never change (spec §9), and the screen says so.
   - Default category: when a post is saved with no categories and is published (now or by go-live), it gets setting `default_category`. If that setting is unset, `ItemService` uses the category with slug `Slugs.title(name)`, creating it if missing, where name = "Без рубрики" when the site language starts with `ru`, else "Uncategorized". It then stores its id as `default_category`. The term is created lazily, never at setup, because the import guard requires an empty `term` table.
   - Automatic excerpt (WordPress `wp_trim_excerpt`): an entry whose `excerpt` is blank shows the first **55** words of the rendered body with tags stripped, followed by ` […]` when it was cut. Feeds keep using the stored excerpt as today.
   - `Settings.tsx`: one form with the fields above. Permalink presets: Day and name (`DEFAULT`), Month and name, Post name, Numeric (`/archives/%post_id%/`), Custom. The default-category select lists the categories. Linked from the dashboard for administrators.
@@ -572,6 +579,61 @@ A site started empty in the wizard must work as a blog without any WordPress imp
 
 ---
 
+### Task 6c: Back office for everything the import fills in
+
+Whatever an import sets must also be settable by hand, so a site started empty is a full peer of an imported one. Import writes: site settings (Task 6b), users, categories and tags, item fields (author, comment status, page order; Tasks 4 and 7), and the redirect map. This task adds the screens that are still missing.
+
+**Files:**
+- Create: `admin/TermsResource.java`, `admin/RedirectsResource.java`, `src/main/webui/src/pages/Terms.tsx`, `pages/Redirects.tsx`
+- Modify: `admin/UsersResource.java` + `pages/Users.tsx` (edit display name and email), `store/TermRepository.java` (`update`, `delete`), `store/RedirectRepository.java` (`list`, `delete`), `main.tsx` + `Shell.tsx` (routes `/categories`, `/tags`, `/redirects`)
+- Test: `admin/TermsResourceTest.java`, `admin/RedirectsResourceTest.java`, `admin/UsersResourceTest.java`
+
+**Interfaces:**
+- Consumes: `PublishQueue`, `Jobs.requestPublish()`, `Slugs`, `Capabilities`.
+- Produces:
+  - Terms (editors and administrators; authors keep creating terms from the editor via `POST /admin/api/terms`):
+    - `GET /admin/api/terms?taxonomy=` gains `count` and `description` (one aggregated query).
+    - `PUT /admin/api/terms/{id}` `{"name","slug","parentId","description"}`: slug via `Slugs.title`, unique per taxonomy (409 `slug_taken`), a parent cycle is 400 `field: "parentId"`. A slug or parent change moves the archive: enqueue the old and new bases plus the bases of every descendant, add a 301 from the old base to the new one, and delete the fragments of the term's items.
+    - `DELETE /admin/api/terms/{id}`: refused for the default category (409 `default_category`). Children move to the deleted term's parent. Its posts lose the term, and a post left with no category gets the default one. Enqueue the term's base and every affected item.
+  - Redirects (administrators): `GET /admin/api/redirects?search=&page=` → `{"items":[{"from","to","status"}],"total"}`. `POST` `{"from","to","status": 301|302}`: `from` is a decoded path starting with `/` or a query starting with `?`, `to` is a path or an absolute `http(s)` URL; a `from` equal to a published item's permalink is 409 `shadows_item`. `DELETE /admin/api/redirects?from=`. No publish is needed: redirects are served by Stillpress in both modes.
+  - Users: `PUT /admin/api/users/{id}` `{"displayName","email"}` (administrators; any user may edit their own) with the Task 12 validation; a display-name change enqueues the user's author base. Author slugs, and so `/author/<slug>/` URLs, never change.
+  - Screens: Categories (tree with parent select) and Tags share `Terms.tsx`; Redirects is a searchable table with add and delete. Both are in the nav for the roles above.
+
+- [ ] **Step 1: Write failing tests**
+
+```java
+@QuarkusTest class TermsResourceTest {
+  @Test void renameSlugMovesArchiveAndRedirectsOldOne() {
+    // category "travel" with child "europe" and a published post in europe; PUT slug "trips"
+    // → poll: current/category/trips/europe/index.html exists, category/travel/ is gone,
+    //   redirects.find("/category/travel/").orElseThrow().getToPath() == "/category/trips/"
+  }
+  @Test void deleteMovesPostsToDefaultCategoryAndChildrenUp() { }
+  @Test void defaultCategoryCannotBeDeleted() { }
+  @Test void parentCycleIs400() { }
+  @Test void authorIs403ForEditButMayCreate() { }
+}
+
+@QuarkusTest class RedirectsResourceTest {
+  @Test void addedRedirectIsServed() {
+    // POST {from "/old-page/", to "/2023/01/14/месяц-ноябрь-год-2022/", status 301}
+    // → GET /old-page/ (no follow) → 301 with that Location (percent-encoded)
+  }
+  @Test void cannotShadowAPublishedItem() { /* 409 shadows_item */ }
+  @Test void deleteRemovesIt() { }
+  @Test void editorIs403() { }
+}
+// UsersResourceTest: user edits own display name → 204 and author archive heading changes after publish;
+// author edits someone else → 403
+```
+
+- [ ] **Step 2: Run, verify fail.**
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run, verify pass**, plus `IncrementalPublishTest` (a term move must still equal a full publish: add `incrementalEqualsFullAfterTermSlugChange` there).
+- [ ] **Step 5: Commit and push** — `git commit -m "feat: categories, tags, redirects and user profile screens"`.
+
+---
+
 ### Task 7: The editor screen
 
 **Files:**
@@ -591,7 +653,7 @@ A site started empty in the wizard must work as a blog without any WordPress imp
     - Save bar by capability: "Save draft", "Submit for review" (contributor), "Publish" / "Update" / "Schedule" (when the date is in the future), "Preview" (autosave now, then open `/admin/preview/{id}` in a new tab), "Revisions (n)" → Task 10 route.
     - Save: first `saveEditedEntityRecord` for every `__experimentalGetDirtyEntityRecords()` entry (edited reusable blocks; a 403 there shows "You cannot edit reusable blocks; the post was not saved" and stops), then `PUT /items/{id}` with `serialize(blocks)` and `expectedModifiedAt`. 409 → "Someone else changed this post. Reload to see their version; your text stays in this tab." Success → notice "Published. The site updates in a few seconds."
     - Autosave every 60 s while dirty → `PUT /items/{id}/autosave`. `beforeunload` warning while dirty.
-  - `Sidebar.tsx`: status and visibility (public or private), date picker (`DateTimePicker`, site zone via `@wordpress/date` `setSettings` with `GET /site`'s new `timezone` field), slug, categories (checkbox tree plus "Add new category"), tags (`FormTokenField`, new tags created on save), excerpt, page parent (pages), and the `BlockInspector` tab.
+  - `Sidebar.tsx`: status and visibility (public or private), date picker (`DateTimePicker`, site zone via `@wordpress/date` `setSettings` with `GET /site`'s new `timezone` field), slug, categories (checkbox tree plus "Add new category"), tags (`FormTokenField`, new tags created on save), excerpt, author (editors and administrators: a select of users), discussion (comments open or closed), page parent and order (pages), and the `BlockInspector` tab.
   - `MediaLibrary.tsx`: `addFilter('editor.MediaUpload', 'stillpress/media', () => MediaLibrary)`. A modal with a grid from `GET /admin/api/media`, filtered by `allowedTypes`, an upload button and alt/title editing; it calls `onSelect({id, url, alt, mime, width, height})`.
   - `GET /admin/api/site` gains `timezone` and `permalinkStructure`.
 
@@ -785,5 +847,6 @@ test('no Russian entry is orphaned', () => { expect(orphansIn(ruJson, extracted(
 - Roadmap coverage for 02b: editor (T7), WP REST slice incl. method override, `canUser` and unknown-call logging (T5), classic block with on-demand conversion (T8), reusable blocks with the separate pattern editor and dirty-entity saving (T5, T7, T9), media library and upload (T6, T7), statuses and scheduling (T3, T4), incremental and background republish with dependency tracking and the fragment/hard-link design (T2, T3), preview (T4), revisions and autosave with compare, restore and 25 kept (T4, T10), admin i18n (T11), every 02a item labelled 02b (T6 nginx split and body-limit exclusion, T12 the rest).
 - Decided with the user at plan time: db-scheduler for publishing jobs (replicas on PostgreSQL stay possible; H2 means single node; static output is synced between replicas by external tools).
 - Calls made here (reviewable): `@wordpress/block-editor` hosted by our own screen rather than `@wordpress/editor` (the spike's proven path; `@wordpress/editor` would need most of the WordPress posts, settings, taxonomies and statuses REST API). Reusable blocks have owners: authors create and edit their own, editors and administrators edit any, contributors only insert (WordPress maps `wp_block` to post capabilities the same way). A slug change on a published item moves its permalink and leaves a 301, as WordPress's old-slug redirect does.
+- Back office parity (user request at plan review): Task 6c plus the item fields in Tasks 4 and 7, and the public-id rule in Global Constraints.
 - From scratch (user request at plan review): Task 6b (settings screen, lazy default category, automatic excerpts) and Task 13 Step 0.
 - Left for later: theme and appearance settings (plan 03), layout/global-styles CSS generator (plan 03; T7 only passes layout settings to the editor), episodes in the editor (plan 05), comment moderation (plan 04), email "pending review" notifications (02c).
