@@ -35,6 +35,8 @@ class ReusableBlocksResourceTest {
     @Inject
     DSLContext db;
     @Inject
+    site.asm0dey.stillpress.importer.WordPressImporter importer;
+    @Inject
     site.asm0dey.stillpress.store.SettingRepository settings;
     String author1;
     String author2;
@@ -51,6 +53,35 @@ class ReusableBlocksResourceTest {
     @AfterEach
     void settle() {
         TestStore.await(() -> db.fetchCount(SCHEDULED_TASKS, SCHEDULED_TASKS.TASK_NAME.eq(Jobs.PUBLISH_SITE)) == 0, 30);
+    }
+
+    @Test
+    void importedBlockCanBeSavedWithItsModifiedAt() throws Exception {
+        importer.importWxr(site.asm0dey.stillpress.TestStore.sample());
+        var admin = sessions.create(users.create("root", "root@example.org", "Root", Role.ADMINISTRATOR).getId());
+        var id = db
+            .select(site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK.SOURCE_ID)
+            .from(site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK)
+            .fetchOne(site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK.SOURCE_ID);
+        var modifiedAt = as(admin)
+            .get("/admin/api/blocks/" + id)
+            .then()
+            .statusCode(200)
+            .extract()
+            .path("modifiedAt");
+        assertThat(modifiedAt).isNotNull();
+        as(admin)
+            .body(Map.of(
+                    "title",
+                    "T",
+                    "content",
+                    "<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->",
+                    "expectedModifiedAt",
+                    modifiedAt
+            ))
+            .put("/admin/api/blocks/" + id)
+            .then()
+            .statusCode(200);
     }
 
     @Test

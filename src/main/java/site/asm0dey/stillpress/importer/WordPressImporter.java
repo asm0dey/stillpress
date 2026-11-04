@@ -203,6 +203,12 @@ public class WordPressImporter {
                     r.setAuthorId(authorIds.get(i.creator()));
                     r.setContent(localize(i.content()).rewrite(Objects.requireNonNullElse(i.content(), "")));
                     reportLeftovers(r.getContent());
+                    // the editor needs a modified time for its concurrency check
+                    r.setModifiedAt(
+                            i.modifiedGmt() != null ? utc(i.modifiedGmt()) : LocalDateTime
+                                .now(ZoneOffset.UTC)
+                                .truncatedTo(ChronoUnit.MICROS)
+                    );
                     r.store();
                     reusableCount++;
                 }
