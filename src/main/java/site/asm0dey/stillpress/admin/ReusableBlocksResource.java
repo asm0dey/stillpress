@@ -62,7 +62,9 @@ public class ReusableBlocksResource {
             LocalDateTime modifiedAt,
             int usedBy,
             boolean canEdit,
-            ItemsResource.AutosaveRef autosave
+            ItemsResource.AutosaveRef autosave,
+            /* only in a PUT's answer: the published items that save queued for republishing */
+            Integer republished
     ) {}
 
     public record BlockSave(String title, String content, LocalDateTime expectedModifiedAt) {}
@@ -120,7 +122,8 @@ public class ReusableBlocksResource {
             throw new ItemService.Refused(400, "invalid", null);
         }
         var a = actor();
-        return view(service.save(id, s.title(), s.content(), s.expectedModifiedAt(), a), a);
+        var saved = service.update(id, s.title(), s.content(), s.expectedModifiedAt(), a);
+        return view(saved.block(), a, saved.republished());
     }
 
     @PUT
@@ -185,6 +188,10 @@ public class ReusableBlocksResource {
     }
 
     private BlockView view(ReusableBlockRecord b, ItemService.Actor a) {
+        return view(b, a, null);
+    }
+
+    private BlockView view(ReusableBlockRecord b, ItemService.Actor a, Integer republished) {
         var autosave = revisions
             .autosaveOf(TYPE, b.getSourceId(), a.userId())
             .map(RevisionRecord::getCreatedAt)
@@ -199,7 +206,8 @@ public class ReusableBlocksResource {
                 b.getModifiedAt(),
                 usedBy(Set.of(b.getSourceId())).getOrDefault(b.getSourceId(), 0),
                 Capabilities.canEditBlock(a.role(), a.userId(), b),
-                autosave
+                autosave,
+                republished
         );
     }
 

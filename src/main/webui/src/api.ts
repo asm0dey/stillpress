@@ -37,6 +37,8 @@ export interface ItemSummary {
 export interface ReusableBlock {
   id: number; title: string; content?: string | null; author: string | null; modifiedAt: string; usedBy: number;
   canEdit: boolean; autosave?: { createdAt: string } | null;
+  /** only in PUT's answer: the published items that save queued for republishing */
+  republished?: number;
 }
 /** GET /media/{id}, POST /media */
 export interface Media {

@@ -8,11 +8,9 @@ import { dispatch as wpDispatch } from '@wordpress/data';
 import { type ApiError, type ReusableBlock, api } from '../api.ts';
 import { bodyOf, installClassicEditor, toBlocks } from './classic.ts';
 import {
-  EditorContent, EditorFrame, EditorHeader, EditorNotices, type Message, hasClassic, useEditing, useEditorSession,
+  EditorContent, EditorFrame, EditorHeader, EditorNotices, hasClassic, saveError, useEditing, useEditorSession,
   useEditorSettings,
 } from './workspace.tsx';
-
-const UNSAFE_HTML = 'This block contains HTML your role cannot publish:';
 
 /** The /blocks/:id screen: the pattern editor bound to one reusable block, read-only without the right to edit it. */
 export default function BlockEditor() {
@@ -29,14 +27,15 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
   const [blocks, setBlocks] = useState<BlockInstance[]>([]);
   const [revisions, setRevisions] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<Message | null>(null);
-  const [autosaveAt, setAutosaveAt] = useState<string | null>(null);
   const opened = useRef({ serialized: '', body: '' });
   const latest = useRef({ title, blocks });
   latest.current = { title, blocks };
   const canEdit = !!block?.canEdit;
 
-  const { edits, unsaved, markDirty, blocksChanged, reset, saved: savedEdits } = useEditing(() => canEdit
+  const {
+    edits, unsaved, markDirty, blocksChanged, reset, saved: savedEdits, viewAutosave,
+    message, setMessage, autosaveAt, setAutosaveAt,
+  } = useEditing(() => canEdit
     ? api(`/blocks/${id}/autosave`, {
       method: 'PUT', body: { title: latest.current.title, content: bodyOf(latest.current.blocks, opened.current) },
     })
@@ -67,16 +66,6 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
     blocksChanged(serialize(b));
   }, [blocksChanged]);
 
-  async function viewAutosave() {
-    try {
-      const a = await api<{ title: string; content: string }>(`/blocks/${id}/autosave`);
-      setTitle(a.title);
-      setBlocks(toBlocks(a.content ?? '', 'blocks'));
-      markDirty();
-      setAutosaveAt(null);
-    } catch { setMessage({ kind: 'alert', text: 'Could not load the autosave.' }); }
-  }
-
   async function save() {
     if (!block) return;
     setBusy(true);
@@ -97,24 +86,14 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
       core.invalidateResolutionForStoreSelector('getEntityRecords');
       setAutosaveAt(null);
       setRevisions((n) => n + 1);
-      setMessage({ kind: 'status', text: `Saved. ${saved.usedBy} ${saved.usedBy === 1 ? 'item' : 'items'} will be republished.` });
+      const n = saved.republished ?? 0;
+      setMessage({ kind: 'status', text: `Saved. ${n} ${n === 1 ? 'item' : 'items'} will be republished.` });
     } catch (e) {
-      const err = e as ApiError;
-      setMessage({
-        kind: 'alert',
-        list: err.error === 'unsafe_html' ? err.violations : undefined,
-        text: err.error === 'unsafe_html' ? UNSAFE_HTML
-          : err.status === 409 ? 'Someone else changed this block. Reload to see their version; your text stays in this tab.'
-          : err.status === 403 ? 'You cannot edit this block.'
-          : err.error === 'csrf' ? err.message!
-          : 'Could not save. Your text stays in this tab.',
-      });
+      setMessage(saveError(e as ApiError, 'block'));
     } finally { setBusy(false); }
   }
 
-  const base = useEditorSettings(canPublish, (ref) => {
-    if (!unsaved || confirm('Leave without saving your changes?')) navigate(`/blocks/${ref}`);
-  });
+  const base = useEditorSettings(canPublish, unsaved);
   // read-only: the canvas shows the blocks without selecting or editing them
   const settings = useMemo(() => (canEdit ? base : { ...base, isPreviewMode: true, templateLock: 'all' }), [base, canEdit]);
 
@@ -142,7 +121,10 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
                   </div>
                 )}
                 <EditorNotices message={message} onDismiss={() => setMessage(null)} autosaveAt={autosaveAt} noun="block"
-                  onViewAutosave={viewAutosave} onDismissAutosave={() => setAutosaveAt(null)} />
+                  onViewAutosave={() => viewAutosave<{ title: string; content: string }>(`/blocks/${id}/autosave`, (a) => {
+                  setTitle(a.title);
+                  setBlocks(toBlocks(a.content ?? '', 'blocks'));
+                })} onDismissAutosave={() => setAutosaveAt(null)} />
               </>
             )} />
         </div>

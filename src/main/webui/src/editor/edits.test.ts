@@ -40,3 +40,12 @@ test('an autosave clears only what it covered', () => {
   e.autosaved(e.mark());
   expect([e.dirty, e.needsAutosave]).toEqual([true, false]);
 });
+
+test('the same blocks reported again during a save do not make it dirty', () => {
+  const e = new Edits('a');
+  e.blocks('x');
+  const mark = e.mark();
+  e.blocks('x');
+  e.saved(mark, 'x');
+  expect(e.dirty).toBe(false);
+});

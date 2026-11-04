@@ -8,17 +8,24 @@ export class Edits {
   private count = 0;
   private savedAt = 0;
   private autosavedAt = 0;
+  private last: string;
 
-  constructor(private baseline: string) {}
+  constructor(private baseline: string) {
+    this.last = baseline;
+  }
 
   /** A title, sidebar or otherwise certain edit. */
   edit(): void {
     this.count++;
   }
 
-  /** The blocks changed; counts as an edit only when they serialize differently from the baseline. */
+  /**
+   * The blocks changed; counts as an edit only when they serialize differently from the baseline and from the last
+   * call: Gutenberg reports a change again (onInput, then onChange) when it becomes persistent.
+   */
   blocks(serialized: string): void {
-    if (serialized !== this.baseline) this.count++;
+    if (serialized !== this.baseline && serialized !== this.last) this.count++;
+    this.last = serialized;
   }
 
   get dirty(): boolean {
@@ -38,6 +45,7 @@ export class Edits {
     this.savedAt = mark;
     this.autosavedAt = Math.max(this.autosavedAt, mark);
     this.baseline = serialized;
+    this.last = serialized;
   }
 
   autosaved(mark: number): void {

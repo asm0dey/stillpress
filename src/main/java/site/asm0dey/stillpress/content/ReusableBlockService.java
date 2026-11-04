@@ -44,55 +44,19 @@ public class ReusableBlockService {
             LocalDateTime expectedModifiedAt,
             ItemService.Actor a
     ) {
-        return ref == null ? create(title, content, a) : update(ref, title, content, expectedModifiedAt, a);
-    }
-
-    @Transactional
-    public void autosave(long ref, ItemService.Actor a, String title, String content) {
-        editable(ref, a);
-        html.block(a.role(), ref, title, content, List::of);
-        guard.close();
-        revisions.autosave(OBJECT_TYPE, ref, a.userId(), title, content, null);
+        return ref == null ? create(title, content, a) : update(ref, title, content, expectedModifiedAt, a).block();
     }
 
     /**
-     * An ordinary {@link #save} with the revision's title and content.
+     * A saved block and how many published items its save queued for republishing.
+     */
+    public record Saved(ReusableBlockRecord block, int republished) {}
+
+    /**
+     * {@link #save} of an existing block, with the number of items it republishes.
      */
     @Transactional
-    public ReusableBlockRecord restoreRevision(long ref, long revisionId, ItemService.Actor a) {
-        var rev = revisions
-            .find(revisionId)
-            .filter(v -> OBJECT_TYPE.equals(v.getObjectType()) && v.getObjectId() == ref && !v.getAutosave())
-            .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
-        return update(ref, rev.getTitle(), rev.getBody(), null, a);
-    }
-
-    private ReusableBlockRecord create(String title, String content, ItemService.Actor a) {
-        if (!Capabilities.canCreateBlock(a.role())) {
-            throw forbidden();
-        }
-        html.block(a.role(), null, title, content, List::of);
-        guard.close();
-        var r = blocks.create(
-                Objects.requireNonNullElse(title, ""),
-                Objects.requireNonNullElse(content, ""),
-                a.userId(),
-                now()
-        );
-        // items may already show the new public id; a refusal rolls the insert back
-        var ref = r.getSourceId();
-        html.block(a.role(), ref, title, content, () -> blocks.itemsUsing(withContainers(ref)));
-        revisions.saved(OBJECT_TYPE, r.getSourceId(), r.getTitle(), r.getContent(), "blocks", null, a.userId());
-        return r;
-    }
-
-    private ReusableBlockRecord update(
-            long ref,
-            String title,
-            String content,
-            LocalDateTime expectedModifiedAt,
-            ItemService.Actor a
-    ) {
+    public Saved update(long ref, String title, String content, LocalDateTime expectedModifiedAt, ItemService.Actor a) {
         var r = editable(ref, a);
         if (expectedModifiedAt != null && !Objects.equals(r.getModifiedAt(), expectedModifiedAt)) {
             throw new ItemService.Refused(409, "conflict", null);
@@ -117,6 +81,45 @@ public class ReusableBlockService {
         if (!published.isEmpty()) {
             jobs.requestPublish();
         }
+        return new Saved(r, published.size());
+    }
+
+    @Transactional
+    public void autosave(long ref, ItemService.Actor a, String title, String content) {
+        editable(ref, a);
+        html.block(a.role(), ref, title, content, List::of);
+        guard.close();
+        revisions.autosave(OBJECT_TYPE, ref, a.userId(), title, content, null);
+    }
+
+    /**
+     * An ordinary {@link #save} with the revision's title and content.
+     */
+    @Transactional
+    public ReusableBlockRecord restoreRevision(long ref, long revisionId, ItemService.Actor a) {
+        var rev = revisions
+            .find(revisionId)
+            .filter(v -> OBJECT_TYPE.equals(v.getObjectType()) && v.getObjectId() == ref && !v.getAutosave())
+            .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
+        return update(ref, rev.getTitle(), rev.getBody(), null, a).block();
+    }
+
+    private ReusableBlockRecord create(String title, String content, ItemService.Actor a) {
+        if (!Capabilities.canCreateBlock(a.role())) {
+            throw forbidden();
+        }
+        html.block(a.role(), null, title, content, List::of);
+        guard.close();
+        var r = blocks.create(
+                Objects.requireNonNullElse(title, ""),
+                Objects.requireNonNullElse(content, ""),
+                a.userId(),
+                now()
+        );
+        // items may already show the new public id; a refusal rolls the insert back
+        var ref = r.getSourceId();
+        html.block(a.role(), ref, title, content, () -> blocks.itemsUsing(withContainers(ref)));
+        revisions.saved(OBJECT_TYPE, r.getSourceId(), r.getTitle(), r.getContent(), "blocks", null, a.userId());
         return r;
     }
 

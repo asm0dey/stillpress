@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import '@wordpress/format-library';
 import { registerCoreBlocks } from '@wordpress/block-library';
 import { type Block as BlockInstance } from '@wordpress/blocks';
@@ -9,7 +9,7 @@ import { store as coreStore } from '@wordpress/core-data';
 import { useDispatch, useSelect } from '@wordpress/data';
 import { store as noticesStore } from '@wordpress/notices';
 import { getSettings, setSettings } from '@wordpress/date';
-import { type ItemSummary, type SessionUser, type Site, api } from '../api.ts';
+import { type ApiError, type ItemSummary, type SessionUser, type Site, api } from '../api.ts';
 import { installWordPressApi } from './wpapi.ts';
 import { picked, upload, uploadError } from './MediaLibrary.tsx';
 import { Edits } from './edits.ts';
@@ -38,6 +38,32 @@ export const hasClassic = (blocks: BlockInstance[]): boolean =>
 
 export interface Message { kind: 'status' | 'alert'; text: string; list?: string[] }
 
+type Noun = 'post' | 'block';
+
+/** The 400 unsafe_html refusal: the role lacks unfiltered_html, nothing was saved. */
+export const UNSAFE_HTML = (noun: Noun) => `This ${noun} contains HTML your role cannot publish:`;
+
+const FIELD_ERRORS: Record<string, string> = {
+  date: 'A scheduled post needs a date in the future.',
+  slug: 'This slug cannot be used.',
+  parentId: 'Choose another parent page.',
+  authorId: 'That author no longer exists.',
+};
+
+/** What a refused save tells the user. */
+export function saveError(err: ApiError, noun: Noun): Message {
+  return {
+    kind: 'alert',
+    list: err.error === 'unsafe_html' ? err.violations : undefined,
+    text: err.error === 'unsafe_html' ? UNSAFE_HTML(noun)
+      : err.status === 409 ? `Someone else changed this ${noun}. Reload to see their version; your text stays in this tab.`
+      : err.status === 403 ? 'You cannot make this change.'
+      : err.error === 'csrf' ? err.message!
+      : err.field ? FIELD_ERRORS[err.field] ?? `Check the ${err.field} field.`
+      : 'Could not save. Your text stays in this tab.',
+  };
+}
+
 let installedFor: number | null = null;
 
 /** The session, once the site's time zone and the WordPress API translator are in place. */
@@ -65,8 +91,12 @@ async function fetchLinkSuggestions(search: string) {
     .map((i) => ({ id: i.id, url: i.permalink!, title: i.title || '(no title)', type: i.type, kind: 'post-type' }));
 }
 
-/** The block editor settings; {@code onEditBlock} is a reusable block's "Edit original". */
-export function useEditorSettings(canPublish: boolean, onEditBlock: (id: number) => void) {
+/** The block editor settings; a reusable block's "Edit original" opens its own screen, as in WordPress. */
+export function useEditorSettings(canPublish: boolean, unsaved: boolean) {
+  const navigate = useNavigate();
+  const onEditBlock = (ref: number) => {
+    if (!unsaved || confirm('Leave without saving your changes?')) navigate(`/blocks/${ref}`);
+  };
   const reusable = useSelect((s) => s(coreStore).getEntityRecords('postType', 'wp_block',
     { per_page: -1 }) as { id: number; title: { raw: string }; content: { raw: string } }[] | null, []);
   const onEdit = useRef(onEditBlock);
@@ -93,12 +123,14 @@ export function useEditorSettings(canPublish: boolean, onEditBlock: (id: number)
 }
 
 /**
- * Unsaved edits, the leave warning and the 60 s autosave. {@code put} sends the autosave, or returns null when there
- * is nothing it can send; {@code alsoUnsaved} adds other pending changes to the leave warning.
+ * Unsaved edits, the leave warning, the 60 s autosave and the notices. {@code put} sends the autosave, or returns null
+ * when there is nothing it can send.
  */
-export function useEditing(put: () => Promise<unknown> | null, alsoUnsaved = false) {
+export function useEditing(put: () => Promise<unknown> | null) {
   const edits = useRef(new Edits(''));
   const [dirty, setDirty] = useState(false);
+  const [message, setMessage] = useState<Message | null>(null);
+  const [autosaveAt, setAutosaveAt] = useState<string | null>(null);
   const send = useRef(put);
   send.current = put;
 
@@ -120,7 +152,7 @@ export function useEditing(put: () => Promise<unknown> | null, alsoUnsaved = fal
     setDirty(edits.current.dirty);
   }, []);
 
-  const unsaved = dirty || alsoUnsaved;
+  const unsaved = dirty;
   useEffect(() => {
     if (!unsaved) return;
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
@@ -148,7 +180,19 @@ export function useEditing(put: () => Promise<unknown> | null, alsoUnsaved = fal
     return () => clearInterval(timer);
   }, [autosave]);
 
-  return { edits, dirty, unsaved, markDirty, blocksChanged, reset, saved, autosave };
+  /** "View the autosave": {@code apply} puts the autosave's fields into the editor. */
+  async function viewAutosave<T>(path: string, apply: (a: T) => void) {
+    try {
+      apply(await api<T>(path));
+      markDirty();
+      setAutosaveAt(null);
+    } catch { setMessage({ kind: 'alert', text: 'Could not load the autosave.' }); }
+  }
+
+  return {
+    edits, unsaved, markDirty, blocksChanged, reset, saved, autosave, viewAutosave,
+    message, setMessage, autosaveAt, setAutosaveAt,
+  };
 }
 
 /** The screen around a block editor: slots for popovers and the block library's snackbars. */

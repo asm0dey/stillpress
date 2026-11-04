@@ -87,6 +87,34 @@ class ReusableBlocksResourceTest {
     }
 
     @Test
+    void saveReportsThePublishedItemsItRepublishesThroughOtherBlocksToo() {
+        var inner = create(author1, "inner");
+        var outer = create(author1, "<!-- wp:block {\"ref\":" + inner.getLong("id") + "} /-->");
+        var draft = ItemsResourceTest.create(author1, "post");
+        ItemsResourceTest
+            .update(author1, draft, Map.of("body", "<!-- wp:block {\"ref\":" + inner.getLong("id") + "} /-->"))
+            .then()
+            .statusCode(200);
+        var published = ItemsResourceTest.create(author1, "post");
+        ItemsResourceTest
+            .update(
+                    author1,
+                    published,
+                    Map.of(
+                            "title",
+                            "Shows outer",
+                            "status",
+                            "publish",
+                            "body",
+                            "<!-- wp:block {\"ref\":" + outer.getLong("id") + "} /-->"
+                    )
+            )
+            .then()
+            .statusCode(200);
+        put(author1, inner, "changed").then().statusCode(200).body("republished", equalTo(1)).body("usedBy", equalTo(1));
+    }
+
+    @Test
     void staleExpectedModifiedAtIs409() {
         var b = create(author1, "one");
         put(author1, b, "two").then().statusCode(200);

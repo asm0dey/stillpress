@@ -53,26 +53,15 @@ test('creating a block posts title and content with the CSRF header', async () =
   }]);
 });
 
-test('PUT goes out as POST with X-HTTP-Method-Override and arrives as PUT without expectedModifiedAt', async () => {
-  reply = () => json(BLOCK);
-  await call({ path: '/wp/v2/blocks/3', method: 'PUT', data: { id: 3, content: { raw: 'new' } } });
-  // a client that sends the override itself is handled the same way
-  await call({ path: '/wp/v2/blocks/3', method: 'POST', headers: { 'X-HTTP-Method-Override': 'PUT' }, data: { title: 'T' } });
-  expect(calls.map((c) => [c.method, c.url, c.body])).toEqual([
-    ['PUT', '/admin/api/blocks/3', { content: 'new' }],
-    ['PUT', '/admin/api/blocks/3', { title: 'T' }],
-  ]);
-});
-
-test('a 403 on save surfaces as an apiFetch error with its status', async () => {
+test('a 403 on create surfaces as an apiFetch error with its status', async () => {
   reply = () => json({ error: 'forbidden' }, 403);
-  await expect(call({ path: '/wp/v2/blocks/3', method: 'PUT', data: { content: 'x' } }))
+  await expect(call({ path: '/wp/v2/blocks', method: 'POST', data: { content: 'x' } }))
     .rejects.toEqual({ code: 'forbidden', message: 'forbidden', data: { status: 403 } });
 });
 
 test('an unsafe_html refusal keeps its violations for the editor to list', async () => {
   reply = () => json({ error: 'unsafe_html', field: 'body', violations: ['<script> element'] }, 400);
-  await expect(call({ path: '/wp/v2/blocks/3', method: 'PUT', data: { content: '<script></script>' } }))
+  await expect(call({ path: '/wp/v2/blocks', method: 'POST', data: { content: '<script></script>' } }))
     .rejects.toEqual({ code: 'unsafe_html', message: 'unsafe_html', data: { status: 400, violations: ['<script> element'] } });
 });
 

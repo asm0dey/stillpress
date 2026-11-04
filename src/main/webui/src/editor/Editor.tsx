@@ -6,14 +6,14 @@ import {
 } from '@wordpress/block-editor';
 import { Button, MenuItem, Modal, Notice, TextControl } from '@wordpress/components';
 import { store as coreStore } from '@wordpress/core-data';
-import { dispatch as wpDispatch, select as wpSelect, useDispatch, useRegistry, useSelect } from '@wordpress/data';
+import { useDispatch, useRegistry } from '@wordpress/data';
 import { isInTheFuture } from '@wordpress/date';
 import { type ApiError, type Item, type ItemSummary, type SessionUser, type TermView, type UserView, api } from '../api.ts';
 import Sidebar, { type Draft } from './Sidebar.tsx';
 import { bodyFormatOf, bodyOf, installClassicEditor, toBlocks } from './classic.ts';
 import {
-  EditorContent, EditorFrame, EditorHeader, EditorNotices, type Message, hasClassic, useEditing, useEditorSession,
-  useEditorSettings,
+  EditorContent, EditorFrame, EditorHeader, EditorNotices, UNSAFE_HTML, hasClassic, saveError, useEditing,
+  useEditorSession, useEditorSettings,
 } from './workspace.tsx';
 
 const SAVED: Record<string, string> = {
@@ -23,15 +23,6 @@ const SAVED: Record<string, string> = {
   draft: 'Draft saved.',
   private: 'Saved as private.',
 };
-const FIELD_ERRORS: Record<string, string> = {
-  date: 'A scheduled post needs a date in the future.',
-  slug: 'This slug cannot be used.',
-  parentId: 'Choose another parent page.',
-  authorId: 'That author no longer exists.',
-};
-
-/** The 400 unsafe_html refusal: the role lacks unfiltered_html, nothing was saved. */
-const UNSAFE_HTML = 'This post contains HTML your role cannot publish:';
 type WpError = { code?: string; data?: { status?: number; violations?: string[] } };
 
 function draftOf(item: Item, tags: TermView[]): Draft {
@@ -72,8 +63,6 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   const [pages, setPages] = useState<{ id: number; title: string }[]>([]);
   const [revisions, setRevisions] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<Message | null>(null);
-  const [autosaveAt, setAutosaveAt] = useState<string | null>(null);
   const opened = useRef({ serialized: '', body: '' });
   const latest = useRef({ title, blocks, excerpt: '', format: item?.bodyFormat });
   latest.current = { title, blocks, excerpt: draft?.excerpt ?? '', format: item?.bodyFormat };
@@ -82,13 +71,15 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   const editor = role === 'administrator' || role === 'editor';
   const canPublish = role !== 'contributor';
 
-  const dirtyEntities = useSelect((s) => s(coreStore).__experimentalGetDirtyEntityRecords().length > 0, []);
-  const { edits, unsaved, markDirty, blocksChanged, reset, saved: savedEdits, autosave } = useEditing(() => {
+  const {
+    edits, unsaved, markDirty, blocksChanged, reset, saved: savedEdits, autosave, viewAutosave,
+    message, setMessage, autosaveAt, setAutosaveAt,
+  } = useEditing(() => {
     const { title: t, blocks: b, excerpt, format } = latest.current;
     // the autosave carries no format; the preview renders it in the item's stored one
     if (bodyFormatOf(b) !== format) return null;
     return api(`/items/${id}/autosave`, { method: 'PUT', body: { title: t, body: bodyOf(b, opened.current), excerpt } });
-  }, dirtyEntities);
+  });
 
   useEffect(() => {
     (async () => {
@@ -126,17 +117,6 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     blocksChanged(serialize(b));
   }, [blocksChanged]);
 
-  async function viewAutosave() {
-    try {
-      const a = await api<{ title: string; body: string; excerpt: string }>(`/items/${id}/autosave`);
-      setTitle(a.title);
-      setBlocks(toBlocks(a.body, latest.current.format ?? 'blocks'));
-      setDraft((d) => d && { ...d, excerpt: a.excerpt ?? '' });
-      markDirty();
-      setAutosaveAt(null);
-    } catch { setMessage({ kind: 'alert', text: 'Could not load the autosave.' }); }
-  }
-
   async function preview() {
     // opened before the autosave so the popup blocker sees the click
     const tab = window.open('about:blank', '_blank');
@@ -147,7 +127,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
       // the preview would show the older version; other failures open it as before
       if (err.error === 'unsafe_html') {
         tab?.close();
-        setMessage({ kind: 'alert', text: UNSAFE_HTML, list: err.violations });
+        setMessage({ kind: 'alert', text: UNSAFE_HTML('post'), list: err.violations });
         return;
       }
     }
@@ -188,20 +168,6 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     setBusy(true);
     setMessage(null);
     try {
-      // edited reusable blocks first: a post that shows them must not go out without them
-      for (const r of wpSelect(coreStore).__experimentalGetDirtyEntityRecords()) {
-        try {
-          await wpDispatch(coreStore).saveEditedEntityRecord(r.kind, r.name, r.key, { throwOnError: true });
-        } catch (e) {
-          const err = e as WpError;
-          setMessage(err.code === 'unsafe_html'
-            ? { kind: 'alert', text: 'A reusable block in this post contains HTML your role cannot publish; the post was not saved:', list: err.data?.violations }
-            : { kind: 'alert', text: err.data?.status === 403
-              ? 'You cannot edit reusable blocks; the post was not saved'
-              : 'A reusable block could not be saved; the post was not saved.' });
-          return;
-        }
-      }
       const mark = edits.current.mark();
       const serialized = serialize(blocks);
       const body = bodyOf(blocks, opened.current);
@@ -227,24 +193,11 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
       setRevisions((n) => n + 1);
       setMessage({ kind: 'status', text: SAVED[saved.status] ?? 'Saved.' });
     } catch (e) {
-      const err = e as ApiError;
-      setMessage({
-        kind: 'alert',
-        list: err.error === 'unsafe_html' ? err.violations : undefined,
-        text: err.error === 'unsafe_html' ? UNSAFE_HTML
-          : err.status === 409 ? 'Someone else changed this post. Reload to see their version; your text stays in this tab.'
-          : err.status === 403 ? 'You cannot make this change.'
-          : err.error === 'csrf' ? err.message!
-          : err.field ? FIELD_ERRORS[err.field] ?? `Check the ${err.field} field.`
-          : 'Could not save. Your text stays in this tab.',
-      });
+      setMessage(saveError(e as ApiError, 'post'));
     } finally { setBusy(false); }
   }
 
-  const settings = useEditorSettings(canPublish, (ref) => {
-    // synced patterns are edited on their own screen, as in WordPress
-    if (!unsaved || confirm('Leave without saving your changes?')) navigate(`/blocks/${ref}`);
-  });
+  const settings = useEditorSettings(canPublish, unsaved);
 
   if (!item || !draft) {
     return <main className="page">{message ? <p role="alert" className="error">{message.text}</p> : <p role="status">Loading…</p>}</main>;
@@ -275,7 +228,11 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
         <div className="sp-editor__main">
           <EditorContent title={title} onTitle={(t) => { setTitle(t); markDirty(); }}
             notices={<EditorNotices message={message} onDismiss={() => setMessage(null)} autosaveAt={autosaveAt} noun="post"
-              onViewAutosave={viewAutosave} onDismissAutosave={() => setAutosaveAt(null)} />} />
+              onViewAutosave={() => viewAutosave<{ title: string; body: string; excerpt: string }>(`/items/${id}/autosave`, (a) => {
+                setTitle(a.title);
+                setBlocks(toBlocks(a.body, latest.current.format ?? 'blocks'));
+                setDraft((d) => d && { ...d, excerpt: a.excerpt ?? '' });
+              })} onDismissAutosave={() => setAutosaveAt(null)} />} />
           <aside className="sp-editor__sidebar" aria-label="Settings">
             <Sidebar item={item} session={session} draft={draft} onChange={patch} categories={categories}
               onAddCategory={addCategory} tags={tags} users={users} pages={pages} />

@@ -62,8 +62,6 @@ type Route = (m: RegExpMatchArray, query: URLSearchParams, data: Record<string, 
 
 function routes(session: SessionUser): Record<string, Record<string, Route>> {
   const save = (d: Record<string, unknown>) => ({ title: raw(d.title), content: raw(d.content) });
-  // no expectedModifiedAt: the post's save writes what this editor holds, as WordPress does
-  const update: Route = ([, id], _q, d) => reshape(admin('/blocks/' + id, 'PUT', save(d)), block);
   return {
     '/wp/v2/blocks': {
       GET: () => reshape<AdminBlock[]>(admin('/blocks?content=true'), (all) => all.map(block)),
@@ -73,8 +71,7 @@ function routes(session: SessionUser): Record<string, Record<string, Route>> {
     '/wp/v2/blocks/(\\d+)': {
       // core-data reads canUser from the Allow header of the record's GET too, so both carry it
       GET: ([, id]) => one(id, (b) => json(block(b), 200, allow(b))),
-      POST: update,
-      PUT: update,
+      // no PUT: a block is edited on its own screen (/blocks/:id), which saves through /admin/api
       OPTIONS: ([, id]) => one(id, (b) => json(null, 200, allow(b))),
     },
     '/wp/v2/types': { GET: () => json(TYPES) },

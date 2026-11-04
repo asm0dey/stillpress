@@ -7,13 +7,16 @@ import Setup from './pages/Setup.tsx';
 import Login from './pages/Login.tsx';
 import SetPassword from './pages/SetPassword.tsx';
 import Dashboard from './pages/Dashboard.tsx';
-import Users from './pages/Users.tsx';
-import Import from './pages/Import.tsx';
-import Settings from './pages/Settings.tsx';
-import Terms from './pages/Terms.tsx';
-import Redirects from './pages/Redirects.tsx';
-import Items from './pages/Items.tsx';
-import Blocks from './pages/Blocks.tsx';
+
+// the larger admin screens come as one chunk; login, setup and the dashboard stay in the entry
+const admin = () => import('./pages/admin.ts');
+const Users = lazy(() => admin().then((m) => ({ default: m.Users })));
+const Import = lazy(() => admin().then((m) => ({ default: m.Import })));
+const Settings = lazy(() => admin().then((m) => ({ default: m.Settings })));
+const Terms = lazy(() => admin().then((m) => ({ default: m.Terms })));
+const Redirects = lazy(() => admin().then((m) => ({ default: m.Redirects })));
+const Items = lazy(() => admin().then((m) => ({ default: m.Items })));
+const Blocks = lazy(() => admin().then((m) => ({ default: m.Blocks })));
 
 // Gutenberg is large: only the editor route downloads it
 const Editor = lazy(() => import('./editor/Editor.tsx'));
@@ -53,6 +56,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter basename="/admin">
       <Gate>
+        <Suspense fallback={<p role="status">Loading…</p>}>
         <Routes>
           <Route path="/setup" element={<Setup />} />
           <Route path="/login" element={<Login />} />
@@ -71,6 +75,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/blocks/:id" element={<Suspense fallback={<p role="status">Loading the editor…</p>}><BlockEditor /></Suspense>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </Gate>
     </BrowserRouter>
   </StrictMode>,
