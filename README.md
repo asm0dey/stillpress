@@ -58,6 +58,8 @@ stillpress verify-urls --source https://old-blog.example --target http://localho
 - `--media-limit N` downloads at most N media files. It is for test imports; a full import (no flag) downloads everything.
 - `--posts-per-page N` (default 10), `--posts-per-rss N` (default 10), `--category-base BASE` (default `category`) and `--tag-base BASE` (default `tag`) carry the WordPress settings an export does not include. Set them to the source site's values, or archive URLs and page counts will differ. The bases are a single path segment.
 
+The admin (wizard) import has no flag; set `STILLPRESS_IMPORT_MEDIA_LIMIT=N` (property `stillpress.import.media-limit`, unset = unlimited) to cap its media downloads for a test run.
+
 `verify-urls` takes `--source` (the live WordPress site), `--target` (Stillpress) and `--max N` (default 20000 URLs). It exits 0 only when every URL matches.
 
 Only `serve` binds the HTTP port, and the H2 database runs in auto-server mode. `publish` and `verify-urls` therefore run while `serve` is up; a new release is picked up without a restart. Pass `-Dquarkus.http.port=…` to serve elsewhere.

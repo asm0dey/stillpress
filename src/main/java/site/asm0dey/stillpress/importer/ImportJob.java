@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import javax.xml.stream.XMLStreamException;
 import module java.base;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.publish.SitePublisher;
@@ -27,6 +28,8 @@ public class ImportJob {
     DataDir dataDir;
     @Inject
     ItemRepository store;
+    @ConfigProperty(name = "stillpress.import.media-limit")
+    Optional<Integer> mediaLimit;
     // true from a successful begin() until the outcome is persisted: "running" without it is a dead import (or the CLI)
     private volatile boolean live;
     private volatile int items, media;
@@ -43,6 +46,11 @@ public class ImportJob {
      * nothing; synchronized with {@link #status} so no poll sees this import begun but not yet live.
      */
     public synchronized void start(Path wxr, ImportOptions options) throws AlreadyImportedException {
+        mediaLimit.ifPresent(n -> {
+            if (n < 0) {
+                throw new IllegalStateException("stillpress.import.media-limit must not be negative, got " + n);
+            }
+        });
         guard.begin();
         live = true;
         items = 0;
@@ -77,7 +85,9 @@ public class ImportJob {
                     media = done;
                 }
             };
-            report = importer.importWxr(in, Integer.MAX_VALUE, options, listener).toText();
+            report = importer
+                .importWxr(in, mediaLimit.orElse(Integer.MAX_VALUE), options, listener)
+                .toText(mediaLimit.orElse(null));
             publisher.publishAll();
             guard.done();
         } catch (Throwable e) {
