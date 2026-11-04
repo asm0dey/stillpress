@@ -1,4 +1,6 @@
 /// <reference types="bun" />
+import { afterEach, beforeAll } from 'bun:test';
+import { useDom } from './editor/testdom.ts';
 
 interface Reply { status?: number; body?: unknown }
 /** A reply, or one computed from the request's JSON body. */
@@ -22,4 +24,32 @@ export function fakeApi(routes: Record<string, Route>): Call[] {
     return new Response(status === 204 || reply.body === undefined ? null : JSON.stringify(reply.body), { status });
   }) as typeof fetch;
   return calls;
+}
+
+export interface Pages {
+  rtl: typeof import('@testing-library/react/pure');
+  user: typeof import('@testing-library/user-event').userEvent;
+  router: typeof import('react-router');
+}
+
+/**
+ * Sets up rendering pages: a jsdom DOM, then React, Testing Library and the router, filled in before the file's own
+ * beforeAll. They look for the DOM when they load, so they come in after useDom; the pure entry registers no hooks of
+ * its own (bun refuses hooks registered inside beforeAll). After each test the page unmounts and fetch is real again.
+ */
+export function usePages(): Pages {
+  const pages = {} as Pages;
+  const realFetch = globalThis.fetch;
+  useDom();
+  beforeAll(async () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    pages.rtl = await import('@testing-library/react/pure');
+    pages.user = (await import('@testing-library/user-event')).userEvent;
+    pages.router = await import('react-router');
+  });
+  afterEach(() => {
+    pages.rtl.cleanup();
+    globalThis.fetch = realFetch;
+  });
+  return pages;
 }
