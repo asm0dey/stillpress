@@ -71,11 +71,6 @@ public class LoginLimiter {
         byLogin.remove(key(account));
     }
 
-    synchronized void reset() {
-        byLogin.clear();
-        byIp.clear();
-    }
-
     /**
      * Once {@code limit} failures are in the window, the wait ends when enough of the oldest leave it.
      */

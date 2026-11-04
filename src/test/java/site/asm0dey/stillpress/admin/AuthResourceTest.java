@@ -15,7 +15,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Limiters;
-import site.asm0dey.stillpress.account.LoginLimiter;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.store.AuthorRepository;
@@ -29,14 +28,12 @@ class AuthResourceTest {
     AuthorRepository users;
     @Inject
     TokenRepository tokens;
-    @Inject
-    LoginLimiter limiter;
     long adminId;
 
     @BeforeEach
     void reset() {
         store.reset();
-        Limiters.reset(limiter);
+        Limiters.reset();
         adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
         users.setPassword(adminId, Passwords.hash("correct horse battery"));
     }

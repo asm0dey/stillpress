@@ -21,7 +21,6 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.images.builder.Transferable;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Limiters;
-import site.asm0dey.stillpress.account.LoginLimiter;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.publish.SitePublisher;
 
@@ -37,8 +36,6 @@ class NginxModeTwoTest {
     SitePublisher publisher;
     @Inject
     DataDir dataDir;
-    @Inject
-    LoginLimiter limiter;
     @TestHTTPResource("/")
     URL app;
 
@@ -130,7 +127,7 @@ class NginxModeTwoTest {
 
     @Test
     void clientSentForwardedForCannotChangeTheClientIp() {
-        Limiters.reset(limiter);
+        Limiters.reset();
         try {
             for (int i = 0; i <= 20; i++) {
                 csrf()
@@ -144,7 +141,7 @@ class NginxModeTwoTest {
                     .statusCode(i < 20 ? 401 : 429);
             }
         } finally {
-            Limiters.reset(limiter);
+            Limiters.reset();
         }
     }
 

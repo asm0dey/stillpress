@@ -31,7 +31,7 @@ public class SetupToken {
     }
 
     /**
-     * Test hook: a fresh token regardless of the store.
+     * A fresh token, logged for the person running the wizard.
      */
     void regenerate() {
         var b = new byte[24];

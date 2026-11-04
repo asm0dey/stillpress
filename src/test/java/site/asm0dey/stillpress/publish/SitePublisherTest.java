@@ -177,21 +177,14 @@ class SitePublisherTest {
     void failureAfterEveryFileIsWrittenStillKeepsPreviousReleaseLive() throws Exception {
         var good = publisher.publishAll().release();
         var before = releases();
-        var written = new java.util.concurrent.atomic.AtomicInteger();
-        publisher.beforeActivate(release -> {
-            try (var walk = Files.walk(release)) {
-                written.set((int) walk.filter(Files::isRegularFile).count());
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-            throw new IllegalStateException("boom");
-        });
+        // the switch cannot clear a non-empty directory where it stages the new symlink, so it fails after rendering
+        var blocker = dataDir.current().resolveSibling("current.tmp");
+        Files.createDirectories(blocker.resolve("x"));
         try {
-            assertThatThrownBy(publisher::publishAll).hasMessage("boom");
+            assertThatThrownBy(publisher::publishAll).isInstanceOf(UncheckedIOException.class);
         } finally {
-            publisher.beforeActivate(r -> {});
+            ReleaseSwitcher.deleteTree(blocker);
         }
-        assertThat(written.get()).isPositive();
         assertThat(dataDir.current().toRealPath()).isEqualTo(good.toRealPath());
         assertThat(releases()).isEqualTo(before);
     }

@@ -69,17 +69,26 @@ class ReleaseSwitcherTest {
     @Test
     void pruneFailureNeverBreaksTheSwapOrDeletesTheLiveRelease() throws Exception {
         var dir = new DataDir(tmp.toString());
-        var s = new ReleaseSwitcher(dir, p -> {
-            throw new IOException("busy: " + p);
-        });
+        var s = switcher(dir);
+        var releases = new ArrayList<Path>();
         Path last = null;
-        for (int i = 0; i < 5; i++) {
-            last = s.newRelease();
-            Files.writeString(last.resolve("index.html"), "r" + i);
-            s.activate(last);
+        try {
+            for (int i = 0; i < 5; i++) {
+                last = s.newRelease();
+                releases.add(last);
+                Files.writeString(last.resolve("index.html"), "r" + i);
+                // a read-only release cannot be emptied, so pruning it fails
+                Files.setPosixFilePermissions(last, PosixFilePermissions.fromString("r-xr-xr-x"));
+                s.activate(last);
+            }
+            assertThat(dir.current().toRealPath()).isEqualTo(last.toRealPath());
+            assertThat(dir.current().resolve("index.html")).hasContent("r4");
+            assertThat(releases.getFirst().resolve("index.html")).as("prune was refused").exists();
+        } finally {
+            for (var r : releases) {
+                Files.setPosixFilePermissions(r, PosixFilePermissions.fromString("rwxr-xr-x"));
+            }
         }
-        assertThat(dir.current().toRealPath()).isEqualTo(last.toRealPath());
-        assertThat(dir.current().resolve("index.html")).hasContent("r4");
     }
 
     @Test

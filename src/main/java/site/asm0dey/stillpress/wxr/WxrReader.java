@@ -15,34 +15,6 @@ public final class WxrReader {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC);
 
     /**
-     * Collects everything in memory; for tests and small files. Use {@link #read(InputStream, WxrHandler)} for real exports.
-     */
-    public static WxrDocument read(InputStream in) {
-        var site = new WxrSite[1];
-        var authors = new ArrayList<WxrAuthor>();
-        var terms = new ArrayList<WxrTerm>();
-        var items = new ArrayList<WxrItem>();
-        read(in, new WxrHandler() {
-            public void site(WxrSite s) {
-                site[0] = s;
-            }
-
-            public void author(WxrAuthor a) {
-                authors.add(a);
-            }
-
-            public void term(WxrTerm t) {
-                terms.add(t);
-            }
-
-            public void item(WxrItem i) {
-                items.add(i);
-            }
-        });
-        return new WxrDocument(site[0], authors, terms, items);
-    }
-
-    /**
      * Streams the export: only the current item is held in memory. Every post type is passed through.
      */
     public static void read(InputStream in, WxrHandler h) {

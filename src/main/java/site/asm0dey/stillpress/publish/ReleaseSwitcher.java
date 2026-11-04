@@ -16,25 +16,11 @@ public class ReleaseSwitcher {
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
     private static final Logger LOG = Logger.getLogger(ReleaseSwitcher.class);
     private final DataDir dataDir;
-    private final Deleter deleter;
     private Instant last;
-
-    /**
-     * Removes one release tree.
-     */
-    @FunctionalInterface
-    interface Deleter {
-        void delete(Path dir) throws IOException;
-    }
 
     @Inject
     public ReleaseSwitcher(DataDir dataDir) {
-        this(dataDir, ReleaseSwitcher::deleteTree);
-    }
-
-    ReleaseSwitcher(DataDir dataDir, Deleter deleter) {
         this.dataDir = dataDir;
-        this.deleter = deleter;
     }
 
     /**
@@ -106,7 +92,7 @@ public class ReleaseSwitcher {
             for (var old : all.subList(0, Math.max(0, all.size() - KEEP))) {
                 try {
                     if (!old.toRealPath().equals(live)) {
-                        deleter.delete(old);
+                        deleteTree(old);
                     }
                 } catch (IOException | RuntimeException e) {
                     LOG.warnf(e, "Could not prune old release %s", old);

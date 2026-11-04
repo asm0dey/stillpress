@@ -49,14 +49,6 @@ public class SitePublisher {
     DataDir dataDir;
     @Inject
     ReleaseSwitcher switcher;
-    /**
-     * Test seam: runs after every file is written, before the switch.
-     */
-    private volatile Consumer<Path> beforeActivate = r -> {};
-
-    void beforeActivate(Consumer<Path> hook) {
-        beforeActivate = hook;
-    }
 
     public PublishResult publishAll() {
         var start = Instant.now();
@@ -64,7 +56,6 @@ public class SitePublisher {
         try {
             var out = new Out(release);
             render(out);
-            beforeActivate.accept(release);
             switcher.activate(release);
             return new PublishResult(release, out.files, Duration.between(start, Instant.now()));
         } catch (IOException e) {
