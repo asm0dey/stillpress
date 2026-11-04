@@ -68,6 +68,18 @@ class MediaServiceTest {
         assertThat(db.fetchCount(MEDIA)).isZero();
     }
 
+    @Test
+    void rolledBackUploadLeavesNoFile() throws IOException {
+        var month = YearMonth.now(ZoneOffset.UTC);
+        var url = "/media/%d/%02d/dup.png".formatted(month.getYear(), month.getMonthValue());
+        db.insertInto(MEDIA, MEDIA.SOURCE_URL, MEDIA.PATH).values(url, url).execute();
+        var f = tmp();
+        assertThatThrownBy(() -> service.store("dup.png", f, userId)).isInstanceOf(RuntimeException.class);
+        try (var files = Files.walk(dataDir.media())) {
+            assertThat(files.filter(Files::isRegularFile)).isEmpty();
+        }
+    }
+
     private Path tmp() throws IOException {
         var f = Files.createTempFile(dataDir.root(), "upload", ".tmp");
         Files.write(f, new byte[] {1, 2, 3});

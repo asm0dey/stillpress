@@ -2,7 +2,11 @@ package site.asm0dey.stillpress.content;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Status;
+import jakarta.transaction.Synchronization;
+import jakarta.transaction.TransactionSynchronizationRegistry;
 import jakarta.transaction.Transactional;
+import org.jboss.logging.Logger;
 import javax.imageio.ImageIO;
 import module java.base;
 import site.asm0dey.stillpress.config.DataDir;
@@ -35,6 +39,9 @@ public class MediaService {
             Map.entry("pdf", "application/pdf"),
             Map.entry("zip", "application/zip")
     );
+    private static final Logger LOG = Logger.getLogger(MediaService.class);
+    @Inject
+    TransactionSynchronizationRegistry registry;
     @Inject
     MediaRepository media;
     @Inject
@@ -72,10 +79,12 @@ public class MediaService {
             for (int n = 1; ; n++) {
                 var name = base + (n == 1 ? "" : "-" + n) + "." + ext;
                 try {
-                    var target = dir.resolve(name);
+                    // O_EXCL reserves the name; a bare move would silently replace a file a parallel upload just placed
+                    var target = Files.createFile(dir.resolve(name));
+                    removeOnRollback(target);
                     var size = Files.size(upload);
                     var dims = dimensions(upload, mime);
-                    Files.move(upload, target);
+                    Files.move(upload, target, StandardCopyOption.REPLACE_EXISTING);
                     var url = "/media/" + folder + "/" + name;
                     var r = media.insert(url, mime, dims[0], dims[1], size, userId, LocalDateTime.now(ZoneOffset.UTC));
                     queue.media();
@@ -88,6 +97,27 @@ public class MediaService {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /**
+     * A file placed under media/ is published whether or not it has a library row, so a failed transaction removes it.
+     */
+    private void removeOnRollback(Path target) {
+        registry.registerInterposedSynchronization(new Synchronization() {
+            @Override
+            public void beforeCompletion() {}
+
+            @Override
+            public void afterCompletion(int status) {
+                if (status != Status.STATUS_COMMITTED) {
+                    try {
+                        Files.deleteIfExists(target);
+                    } catch (IOException e) {
+                        LOG.warnf(e, "Could not remove %s after a rolled-back upload", target);
+                    }
+                }
+            }
+        });
     }
 
     @Transactional

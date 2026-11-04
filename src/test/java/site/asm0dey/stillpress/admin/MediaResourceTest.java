@@ -15,7 +15,9 @@ import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 
 @QuarkusTest
@@ -30,6 +32,8 @@ class MediaResourceTest {
     DSLContext db;
     @Inject
     DataDir dataDir;
+    @Inject
+    SettingRepository settings;
     String contributor;
     String author;
 
@@ -109,6 +113,33 @@ class MediaResourceTest {
                 "url",
                 org.hamcrest.Matchers.endsWith("/a-2.png")
         );
+    }
+
+    @Test
+    void parallelUploadsOfOneNameKeepTheirOwnBytes() throws Exception {
+        // the first-ever concurrent write races inside ImportGuard.close(); settle it so this test is about names
+        settings.put(ImportGuard.STATE, "closed");
+        int n = 6;
+        var pool = Executors.newFixedThreadPool(n);
+        try {
+            var futures = new ArrayList<Future<String>>();
+            for (int i = 0; i < n; i++) {
+                var bytes = ("content-" + i).getBytes(StandardCharsets.UTF_8);
+                futures.add(pool.submit(() -> {
+                    var url = upload(author, "image.png", bytes).then().statusCode(201).extract().<String>path("url");
+                    return url + "|" + new String(bytes, StandardCharsets.UTF_8);
+                }));
+            }
+            var urls = new HashSet<String>();
+            for (var f : futures) {
+                var parts = f.get(60, TimeUnit.SECONDS).split("\\|");
+                assertThat(urls.add(parts[0])).as(parts[0]).isEqualTo(true);
+                assertThat(Files.readString(dataDir.root().resolve(parts[0].substring(1)))).isEqualTo(parts[1]);
+            }
+            assertThat(urls).hasSize(n);
+        } finally {
+            pool.shutdown();
+        }
     }
 
     @Test
