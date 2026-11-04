@@ -78,6 +78,20 @@ class SetupResourceTest {
     }
 
     @Test
+    void keepsAnImportedHomeUrl() {
+        settings.put("home_url", "https://blog.example.ru");
+        given()
+            .header("X-Requested-With", "stillpress")
+            .header("X-Forwarded-Host", "tunnel.example.net")
+            .contentType(JSON)
+            .body(body(token.current().orElseThrow(), "admin0"))
+            .post("/admin/api/setup")
+            .then()
+            .statusCode(201);
+        assertThat(settings.get("home_url")).hasValue("https://blog.example.ru");
+    }
+
+    @Test
     void writesSettingsAndKeepsExistingDefaults() {
         settings.put("posts_per_page", "25");
         setup(token.current().orElseThrow()).then().statusCode(201);

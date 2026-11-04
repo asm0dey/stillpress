@@ -97,7 +97,10 @@ public class SetupResource {
     private String create(Setup s, String hash, String home) {
         settings.put("title", s.title().strip());
         settings.put("language", s.language());
-        settings.put("home_url", home);
+        // an install that already holds a CLI import keeps the export's site URL, not the host the admin used
+        if (settings.get("home_url").isEmpty()) {
+            settings.put("home_url", home);
+        }
         DEFAULTS.forEach((k, v) -> {
             if (settings.get(k).isEmpty()) {
                 settings.put(k, v);
