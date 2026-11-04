@@ -125,6 +125,21 @@ class TermsResourceTest {
     }
 
     @Test
+    void nameLongerThanTheColumnIs400() {
+        var longName = "n".repeat(201);
+        as(admin)
+            .body(Map.of("taxonomy", "category", "name", longName))
+            .post("/admin/api/terms")
+            .then()
+            .statusCode(400)
+            .body("field", equalTo("name"));
+        var news = term(admin, "category", "News", null);
+        put(admin, news, Map.of("name", longName, "slug", "news")).then().statusCode(400).body("field", equalTo("name"));
+        assertThat(terms.findById(news).orElseThrow().getName()).isEqualTo("News");
+        term(admin, "category", "n".repeat(200), null);
+    }
+
+    @Test
     void defaultCategoryCannotBeDeleted() {
         var news = term(admin, "category", "News", null);
         settings.put("default_category", String.valueOf(news));

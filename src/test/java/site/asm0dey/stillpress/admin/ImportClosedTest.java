@@ -80,6 +80,49 @@ class ImportClosedTest {
                         Map.of("title", "T")
                 ))
         );
+        map.put(
+                "items DELETE",
+                new Write(c -> ItemsResourceTest.create(c, "post").getLong("id"), (c, x) -> as(c)
+                    .delete("/admin/api/items/" + x))
+        );
+        map.put("items restore POST", new Write(c -> {
+            var id = ItemsResourceTest.create(c, "post").getLong("id");
+            as(c).delete("/admin/api/items/" + id).then().statusCode(204);
+            return id;
+        }, (c, x) -> as(c).post("/admin/api/items/" + x + "/restore")));
+        map.put(
+                "items autosave PUT",
+                new Write(c -> ItemsResourceTest.create(c, "post").getLong("id"), (c, x) -> as(c)
+                    .body(Map.of("title", "T", "body", "<p>x</p>", "excerpt", ""))
+                    .put("/admin/api/items/" + x + "/autosave"))
+        );
+        map.put("items revision restore POST", new Write(c -> {
+            var item = ItemsResourceTest.create(c, "post");
+            ItemsResourceTest.update(c, item, Map.of("title", "First")).then().statusCode(200);
+            var rid = as(c)
+                .get("/admin/api/items/" + item.getLong("id") + "/revisions")
+                .then()
+                .extract()
+                .jsonPath()
+                .getLong("[0].id");
+            return "/admin/api/items/" + item.getLong("id") + "/revisions/" + rid + "/restore";
+        }, (c, x) -> as(c).post((String) x)));
+        map.put(
+                "blocks autosave PUT",
+                new Write(c -> block(c).getLong("id"), (c, x) -> as(c)
+                    .body(Map.of("title", "T", "content", "<p>y</p>"))
+                    .put("/admin/api/blocks/" + x + "/autosave"))
+        );
+        map.put("blocks revision restore POST", new Write(c -> {
+            var id = block(c).getLong("id");
+            var rid = as(c)
+                .get("/admin/api/blocks/" + id + "/revisions")
+                .then()
+                .extract()
+                .jsonPath()
+                .getLong("[0].id");
+            return "/admin/api/blocks/" + id + "/revisions/" + rid + "/restore";
+        }, (c, x) -> as(c).post((String) x)));
         map.put("media POST", new Write(c -> null, (c, x) -> upload(c)));
         map.put(
                 "media PUT",
@@ -206,6 +249,26 @@ class ImportClosedTest {
             .cookie("sp_session", admin)
             .multiPart("file", "export.xml", "<rss/>".getBytes(StandardCharsets.UTF_8), "text/xml")
             .post("/admin/api/import");
+    }
+
+    @Test
+    void writeRefusedByExceptionLeavesImportOpen() {
+        var contributor = sessions.create(users.create("c", "c@example.org", "C", Role.CONTRIBUTOR).getId());
+        as(contributor).body(Map.of("taxonomy", "category", "name", "News")).post("/admin/api/terms").then().statusCode(
+                403
+        );
+        assertThat(settings.get(ImportGuard.STATE)).isNotPresent();
+        as(admin).get("/admin/api/site").then().body("importAllowed", equalTo(true));
+    }
+
+    private static io.restassured.path.json.JsonPath block(String cookie) {
+        return as(cookie)
+            .body(Map.of("title", "T", "content", "<p>x</p>"))
+            .post("/admin/api/blocks")
+            .then()
+            .statusCode(201)
+            .extract()
+            .jsonPath();
     }
 
     private static long newUser(String cookie) {

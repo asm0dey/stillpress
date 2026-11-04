@@ -28,12 +28,23 @@ public class PublishQueue {
      * {@link #item} for many, in one statement.
      */
     public void items(Collection<Long> ids) {
-        if (ids.isEmpty()) {
+        addAll("item", ids.stream().map(String::valueOf).toList());
+    }
+
+    /**
+     * {@link #base} for many, in one statement.
+     */
+    public void bases(Collection<String> bases) {
+        addAll("base", bases);
+    }
+
+    private void addAll(String kind, Collection<String> refs) {
+        if (refs.isEmpty()) {
             return;
         }
         var now = LocalDateTime.now(ZoneOffset.UTC);
         var insert = db.insertInto(PUBLISH_QUEUE, PUBLISH_QUEUE.KIND, PUBLISH_QUEUE.REF, PUBLISH_QUEUE.QUEUED_AT);
-        ids.forEach(id -> insert.values("item", String.valueOf(id), now));
+        refs.forEach(ref -> insert.values(kind, ref, now));
         insert.execute();
     }
 
