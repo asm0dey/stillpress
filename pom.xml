@@ -30,6 +30,7 @@
         <db.codegen.schema>public</db.codegen.schema>
         <surefire-plugin.version>3.6.1</surefire-plugin.version>
         <spotless-plugin.version>3.11.0</spotless-plugin.version>
+        <jacoco.version>0.8.16</jacoco.version>
     </properties>
 
     <dependencyManagement>
@@ -147,6 +148,12 @@
             <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- coverage of @QuarkusTest classes; the jacoco plugin below adds plain unit tests to the same report -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jacoco</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -163,6 +170,26 @@
                             <goal>generate-code</goal>
                             <goal>generate-code-tests</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Quarkus's documented setup: unit tests write into the file quarkus-jacoco reports from
+                 (target/jacoco-report/jacoco.xml); classes loaded by Quarkus are left to the extension -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>default-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <exclClassLoaders>*QuarkusClassLoader</exclClassLoaders>
+                            <destFile>${project.build.directory}/jacoco-quarkus.exec</destFile>
+                            <append>true</append>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

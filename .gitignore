@@ -11,3 +11,4 @@ data/
 data-*/
 src/main/webui/node_modules/
 src/main/webui/dist/
+src/main/webui/coverage/
