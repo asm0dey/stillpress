@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.Records;
 import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.blocks.Block;
 import site.asm0dey.stillpress.blocks.BlockParser;
@@ -494,21 +495,26 @@ public class WordPressImporter {
                     .select(ITEM.ID, ITEM.PERMALINK, ITEM.STATUS, ITEM.PASSWORD_PROTECTED)
                     .from(ITEM)
                     .where(ITEM.SOURCE_ID.eq(p.parentSourceId()))
-                    .fetchOne();
+                    .fetchOptional(Records.mapping(ParentRow::new))
+                    .orElse(null);
                 if (parent == null) {
                     continue;
                 }
-                db.update(ITEM).set(ITEM.PARENT_ID, parent.value1()).where(ITEM.ID.eq(p.id())).execute();
+                db.update(ITEM).set(ITEM.PARENT_ID, parent.id()).where(ITEM.ID.eq(p.id())).execute();
                 if (p.type().equals("attachment")
-                        && parent.value2() != null
-                        && publishable(parent.value3(), parent.value4())) {
+                        && parent.permalink() != null
+                        && publishable(parent.status(), parent.passwordProtected())) {
                     if (p.permalink() != null) {
-                        redirect(p.permalink(), parent.value2());
+                        redirect(p.permalink(), parent.permalink());
                     }
-                    redirect("?attachment_id=" + p.sourceId(), parent.value2());
+                    redirect("?attachment_id=" + p.sourceId(), parent.permalink());
                 }
             }
         }
+
+        private record ParentRow(Long id, String permalink, String status, Boolean passwordProtected) {}
+
+        private record TermRow(Long id, String slug, Long parentId) {}
 
         /**
          * The published posts with their category (the lowest id, as WordPress picks it) and author.
@@ -518,7 +524,7 @@ public class WordPressImporter {
                 .select(TERM.ID, TERM.SLUG, TERM.PARENT_ID)
                 .from(TERM)
                 .where(TERM.TAXONOMY.eq("category"))
-                .fetchMap(TERM.ID);
+                .fetchMap(TERM.ID, Records.mapping(TermRow::new));
             var firstCategory = db
                 .select(ITEM_TERM.ITEM_ID, DSL.min(ITEM_TERM.TERM_ID))
                 .from(ITEM_TERM)
@@ -533,21 +539,20 @@ public class WordPressImporter {
                 .leftJoin(AUTHOR)
                 .on(AUTHOR.ID.eq(ITEM.AUTHOR_ID))
                 .where(ITEM.TYPE.eq("post"), ITEM.STATUS.eq("publish"), ITEM.PUBLISHED_LOCAL.isNotNull())
-                .fetch(r -> {
+                .fetch(Records.mapping((id, sourceId, slug, publishedLocal, authorSlug, permalink) -> {
                     var path = new ArrayDeque<String>();
-                    for (var t = categories.get(firstCategory.get(r.value1())); t != null; t = categories.get(t.value3()
-                    )) {
-                        path.addFirst(t.value2());
+                    for (var t = categories.get(firstCategory.get(id)); t != null; t = categories.get(t.parentId())) {
+                        path.addFirst(t.slug());
                     }
                     return new PermalinkStructure.Fields(
-                            Objects.requireNonNullElse(r.value2(), 0L),
-                            Objects.requireNonNullElse(r.value3(), ""),
-                            r.value4(),
+                            Objects.requireNonNullElse(sourceId, 0L),
+                            Objects.requireNonNullElse(slug, ""),
+                            publishedLocal,
                             String.join("/", path),
-                            Objects.requireNonNullElse(r.value5(), ""),
-                            r.value6()
+                            Objects.requireNonNullElse(authorSlug, ""),
+                            permalink
                     );
-                });
+                }));
         }
 
         ImportReport report() {

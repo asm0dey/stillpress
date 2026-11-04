@@ -88,10 +88,11 @@ public class UsersResource {
         if (users.findById(id).isEmpty()) {
             return error(404, "not_found");
         }
+        if (!users.setRoleKeepingAdministrator(id, role)) {
+            return error(409, "last_administrator");
+        }
         guard.close();
-        return users.setRoleKeepingAdministrator(id, role)
-                ? Response.noContent().build()
-                : error(409, "last_administrator");
+        return Response.noContent().build();
     }
 
     @POST

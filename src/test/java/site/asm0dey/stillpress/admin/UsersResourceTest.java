@@ -103,6 +103,12 @@ class UsersResourceTest {
     }
 
     @Test
+    void refusedDemotionLeavesImportOpen() {
+        asAdmin().body(Map.of("role", "editor")).put("/admin/api/users/" + adminId + "/role").then().statusCode(409);
+        asAdmin().get("/admin/api/site").then().statusCode(200).body("importAllowed", equalTo(true));
+    }
+
+    @Test
     void administratorWithoutPasswordDoesNotCountAsAnotherOne() {
         var other = users.create("pending", "p@example.org", "P", Role.ADMINISTRATOR).getId();
         asAdmin().body(Map.of("role", "editor")).put("/admin/api/users/" + adminId + "/role").then().statusCode(409);

@@ -8,6 +8,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.Records;
+import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 
 @ApplicationScoped
@@ -38,17 +40,14 @@ public class ItemRepository {
      * No items, comments, media, terms or reusable blocks: nothing an import would collide with.
      */
     public boolean contentEmpty() {
-        return db
-            .select(
-                    field(notExists(selectOne().from(ITEM))
-                        .and(notExists(selectOne().from(COMMENT)))
-                        .and(notExists(selectOne().from(MEDIA)))
-                        .and(notExists(selectOne().from(TERM)))
-                        .and(notExists(selectOne().from(REUSABLE_BLOCK)))
-                    )
-            )
-            .fetchSingle()
-            .value1();
+        return db.fetchValue(
+                field(notExists(selectOne().from(ITEM))
+                    .and(notExists(selectOne().from(COMMENT)))
+                    .and(notExists(selectOne().from(MEDIA)))
+                    .and(notExists(selectOne().from(TERM)))
+                    .and(notExists(selectOne().from(REUSABLE_BLOCK)))
+                )
+        );
     }
 
     /**
@@ -70,7 +69,14 @@ public class ItemRepository {
      */
     public List<Summary> findPublishedSummaries() {
         return db
-            .select(ITEM.ID, ITEM.TYPE, ITEM.PERMALINK, ITEM.PUBLISHED_AT, ITEM.PUBLISHED_LOCAL, ITEM.AUTHOR_ID)
+            .select(
+                    ITEM.ID,
+                    ITEM.TYPE,
+                    ITEM.PERMALINK,
+                    ITEM.PUBLISHED_AT,
+                    DSL.coalesce(ITEM.PUBLISHED_LOCAL, ITEM.PUBLISHED_AT),
+                    ITEM.AUTHOR_ID
+            )
             .from(ITEM)
             .where(
                     ITEM.STATUS.eq("publish"),
@@ -79,14 +85,7 @@ public class ItemRepository {
                     ITEM.PERMALINK.isNotNull()
             )
             .orderBy(ITEM.PUBLISHED_AT.desc().nullsLast(), ITEM.ID.desc())
-            .fetch(r -> new Summary(
-                    r.value1(),
-                    r.value2(),
-                    r.value3(),
-                    r.value4(),
-                    r.value5() != null ? r.value5() : r.value4(),
-                    r.value6()
-            ));
+            .fetch(Records.mapping(Summary::new));
     }
 
     /**

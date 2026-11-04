@@ -59,10 +59,10 @@ public class PublishQueue {
         boolean media = false, all = false;
         var ids = new HashSet<Long>();
         for (var r : rows) {
-            ids.add(r.value1());
-            switch (r.value2()) {
-                case "item" -> items.add(Long.parseLong(r.value3()));
-                case "base" -> bases.add(r.value3());
+            ids.add(r.get(PUBLISH_QUEUE.ID));
+            switch (r.get(PUBLISH_QUEUE.KIND)) {
+                case "item" -> items.add(Long.parseLong(r.get(PUBLISH_QUEUE.REF)));
+                case "base" -> bases.add(r.get(PUBLISH_QUEUE.REF));
                 case "media" -> media = true;
                 default -> all = true;
             }
