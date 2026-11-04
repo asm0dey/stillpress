@@ -1,9 +1,6 @@
 import { expect, test } from 'bun:test';
 import { __ } from '@wordpress/i18n';
-import { useDom } from '../editor/testdom.ts';
 import { loadLocale, zoneOffset } from './index.ts';
-
-useDom();
 
 test('English after Russian shows English again', async () => {
   await loadLocale('ru');

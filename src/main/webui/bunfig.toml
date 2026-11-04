@@ -1,0 +1,3 @@
+[test]
+# the DOM every test runs in (see the file)
+preload = ["./src/editor/testdom.ts"]

@@ -1,8 +1,6 @@
 /// <reference types="bun" />
 import { expect, test } from 'bun:test';
-import { useDom, wxrBodies } from './testdom.ts';
-
-useDom();
+import { wxrBodies } from './testdom.ts';
 
 interface Parsed { name: string; isValid: boolean; innerBlocks: Parsed[] }
 const flatten = (blocks: Parsed[]): Parsed[] => blocks.flatMap((b) => [b, ...flatten(b.innerBlocks)]);

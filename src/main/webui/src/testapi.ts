@@ -1,6 +1,8 @@
 /// <reference types="bun" />
-import { afterEach, beforeAll } from 'bun:test';
-import { useDom } from './editor/testdom.ts';
+import { afterEach } from 'bun:test';
+import * as rtl from '@testing-library/react/pure';
+import { userEvent } from '@testing-library/user-event';
+import * as router from 'react-router';
 
 interface Reply { status?: number; body?: unknown }
 /** A reply, or one computed from the request's JSON body. */
@@ -27,29 +29,22 @@ export function fakeApi(routes: Record<string, Route>): Call[] {
 }
 
 export interface Pages {
-  rtl: typeof import('@testing-library/react/pure');
-  user: typeof import('@testing-library/user-event').userEvent;
-  router: typeof import('react-router');
+  rtl: typeof rtl;
+  user: typeof userEvent;
+  router: typeof router;
 }
 
 /**
- * Sets up rendering pages: a jsdom DOM, then React, Testing Library and the router, filled in before the file's own
- * beforeAll. They look for the DOM when they load, so they come in after useDom; the pure entry registers no hooks of
- * its own (bun refuses hooks registered inside beforeAll). After each test the page unmounts and fetch is real again.
+ * What a page test renders with: Testing Library, user-event and the router. After each test the page unmounts and
+ * fetch is real again. The pure entry, with its setup done here: the main one registers cleanup only where afterEach
+ * is a global, which bun's is not.
  */
 export function usePages(): Pages {
-  const pages = {} as Pages;
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   const realFetch = globalThis.fetch;
-  useDom();
-  beforeAll(async () => {
-    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    pages.rtl = await import('@testing-library/react/pure');
-    pages.user = (await import('@testing-library/user-event')).userEvent;
-    pages.router = await import('react-router');
-  });
   afterEach(() => {
-    pages.rtl.cleanup();
+    rtl.cleanup();
     globalThis.fetch = realFetch;
   });
-  return pages;
+  return { rtl, user: userEvent, router };
 }

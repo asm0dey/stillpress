@@ -1,9 +1,7 @@
 /// <reference types="bun" />
 import { beforeAll, expect, test } from 'bun:test';
-import { useDom, wxrBodies } from './testdom.ts';
+import { wxrBodies } from './testdom.ts';
 import { Edits } from './edits.ts';
-
-useDom();
 
 let c: typeof import('./classic.ts');
 let b: typeof import('@wordpress/blocks');

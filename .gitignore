@@ -12,3 +12,6 @@ data-*/
 src/main/webui/node_modules/
 src/main/webui/dist/
 src/main/webui/coverage/
+src/main/webui/.stryker-tmp/
+src/main/webui/reports/
+src/main/webui/stryker.log

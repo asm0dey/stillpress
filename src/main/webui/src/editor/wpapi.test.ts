@@ -11,7 +11,8 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const call = (options: Record<string, unknown>) => apiFetch(options) as Promise<any>;
 
 beforeAll(() => {
-  (globalThis as any).document = { cookie: 'a=b; csrf-token=tok' };
+  document.cookie = 'a=b';
+  document.cookie = 'csrf-token=tok';
 });
 
 beforeEach(() => {
