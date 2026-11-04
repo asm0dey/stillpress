@@ -14,6 +14,7 @@ import site.asm0dey.stillpress.store.SettingRepository;
 @ApplicationScoped
 public class ImportGuard {
     public static final String STATE = "import_state";
+    private static final String CLOSED = "closed";
     @Inject
     ItemRepository items;
     @Inject
@@ -26,6 +27,9 @@ public class ImportGuard {
     public synchronized void begin() throws AlreadyImportedException {
         var refusal = QuarkusTransaction.requiringNew().call(() -> {
             var state = settings.get(STATE).orElse(null);
+            if (CLOSED.equals(state)) {
+                return "this site was started without an import; import works only on a fresh install";
+            }
             if (state != null && !state.equals("failed")) {
                 return "an import is already " + (state.equals("running") ? "running" : "done");
             }
@@ -37,6 +41,34 @@ public class ImportGuard {
         if (refusal != null) {
             throw new AlreadyImportedException(refusal);
         }
+    }
+
+    /**
+     * Settles the site's origin as "never imported", in the caller's transaction. A compare-and-set on the row, so it
+     * holds against another process too; a no-op once closed or done.
+     *
+     * @throws ImportRunningException while an import runs
+     */
+    public void close() {
+        var state = settings.get(STATE).orElse(null);
+        if (CLOSED.equals(state) || "done".equals(state)) {
+            return;
+        }
+        if (!"running".equals(state) && settings.compareAndSet(STATE, state, CLOSED)) {
+            return;
+        }
+        // lost the compare-and-set, or saw running: whoever won decides
+        if ("running".equals(settings.get(STATE).orElse(null))) {
+            throw new ImportRunningException();
+        }
+    }
+
+    /**
+     * Whether an import could start now: nothing decided yet (or a failed try) and nothing to collide with.
+     */
+    public boolean importable() {
+        var state = settings.get(STATE).orElse(null);
+        return (state == null || state.equals("failed")) && items.contentEmpty();
     }
 
     public void done() {

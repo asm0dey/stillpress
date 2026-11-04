@@ -4,6 +4,7 @@ import io.quarkus.security.Authenticated;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
+import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.store.CommentRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
@@ -19,8 +20,10 @@ public class SiteResource {
     ItemRepository items;
     @Inject
     CommentRepository comments;
+    @Inject
+    ImportGuard guard;
 
-    public record Site(String title, String homeUrl, String language, int items, int comments) {}
+    public record Site(String title, String homeUrl, String language, int items, int comments, boolean importAllowed) {}
 
     @GET
     @Authenticated
@@ -30,7 +33,8 @@ public class SiteResource {
                 settings.get("home_url").orElse(""),
                 settings.get("language").orElse("en"),
                 items.count(),
-                comments.count()
+                comments.count(),
+                guard.importable()
         );
     }
 }

@@ -14,14 +14,14 @@ export interface ApiError {
 /** GET /session */
 export interface SessionUser { id: number; login: string; displayName: string; role: Role }
 /** GET /site */
-export interface Site { title: string; homeUrl: string; language: string; items: number; comments: number }
+export interface Site { title: string; homeUrl: string; language: string; items: number; comments: number; importAllowed: boolean }
 /** GET /users */
 export interface UserView {
   id: number; login: string; displayName: string; email: string; role: Role; hasPassword: boolean;
 }
 /** GET and POST /import */
 export interface ImportStatus {
-  state: 'idle' | 'running' | 'done' | 'failed';
+  state: 'idle' | 'running' | 'done' | 'failed' | 'closed';
   items: number;
   media: number;
   report: string | null;

@@ -62,4 +62,43 @@ class ImportGuardTest {
         assertThatThrownBy(guard::begin).isInstanceOf(AlreadyImportedException.class);
         assertThat(guard.state()).isEmpty();
     }
+
+    @Test
+    void startEmptyClosesImport() throws Exception {
+        guard.close();
+        assertThatThrownBy(guard::begin).isInstanceOf(AlreadyImportedException.class).hasMessageContaining(
+                "fresh install"
+        );
+    }
+
+    @Test
+    void closeDuringImportIsRefused() throws Exception {
+        guard.begin();
+        assertThatThrownBy(guard::close).isInstanceOf(ImportRunningException.class);
+    }
+
+    @Test
+    void closeAfterFailedImportCloses() throws Exception {
+        guard.begin();
+        guard.failed("x");
+        guard.close();
+        assertThat(guard.state()).contains("closed");
+    }
+
+    @Test
+    void closeIsANoOpWhenClosedOrDone() throws Exception {
+        guard.close();
+        guard.close();
+        assertThat(guard.state()).contains("closed");
+        settings.put(ImportGuard.STATE, "done");
+        guard.close();
+        assertThat(guard.state()).contains("done");
+    }
+
+    @Test
+    void importableOnlyWhileFreshOrFailedAndEmpty() throws Exception {
+        assertThat(guard.importable()).isTrue();
+        guard.close();
+        assertThat(guard.importable()).isFalse();
+    }
 }

@@ -1,3 +1,4 @@
+import { Navigate } from 'react-router';
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { type ApiError, type ImportStatus, api } from '../api.ts';
 import { Field } from '../Field.tsx';
@@ -48,6 +49,9 @@ export default function Import() {
   const leftContent = state === 'failed' && status!.contentLeft;
   // persisted as running, but no import thread in this server: it died, or the CLI runs one elsewhere
   const stalled = state === 'running' && status!.error;
+
+  // started empty, or edited before any import: the site's origin is decided
+  if (state === 'closed') return <Navigate to="/" replace />;
 
   return (
     <Shell>

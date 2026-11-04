@@ -170,6 +170,55 @@ class SetupResourceTest {
         post(body).then().statusCode(400).body("field", equalTo("password"));
     }
 
+    @Test
+    void startEmptyThenImportIs409() {
+        var cookie = setup(token.current().orElseThrow()).then().statusCode(201).extract().cookie("sp_session");
+        csrf().cookie("sp_session", cookie).post("/admin/api/setup/start-empty").then().statusCode(204);
+        upload(cookie).then().statusCode(409).body("error", equalTo("already_imported"));
+        csrf().cookie("sp_session", cookie).get("/admin/api/site").then().body("importAllowed", is(false));
+    }
+
+    @Test
+    void startEmptyNeedsAnAdministrator() {
+        csrf().post("/admin/api/setup/start-empty").then().statusCode(401);
+    }
+
+    @Test
+    void userCreatedBeforeImportClosesIt() {
+        var cookie = setup(token.current().orElseThrow()).then().statusCode(201).extract().cookie("sp_session");
+        csrf()
+            .cookie("sp_session", cookie)
+            .contentType(JSON)
+            .body(Map.of("login", "w", "email", "w@example.org", "displayName", "W", "role", "author"))
+            .post("/admin/api/users")
+            .then()
+            .statusCode(201);
+        upload(cookie).then().statusCode(409);
+    }
+
+    @Test
+    void importStillAllowedRightAfterSetup() throws InterruptedException {
+        var cookie = setup(token.current().orElseThrow()).then().statusCode(201).extract().cookie("sp_session");
+        csrf().cookie("sp_session", cookie).get("/admin/api/site").then().body("importAllowed", is(true));
+        upload(cookie).then().statusCode(202);
+        var deadline = Instant.now().plusSeconds(30);
+        while (Instant.now().isBefore(deadline)
+                && csrf().cookie("sp_session", cookie).get("/admin/api/import").path("state").equals("running")) {
+            Thread.sleep(100);
+        }
+    }
+
+    private static Response upload(String cookie) {
+        try (var in = TestStore.sample()) {
+            return csrf()
+                .cookie("sp_session", cookie)
+                .multiPart("file", "export.xml", in.readAllBytes(), "text/xml")
+                .post("/admin/api/import");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     static Response setup(String token) {
         return setup(token, "admin0");
     }

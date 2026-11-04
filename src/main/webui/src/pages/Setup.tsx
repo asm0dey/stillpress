@@ -36,6 +36,16 @@ export default function Setup() {
     required: true,
   });
 
+  async function startEmpty() {
+    try {
+      await api('/setup/start-empty', { method: 'POST' });
+      navigate('/');
+    } catch (e) {
+      const err = e as ApiError;
+      setProblem(err.error === 'csrf' ? err.message! : 'Could not start an empty site. Try again.');
+    }
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -61,8 +71,9 @@ export default function Setup() {
       <main className="page">
         <h1>Your site is ready</h1>
         <p className="muted">How do you want to begin?</p>
+        {problem && <p role="alert" className="error">{problem}</p>}
         <div className="cards">
-          <button type="button" className="card" onClick={() => navigate('/')}>
+          <button type="button" className="card" onClick={startEmpty}>
             <strong>Start empty</strong>
             <span>Begin with a blank site and write your first post.</span>
           </button>

@@ -13,6 +13,7 @@ import module java.base;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SetPasswordLink;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
+import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.store.AuthorRepository;
 
 /**
@@ -25,6 +26,8 @@ public class UsersResource {
     AuthorRepository users;
     @Inject
     SetPasswordLink links;
+    @Inject
+    ImportGuard guard;
 
     public record UserView(long id, String login, String displayName, String email, String role, boolean hasPassword) {}
 
@@ -69,6 +72,7 @@ public class UsersResource {
             .isPresent()) {
             return error(409, "login_taken");
         }
+        guard.close();
         var id = users.create(n.login(), n.email(), n.displayName(), role).getId();
         return Response.status(201).entity(Map.of("id", id, "setPasswordUrl", links.issue(id))).build();
     }
@@ -84,6 +88,7 @@ public class UsersResource {
         if (users.findById(id).isEmpty()) {
             return error(404, "not_found");
         }
+        guard.close();
         return users.setRoleKeepingAdministrator(id, role)
                 ? Response.noContent().build()
                 : error(409, "last_administrator");
@@ -96,6 +101,7 @@ public class UsersResource {
         if (users.findById(id).isEmpty()) {
             return error(404, "not_found");
         }
+        guard.close();
         return Response.ok(Map.of("url", links.issue(id))).build();
     }
 

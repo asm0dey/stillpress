@@ -2,7 +2,9 @@ package site.asm0dey.stillpress.admin;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.vertx.core.http.HttpServerRequest;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -14,6 +16,7 @@ import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SessionAuthMechanism;
+import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.SitePublisher;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
@@ -40,6 +43,8 @@ public class SetupResource {
     SettingRepository settings;
     @Inject
     SitePublisher publisher;
+    @Inject
+    ImportGuard guard;
     @Context
     HttpServerRequest request;
 
@@ -93,6 +98,18 @@ public class SetupResource {
         }
         var cookie = SessionAuthMechanism.cookie(raw, "https".equals(request.scheme()));
         return Response.status(201).header(HttpHeaders.SET_COOKIE, cookie.encode()).build();
+    }
+
+    /**
+     * The wizard's "Start empty": the site will never be imported.
+     */
+    @POST
+    @Path("start-empty")
+    @RolesAllowed("administrator")
+    @Transactional
+    public Response startEmpty() {
+        guard.close();
+        return Response.noContent().build();
     }
 
     private String create(Setup s, String hash, String home) {
