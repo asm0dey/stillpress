@@ -87,7 +87,7 @@ class HtmlCompositionTest {
         ItemsResourceTest.update(author, p, Map.of("body", ref(b) + REST)).then().statusCode(200);
         as(author).delete("/admin/api/items/" + p.getLong("id")).then().statusCode(204);
         // an editor's edit is not checked
-        as(editor).body(Map.of("content", HALF)).put("/admin/api/blocks/" + b).then().statusCode(200);
+        putBlock(editor, b, HALF).then().statusCode(200);
         reopenImport();
         as(author)
             .post("/admin/api/items/" + p.getLong("id") + "/restore")
@@ -107,12 +107,10 @@ class HtmlCompositionTest {
         // imported content is never checked
         db.update(ITEM).set(ITEM.BODY, ref(b) + "<p onclick=x>a</p>").where(ITEM.ID.eq(p.getLong("id"))).execute();
         reopenImport();
-        as(author)
-            .body(Map.of("content", "y"))
-            .put("/admin/api/blocks/" + b)
-            .then()
-            .statusCode(400)
-            .body("violations", contains("in \"Old\": onclick attribute on <p>"));
+        putBlock(author, b, "y").then().statusCode(400).body(
+                "violations",
+                contains("in \"Old\": onclick attribute on <p>")
+        );
         as(author).get("/admin/api/blocks/" + b).then().body("content", equalTo("x"));
         assertImportOpen();
     }
@@ -173,6 +171,11 @@ class HtmlCompositionTest {
 
     private static io.restassured.response.Response createBlock(String cookie, String content) {
         return as(cookie).body(Map.of("title", "T", "content", content)).post("/admin/api/blocks");
+    }
+
+    private static io.restassured.response.Response putBlock(String cookie, long id, String content) {
+        var at = as(cookie).get("/admin/api/blocks/" + id).then().extract().jsonPath().getString("modifiedAt");
+        return as(cookie).body(Map.of("content", content, "expectedModifiedAt", at)).put("/admin/api/blocks/" + id);
     }
 
     private static RequestSpecification as(String cookie) {

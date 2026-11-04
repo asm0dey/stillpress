@@ -34,7 +34,7 @@ public class ReusableBlockService {
     /**
      * Creates ({@code ref == null}) or updates a block; a null title or content keeps the stored value. Refused with
      * 403 past the actor's capabilities, 404 for an unknown ref, 409 when the block changed since
-     * {@code expectedModifiedAt}; a null {@code expectedModifiedAt} skips that check (the editor's in-post saves).
+     * {@code expectedModifiedAt}.
      */
     @Transactional
     public ReusableBlockRecord save(
@@ -58,7 +58,7 @@ public class ReusableBlockService {
     @Transactional
     public Saved update(long ref, String title, String content, LocalDateTime expectedModifiedAt, ItemService.Actor a) {
         var r = editable(ref, a);
-        if (expectedModifiedAt != null && !Objects.equals(r.getModifiedAt(), expectedModifiedAt)) {
+        if (!Objects.equals(r.getModifiedAt(), expectedModifiedAt)) {
             throw new ItemService.Refused(409, "conflict", null);
         }
         // the items showing the block are published with the new content
@@ -71,13 +71,13 @@ public class ReusableBlockService {
         revisions.saved(OBJECT_TYPE, ref, r.getTitle(), r.getContent(), "blocks", null, a.userId());
         revisions.deleteAutosave(OBJECT_TYPE, ref, a.userId());
         // archives show excerpts only, so cached fragments stay; the item pages themselves are rendered again
-        var published =
-                blocks
+        var published = blocks
             .itemsUsing(withContainers(ref))
             .stream()
             .filter(u -> "publish".equals(u.status()))
+            .map(u -> u.itemId())
             .toList();
-        published.forEach(u -> queue.item(u.itemId()));
+        queue.items(published);
         if (!published.isEmpty()) {
             jobs.requestPublish();
         }
@@ -97,11 +97,12 @@ public class ReusableBlockService {
      */
     @Transactional
     public Saved restoreRevision(long ref, long revisionId, ItemService.Actor a) {
+        var current = editable(ref, a).getModifiedAt();
         var rev = revisions
             .find(revisionId)
             .filter(v -> OBJECT_TYPE.equals(v.getObjectType()) && v.getObjectId() == ref && !v.getAutosave())
             .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
-        return update(ref, rev.getTitle(), rev.getBody(), null, a);
+        return update(ref, rev.getTitle(), rev.getBody(), current, a);
     }
 
     private ReusableBlockRecord create(String title, String content, ItemService.Actor a) {

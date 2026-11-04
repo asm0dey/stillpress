@@ -121,6 +121,9 @@ public class ReusableBlocksResource {
         if (s == null) {
             throw new ItemService.Refused(400, "invalid", null);
         }
+        if (s.expectedModifiedAt() == null) {
+            throw new ItemService.Refused(400, "invalid", "expectedModifiedAt");
+        }
         var a = actor();
         var saved = service.update(id, s.title(), s.content(), s.expectedModifiedAt(), a);
         return view(saved.block(), a, saved.republished());

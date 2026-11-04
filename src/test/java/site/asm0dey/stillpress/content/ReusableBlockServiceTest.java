@@ -122,6 +122,9 @@ class ReusableBlockServiceTest {
         assertThatThrownBy(() -> service.save(b.getSourceId(), "T", "three", b.getModifiedAt(), author1))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(409));
         assertThat(blocks.find(b.getSourceId()).orElseThrow().getContent()).isEqualTo("two");
+        assertThatThrownBy(() -> service.save(b.getSourceId(), "T", "four", null, author1))
+            .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(409));
+        assertThat(blocks.find(b.getSourceId()).orElseThrow().getContent()).isEqualTo("two");
     }
 
     @Test

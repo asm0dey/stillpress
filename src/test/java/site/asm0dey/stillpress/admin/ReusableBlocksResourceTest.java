@@ -120,14 +120,24 @@ class ReusableBlocksResourceTest {
         put(author1, b, "two").then().statusCode(200);
         put(author1, b, "three").then().statusCode(409).body("error", equalTo("conflict"));
         as(author1).get("/admin/api/blocks/" + b.getLong("id")).then().body("content", equalTo("two"));
-        // no expectedModifiedAt: the editor's in-post save, last writer wins
+    }
+
+    @Test
+    void missingExpectedModifiedAtIs400AndWritesNothing() {
+        var b = create(author1, "one");
         as(author1)
             .body(Map.of("content", "four"))
             .put("/admin/api/blocks/" + b.getLong("id"))
             .then()
-            .statusCode(200)
-            .body("content", equalTo("four"))
-            .body("title", equalTo("T"));
+            .statusCode(400)
+            .body("error", equalTo("invalid"))
+            .body("field", equalTo("expectedModifiedAt"));
+        as(author1)
+            .get("/admin/api/blocks/" + b.getLong("id"))
+            .then()
+            .body("content", equalTo("one"))
+            .body("modifiedAt", equalTo(b.getString("modifiedAt")));
+        as(author1).get("/admin/api/blocks/" + b.getLong("id") + "/revisions").then().body("size()", equalTo(1));
     }
 
     @Test
