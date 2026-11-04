@@ -1,6 +1,7 @@
 package site.asm0dey.stillpress.blocks;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 
 class BlockParserTest {
@@ -81,8 +82,7 @@ class BlockParserTest {
     void trailingFreeformAndStrayCloserAndBadJson() {
         var b = BlockParser.parse("<!-- wp:html {bad} --><i/><!-- /wp:html -->tail<!-- /wp:x -->");
         assertThat(b).extracting(Block::name).containsExactly("core/html", null);
-        assertThat(b.getFirst().attrs().isObject()).isTrue();
-        assertThat(b.getFirst().attrs()).isEmpty();
+        assertThat(b.getFirst().attrs()).isInstanceOf(ObjectNode.class).isEmpty();
         assertThat(b.get(1).innerHtml()).isEqualTo("tail<!-- /wp:x -->");
     }
 }

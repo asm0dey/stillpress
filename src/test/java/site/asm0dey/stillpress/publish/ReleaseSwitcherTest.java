@@ -46,10 +46,11 @@ class ReleaseSwitcherTest {
     @Test
     void releasesCreatedInTheSameMillisecondDoNotCollide() {
         var s = switcher(new DataDir(tmp.toString()));
-        var names = new HashSet<Path>();
+        var names = new ArrayList<Path>();
         for (int i = 0; i < 50; i++) {
-            assertThat(names.add(s.newRelease())).isTrue();
+            names.add(s.newRelease());
         }
+        assertThat(names).doesNotHaveDuplicates();
     }
 
     @Test

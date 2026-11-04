@@ -9,9 +9,18 @@ class BunVersionPinTest {
     void quinoaBunEqualsMise() throws IOException {
         var mise = Files.readString(Path.of("mise.toml"));
         var props = Files.readString(Path.of("src/main/resources/application.properties"));
-        var m = Pattern.compile("(?m)^bun\\s*=\\s*\"([^\"]+)\"").matcher(mise);
-        var p = Pattern.compile("(?m)^quarkus\\.quinoa\\.package-manager-install\\.bun-version=(\\S+)").matcher(props);
-        assertThat(m.find() && p.find()).isTrue();
-        assertThat(p.group(1)).isEqualTo(m.group(1));
+        var miseBun = first("(?m)^bun\\s*=\\s*\"([^\"]+)\"", mise);
+        var quinoaBun = first("(?m)^quarkus\\.quinoa\\.package-manager-install\\.bun-version=(\\S+)", props);
+        assertThat(miseBun).isPresent();
+        assertThat(quinoaBun).isEqualTo(miseBun);
+    }
+
+    private static Optional<String> first(String regex, String text) {
+        return Pattern
+            .compile(regex)
+            .matcher(text)
+            .results()
+            .map(r -> r.group(1))
+            .findFirst();
     }
 }
