@@ -11,6 +11,8 @@ public final class Nicename {
     private Nicename() {
     }
 
+    // the lookbehind keeps the regex linear
+    @SuppressWarnings("java:S8786")
     public static String of(String login) {
         var s =
                 login.codePointCount(0, login.length()) > 50

@@ -39,7 +39,7 @@ function Gate({ children }: { children: ReactNode }) {
   const [passed, setPassed] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       let target: string | null = null;
       try {
         const { required } = await api<{ required: boolean }>('/setup');
@@ -56,7 +56,7 @@ function Gate({ children }: { children: ReactNode }) {
       }
       if (cancelled) return;
       // render nothing until the redirect lands, so a protected page never mounts for an anonymous visitor
-      if (target) navigate(target, { replace: true });
+      if (target) void navigate(target, { replace: true });
       else setPassed(pathname);
     })();
     return () => { cancelled = true; };
@@ -65,7 +65,7 @@ function Gate({ children }: { children: ReactNode }) {
 }
 
 // the signed-in user's language, or the browser's before anyone has signed in; loaded before anything renders
-api<SessionUser>('/session').then((s) => s.locale, () => browserLocale()).then(loadLocale)
+void api<SessionUser>('/session').then((s) => s.locale, () => browserLocale()).then(loadLocale)
   // a translation chunk that fails to load leaves English, not a blank admin
   .catch(() => {}).then(() => createRoot(document.getElementById('root')!).render(
   <StrictMode>

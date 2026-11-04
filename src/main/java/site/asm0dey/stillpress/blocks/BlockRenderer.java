@@ -10,6 +10,8 @@ public class BlockRenderer {
     public static final int MAX_DEPTH = 5;
     @Inject
     Instance<DynamicBlockRenderer> dynamic;
+    // the map is built before publication and never mutated
+    @SuppressWarnings("java:S3077")
     private volatile Map<String, DynamicBlockRenderer> byName;
 
     public String render(String document, RenderContext ctx) {

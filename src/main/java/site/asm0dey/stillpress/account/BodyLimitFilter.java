@@ -12,7 +12,7 @@ import module java.base;
  */
 @ApplicationScoped
 public class BodyLimitFilter {
-    static final long MAX_JSON_BODY = 64 * 1024;
+    static final long MAX_JSON_BODY = 64L * 1024;
 
     void register(@Observes Filters filters) {
         filters.register(ctx -> {

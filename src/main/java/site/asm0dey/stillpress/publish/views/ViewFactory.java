@@ -68,6 +68,8 @@ public class ViewFactory {
         );
     }
 
+    // the lookbehind keeps the regex linear
+    @SuppressWarnings("java:S8786")
     private String homeUrl() {
         return settings.get("home_url").orElse("").replaceAll("(?<!/)/+$", "");
     }

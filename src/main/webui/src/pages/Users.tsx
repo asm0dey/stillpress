@@ -26,7 +26,7 @@ export default function Users() {
 
   const latest = useLatest();
   const load = () => latest(api<UserView[]>('/users')).then(setUsers, () => setMessage(__('Could not load the users.', 'stillpress')));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
 
   async function changeRole(u: UserView, role: Role) {
     setMessage(null);
@@ -37,7 +37,7 @@ export default function Users() {
       setMessage(err.error === 'csrf' ? err.message! : err.error === 'last_administrator'
         ? __('There must be at least one administrator with a password.', 'stillpress') : __('Could not change the role.', 'stillpress'));
     }
-    load();
+    void load();
   }
 
   async function saveProfile(e: FormEvent) {
@@ -48,7 +48,7 @@ export default function Users() {
     try {
       await api(`/users/${editing.id}`, { method: 'PUT', body: { displayName: editing.displayName, email: editing.email } });
       setEditing(null);
-      load();
+      void load();
     } catch (e) {
       const err = asApiError(e);
       if (err.error === 'email_taken') setEditErrors({ email: __('Another user has this email.', 'stillpress') });
@@ -83,7 +83,7 @@ export default function Users() {
       const { setPasswordUrl } = await api<{ setPasswordUrl: string }>('/users', { method: 'POST', body: form });
       await copy(form.login, setPasswordUrl);
       setForm(EMPTY);
-      load();
+      void load();
     } catch (e) {
       const err = asApiError(e);
       if (err.error === 'login_taken') setAddErrors({ login: __('That login is already taken.', 'stillpress') });

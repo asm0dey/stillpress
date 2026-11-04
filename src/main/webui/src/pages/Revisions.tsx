@@ -63,7 +63,7 @@ export default function Revisions({ kind }: { kind: 'items' | 'blocks' }) {
   };
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         // the object says whether this user may restore into it (Capabilities decides on the server)
         const [l, obj] = await Promise.all([api<Line[]>(`${base}/revisions`), api<{ canEdit: boolean }>(base)]);
@@ -99,7 +99,7 @@ export default function Revisions({ kind }: { kind: 'items' | 'blocks' }) {
         ? (r.republished ? sprintf(_n('Restored. %d item will be republished.', 'Restored. %d items will be republished.', r.republished, 'stillpress'), r.republished)
           : __('Restored. No published items use this block.', 'stillpress'))
         : r.status === 'publish' ? __('Restored. The site updates in a few seconds.', 'stillpress') : __('Restored.', 'stillpress');
-      navigate(back, { state: { notice } });
+      void navigate(back, { state: { notice } });
     } catch (e) {
       setMessage(saveError(asApiError(e), noun));
       setBusy(false);

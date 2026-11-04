@@ -26,7 +26,7 @@ export default function Redirects() {
   const load = (q = search, p = page) =>
     latest(api<{ items: RedirectView[]; total: number }>(`/redirects?search=${encodeURIComponent(q)}&page=${p}`))
       .then(setList, () => setMessage(__('Could not load the redirects.', 'stillpress')));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
 
   async function add(e: FormEvent) {
     e.preventDefault();
@@ -35,7 +35,7 @@ export default function Redirects() {
     try {
       await api('/redirects', { method: 'POST', body: form });
       setForm(EMPTY);
-      load();
+      void load();
     } catch (err) {
       const f = asApiError(err);
       if (f.error === 'shadows_item') setErrors({ from: __('A published post or page lives at this address.', 'stillpress') });
@@ -48,7 +48,7 @@ export default function Redirects() {
     setMessage(null);
     try {
       await api(`/redirects?from=${encodeURIComponent(r.from)}`, { method: 'DELETE' });
-      load();
+      void load();
     } catch (err) {
       const f = asApiError(err);
       setMessage(f.error === 'csrf' ? f.message! : __('Could not delete the redirect.', 'stillpress'));
@@ -61,7 +61,7 @@ export default function Redirects() {
     <Shell>
       <h1>{__('Redirects', 'stillpress')}</h1>
       {message && <p role="alert" className="error">{message}</p>}
-      <form role="search" onSubmit={(e) => { e.preventDefault(); setPage(1); load(search, 1); }}>
+      <form role="search" onSubmit={(e) => { e.preventDefault(); setPage(1); void load(search, 1); }}>
         <Field label={__('Search redirects', 'stillpress')} name="search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
       </form>
       {list && (
@@ -82,9 +82,9 @@ export default function Redirects() {
           </table>
           {pages > 1 && (
             <nav aria-label={__('Pagination', 'stillpress')}>
-              <button type="button" disabled={page <= 1} onClick={() => { setPage(page - 1); load(search, page - 1); }}>{__('Previous', 'stillpress')}</button>{' '}
+              <button type="button" disabled={page <= 1} onClick={() => { setPage(page - 1); void load(search, page - 1); }}>{__('Previous', 'stillpress')}</button>{' '}
               <span>{sprintf(__('Page %1$d of %2$d', 'stillpress'), page, pages)}</span>{' '}
-              <button type="button" disabled={page >= pages} onClick={() => { setPage(page + 1); load(search, page + 1); }}>{__('Next', 'stillpress')}</button>
+              <button type="button" disabled={page >= pages} onClick={() => { setPage(page + 1); void load(search, page + 1); }}>{__('Next', 'stillpress')}</button>
             </nav>
           )}
         </>

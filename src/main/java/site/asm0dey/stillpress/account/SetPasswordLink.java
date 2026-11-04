@@ -15,6 +15,8 @@ public class SetPasswordLink {
     @Inject
     SettingRepository settings;
 
+    // the lookbehind keeps the regex linear
+    @SuppressWarnings("java:S8786")
     public String issue(long userId) {
         var token = tokens.create(userId, TokenRepository.SET_PASSWORD, TokenRepository.SET_PASSWORD_TTL);
         var home = settings.get("home_url").orElse("").replaceAll("(?<!/)/+$", "");

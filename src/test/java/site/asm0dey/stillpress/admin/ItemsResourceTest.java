@@ -256,6 +256,8 @@ class ItemsResourceTest {
     }
 
     @Test
+    // test input
+    @SuppressWarnings("java:S8786")
     void newItemIdSkipsImportedIdsAndGetsShortlink() throws Exception {
         store.importSample();
         var max = db.select(DSL.max(ITEM.SOURCE_ID)).from(ITEM).fetchOne(DSL.max(ITEM.SOURCE_ID));

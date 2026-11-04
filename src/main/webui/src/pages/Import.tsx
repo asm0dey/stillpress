@@ -18,7 +18,7 @@ export default function Import() {
 
   const latest = useLatest();
   const load = () => latest(api<ImportStatus>('/import')).then(setStatus, () => setMessage(__('Could not load the import status.', 'stillpress')));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
   // keeps polling while running, also when the import runs in another process (the CLI) and error says so
   useEffect(() => {
     if (status?.state !== 'running') return undefined;

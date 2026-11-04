@@ -75,7 +75,7 @@ async function fetchLinkSuggestions(search: string) {
 export function useEditorSettings(canPublish: boolean, unsaved: boolean) {
   const navigate = useNavigate();
   const onEditBlock = (ref: number) => {
-    if (!unsaved || confirm(__('Leave without saving your changes?', 'stillpress'))) navigate(`/blocks/${ref}`);
+    if (!unsaved || confirm(__('Leave without saving your changes?', 'stillpress'))) void navigate(`/blocks/${ref}`);
   };
   const reusable = useSelect((s) => s(coreStore).getEntityRecords('postType', 'wp_block',
     { per_page: -1 }) as { id: number; title: { raw: string }; content: { raw: string } }[] | null, []);

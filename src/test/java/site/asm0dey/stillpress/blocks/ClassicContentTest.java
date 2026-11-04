@@ -81,6 +81,8 @@ class ClassicContentTest {
     }
 
     @Test
+    // the slow regex lineBreaks replaces, kept as the oracle
+    @SuppressWarnings("java:S8786")
     void lineBreaksMatchesWordPressRegex() {
         var text = Generator
             .listsOf(

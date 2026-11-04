@@ -52,6 +52,8 @@ public final class Slugs {
     }
 
     // shortcut: keeps letters, digits and marks only; WP's list of special punctuation (dashes, quotes, nbsp) is dropped too
+    // the lookbehind keeps the regex linear
+    @SuppressWarnings("java:S8786")
     public static String title(String text) {
         var s = removeAccents(text.replaceAll("<[^>]*>", "")).toLowerCase(Locale.ROOT);
         s = s.replaceAll("&.+?;", "").replace('.', '-');

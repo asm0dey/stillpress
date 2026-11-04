@@ -76,7 +76,7 @@ function Library({ allowedTypes, multiple, value, title, onClose, onSelect }: {
   const load = (p = page, q = search) =>
     latest(api<{ items: Media[]; total: number }>(`/media?type=${type}&search=${encodeURIComponent(q)}&page=${p}&perPage=${PER_PAGE}`))
       .then(setList, () => setError(__('Could not load the media library.', 'stillpress')));
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
 
   // imported media whose file was missing has no url
   const items = (list?.items ?? []).filter((m): m is Media & { url: string } => !!m.url && allowed(m));
@@ -95,7 +95,7 @@ function Library({ allowedTypes, multiple, value, title, onClose, onSelect }: {
       const added = await upload(Array.from(files));
       setSelected(multiple ? [...selected, ...added.map((m) => m.id)] : [added[added.length - 1].id]);
       setPage(1);
-      load(1, search);
+      void load(1, search);
     } catch (e) { setError(uploadError(e)); }
     setBusy(false);
   }
@@ -119,7 +119,7 @@ function Library({ allowedTypes, multiple, value, title, onClose, onSelect }: {
   return (
     <Modal title={title} onRequestClose={onClose} size="fill" className="sp-media">
       <div className="sp-media__bar">
-        <form role="search" onSubmit={(e) => { e.preventDefault(); setPage(1); load(1, search); }}>
+        <form role="search" onSubmit={(e) => { e.preventDefault(); setPage(1); void load(1, search); }}>
           <TextControl __next40pxDefaultSize label={__('Search media', 'stillpress')} value={search} onChange={setSearch} />
         </form>
         <FormFileUpload __next40pxDefaultSize multiple={multiple} accept={allowedTypes?.map((t) => (t.includes('/') ? t : t + '/*')).join(',')}
@@ -155,9 +155,9 @@ function Library({ allowedTypes, multiple, value, title, onClose, onSelect }: {
       <div className="sp-media__footer">
         {pages > 1 && (
           <nav aria-label={__('Pagination', 'stillpress')}>
-            <Button disabled={page <= 1} onClick={() => { setPage(page - 1); load(page - 1); }}>{__('Previous', 'stillpress')}</Button>
+            <Button disabled={page <= 1} onClick={() => { setPage(page - 1); void load(page - 1); }}>{__('Previous', 'stillpress')}</Button>
             <span> {sprintf(__('Page %1$d of %2$d', 'stillpress'), page, pages)} </span>
-            <Button disabled={page >= pages} onClick={() => { setPage(page + 1); load(page + 1); }}>{__('Next', 'stillpress')}</Button>
+            <Button disabled={page >= pages} onClick={() => { setPage(page + 1); void load(page + 1); }}>{__('Next', 'stillpress')}</Button>
           </nav>
         )}
         <Button variant="primary" disabled={!selected.length} onClick={choose}>{__('Select', 'stillpress')}</Button>

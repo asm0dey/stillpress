@@ -86,7 +86,7 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const [it, cats, tagList] = await Promise.all([
           api<Item>(`/items/${id}`), api<TermView[]>('/terms?taxonomy=category'), api<TermView[]>('/terms?taxonomy=post_tag'),
@@ -270,7 +270,7 @@ function MakeReusable() {
       const content = serialize(blocksOf(pending));
       const rec = await saveEntityRecord('postType', 'wp_block', { title: name.trim(), content, status: 'publish' },
         { throwOnError: true }) as { id: number };
-      replaceBlocks(pending, createBlock('core/block', { ref: rec.id }));
+      void replaceBlocks(pending, createBlock('core/block', { ref: rec.id }));
       setPending(null);
       setName('');
     } catch (e) {
@@ -290,7 +290,7 @@ function MakeReusable() {
       </BlockSettingsMenuControls>
       {pending && (
         <Modal title={__('Create reusable block', 'stillpress')} onRequestClose={() => setPending(null)}>
-          <form onSubmit={(e) => { e.preventDefault(); create(); }}>
+          <form onSubmit={(e) => { e.preventDefault(); void create(); }}>
             <TextControl __next40pxDefaultSize label={__('Name', 'stillpress')} value={name} onChange={setName} />
             {error && <Notice status="error" isDismissible={false}><span role="alert">{error}</span></Notice>}
             <div className="sp-modal-actions">

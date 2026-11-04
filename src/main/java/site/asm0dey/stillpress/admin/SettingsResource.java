@@ -75,6 +75,8 @@ public class SettingsResource {
 
     @PUT
     @Transactional
+    // the lookbehind keeps the regex linear
+    @SuppressWarnings("java:S8786")
     public Response put(Settings s) {
         var field = invalidField(s);
         if (field != null) {

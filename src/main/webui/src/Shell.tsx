@@ -39,7 +39,7 @@ export default function Shell({ children }: { children: ReactNode }) {
 
   async function logout() {
     await api('/logout', { method: 'POST' }).catch(() => {});
-    navigate('/login');
+    void navigate('/login');
   }
 
   return (

@@ -29,6 +29,8 @@ class AdminShellTest {
     }
 
     @Test
+    // test input
+    @SuppressWarnings("java:S8786")
     void shellIsRevalidatedButAssetsStayCached() {
         // a cached shell after an upgrade points at bundles that are gone
         for (var path : new String[] {"/admin/", "/admin/setup"}) {

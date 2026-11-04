@@ -74,6 +74,8 @@ public class LoginLimiter {
     /**
      * Once {@code limit} failures are in the window, the wait ends when enough of the oldest leave it.
      */
+    // a list size minus a small limit cannot overflow
+    @SuppressWarnings("java:S2184")
     private static Optional<Duration> wait(ArrayDeque<Instant> failures, int limit, Instant now) {
         if (failures == null || failures.size() < limit) {
             return Optional.empty();

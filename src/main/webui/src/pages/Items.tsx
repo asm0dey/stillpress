@@ -44,19 +44,19 @@ export default function Items({ type }: { type: 'post' | 'page' }) {
   const load = (s = status, q = search, p = page) =>
     latest(api<List>(`/items?type=${type}&status=${s}&search=${encodeURIComponent(q)}&page=${p}`))
       .then(setList, () => setMessage(__('Could not load the list.', 'stillpress')));
-  useEffect(() => { setStatus(''); setSearch(''); setPage(1); load('', '', 1); }, [type]);
+  useEffect(() => { setStatus(''); setSearch(''); setPage(1); void load('', '', 1); }, [type]);
 
   function show(s: ItemStatus | '', p = 1) {
     setStatus(s);
     setPage(p);
-    load(s, search, p);
+    void load(s, search, p);
   }
 
   async function add() {
     setMessage(null);
     try {
       const it = await api<Item>('/items', { method: 'POST', body: { type } });
-      navigate(`/edit/${it.id}`);
+      void navigate(`/edit/${it.id}`);
     } catch (e) {
       setMessage(asApiError(e).status === 403 ? __('You cannot add one.', 'stillpress') : __('Could not add one.', 'stillpress'));
     }
@@ -66,7 +66,7 @@ export default function Items({ type }: { type: 'post' | 'page' }) {
     setMessage(null);
     try {
       await api(restore ? `/items/${it.id}/restore` : `/items/${it.id}`, { method: restore ? 'POST' : 'DELETE' });
-      load();
+      void load();
     } catch (e) {
       const err = asApiError(e);
       setMessage(err.error === 'csrf' ? err.message! : err.status === 403 ? __('You cannot change this one.', 'stillpress') : __('Could not save the change.', 'stillpress'));
@@ -91,7 +91,7 @@ export default function Items({ type }: { type: 'post' | 'page' }) {
           </button>
         ))}
       </nav>
-      <form role="search" onSubmit={(e: FormEvent) => { e.preventDefault(); setPage(1); load(status, search, 1); }}>
+      <form role="search" onSubmit={(e: FormEvent) => { e.preventDefault(); setPage(1); void load(status, search, 1); }}>
         <Field label={type === 'page' ? __('Search pages', 'stillpress') : __('Search posts', 'stillpress')} name="search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} />
       </form>
       {list && (

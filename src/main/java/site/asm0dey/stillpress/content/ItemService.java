@@ -125,6 +125,8 @@ public class ItemService {
     /**
      * WordPress-style public id: one past the highest, imported ids included, computed in the insert itself.
      */
+    // the lookbehind keeps the regex linear
+    @SuppressWarnings("java:S8786")
     private Optional<ItemRecord> insertNew(String type, long authorId) {
         var next = DSL.<Long>coalesce(max(ITEM.SOURCE_ID), 0L).plus(1);
         var home = settings.get("home_url").orElse("").replaceAll("(?<!/)/+$", "");

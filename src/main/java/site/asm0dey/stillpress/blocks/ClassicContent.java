@@ -38,6 +38,8 @@ public final class ClassicContent {
             "((?:<a [^>]+>\\s*)?<img [^>]+>(?:\\s*</a>)?)(.*)",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL
     );
+    // the lookbehind keeps the regex linear
+    @SuppressWarnings("java:S8786")
     private static final Pattern ATTR = Pattern.compile("(?<!\\w)(\\w+)=(?:\"([^\"]*)\"|'([^']*)')");
 
     private static String htmlClass(String s) {
@@ -158,6 +160,8 @@ public final class ClassicContent {
     /**
      * wpautop($text, br=true).
      */
+    // the lookbehind keeps the regex linear
+    @SuppressWarnings("java:S8786")
     static String autop(String text) {
         if (text.trim().isEmpty()) {
             return "";

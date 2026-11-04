@@ -46,7 +46,7 @@ function PatternEditor({ id, canPublish }: { id: number; canPublish: boolean }) 
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const b = await api<ReusableBlock>(`/blocks/${id}`);
         const parsed = toBlocks(b.content ?? '', 'blocks');

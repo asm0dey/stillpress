@@ -112,6 +112,8 @@ public class WordPressImporter {
         private final List<String> unparseableLinks = new ArrayList<>();
 
         @Override
+        // the lookbehind keeps the regex linear
+        @SuppressWarnings("java:S8786")
         public void site(WxrSite site) {
             var home = Objects.requireNonNullElse(site.link(), "").replaceFirst("(?<!/)/+$", "");
             var homeUri = URI.create(home);
@@ -362,6 +364,8 @@ public class WordPressImporter {
         /**
          * Fetches every upload referenced by the texts and returns a rewriter for the ones now stored locally.
          */
+        // the lookbehind keeps the regex linear
+        @SuppressWarnings("java:S8786")
         private MediaRewriter localize(String... texts) {
             var map = new HashMap<String, String>();
             if (uploadUrl != null) {
@@ -392,6 +396,8 @@ public class WordPressImporter {
         /**
          * Every upload URL still in the text after rewriting is hotlinked; report it instead of leaving it silently.
          */
+        // the lookbehind keeps the regex linear
+        @SuppressWarnings("java:S8786")
         private void reportLeftovers(String... texts) {
             for (var text : texts) {
                 if (text != null) {

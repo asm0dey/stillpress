@@ -25,7 +25,7 @@ export default function Blocks() {
     setMessage(null);
     try {
       const b = await api<ReusableBlock>('/blocks', { method: 'POST', body: { title: '', content: '' } });
-      navigate(`/blocks/${b.id}`);
+      void navigate(`/blocks/${b.id}`);
     } catch (e) {
       const err = asApiError(e);
       setMessage(err.error === 'csrf' ? err.message! : err.status === 403 ? __('You cannot add one.', 'stillpress') : __('Could not add one.', 'stillpress'));

@@ -15,6 +15,8 @@ public final class BlockParser {
     private static final Pattern ATTRS_END = Pattern.compile("}\\s+(?<void>/)?-->");
     private static final Pattern TAIL = Pattern.compile("(?<void>/)?-->");
 
+    // never compared or printed
+    @SuppressWarnings("java:S6218")
     private record Frame(Block block, int tokenStart, int tokenLength, int leadingStart, int[] prevOffset) {}
 
     private final String doc;

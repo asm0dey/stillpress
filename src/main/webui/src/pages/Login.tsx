@@ -23,7 +23,7 @@ export default function Login() {
       await loadLocale((await api<SessionUser>('/session')).locale);
       const next = params.get('next');
       // only a path inside the admin; anything else could leave the site
-      navigate(next?.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true });
+      void navigate(next?.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true });
     } catch (e) {
       const err = asApiError(e);
       setError(err.error === 'csrf' ? err.message : err.status === 429 ? __('Too many attempts. Wait a few minutes and try again.', 'stillpress')

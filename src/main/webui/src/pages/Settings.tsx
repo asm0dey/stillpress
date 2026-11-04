@@ -160,7 +160,7 @@ function ResetSite({ title }: { title: string }) {
     setBusy(true);
     try {
       await api('/reset', { method: 'POST', body: { password, confirm } });
-      navigate('/');
+      void navigate('/');
     } catch (err) {
       const f = asApiError(err);
       setMessage(f.field === 'confirm' ? __('Type the site title exactly.', 'stillpress')

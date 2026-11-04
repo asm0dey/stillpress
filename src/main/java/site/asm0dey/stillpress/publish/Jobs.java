@@ -69,6 +69,8 @@ public class Jobs {
         .execute((instance, ctx) -> goLive(instance.getId()));
     private RecurringTask<Void> publishSweep;
     private SchedulerClient client;
+    // db-scheduler's Scheduler is thread-safe
+    @SuppressWarnings("java:S3077")
     private volatile Scheduler scheduler;
 
     @PostConstruct

@@ -144,7 +144,7 @@ async function load(): Promise<void> {
       initialize(id: string, { tinymce: own }: { tinymce: Record<string, unknown> }) {
         const target = document.getElementById(id);
         // the block's content already has its paragraphs (toBlocks); bodyOf removes them on save
-        if (target) tinymce.init({ ...own, language: locale(), target });
+        if (target) void tinymce.init({ ...own, language: locale(), target });
       },
       // freeform/modal ClassicEdit effect cleanup: remove(id) when the modal closes
       remove: (id: string) => tinymce.get(id)?.remove(),

@@ -14,7 +14,7 @@ export default function Dashboard() {
     let cancelled = false;
     api<Site>('/site').then((s) => !cancelled && setSite(s), (e: unknown) => {
       if (cancelled) return;
-      if (asApiError(e).status === 401) navigate('/login?next=' + encodeURIComponent('/'));
+      if (asApiError(e).status === 401) void navigate('/login?next=' + encodeURIComponent('/'));
       else setError(__('Could not load the site.', 'stillpress'));
     });
     return () => { cancelled = true; };
@@ -47,7 +47,7 @@ function PublishCard({ timeZone }: { timeZone: string }) {
   const load = () => api<PublishState>('/publish').then(setState, () => setMessage(__('Could not load the publish state.', 'stillpress')));
   useEffect(() => {
     let cancelled = false;
-    load();
+    void load();
     api<SessionUser>('/session').then((s) => !cancelled && setRole(s.role), () => {});
     return () => { cancelled = true; };
   }, []);

@@ -40,7 +40,8 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
-          # the scanner needs compiled classes for Java; node_modules and the built admin UI are not our code
+          # the scanner needs compiled classes for Java; node_modules and the built admin UI are not our code.
+          # Qute strips the parameter-declaration lines above <?xml in the feed templates (TemplatesTest checks it)
           args: >
             -Dsonar.organization=asm0dey
             -Dsonar.projectKey=asm0dey_stillpress
@@ -52,3 +53,6 @@ jobs:
             -Dsonar.exclusions=src/main/webui/node_modules/**,src/main/webui/dist/**,src/main/webui/coverage/**,**/*.test.ts
             -Dsonar.coverage.jacoco.xmlReportPaths=target/jacoco-report/jacoco.xml
             -Dsonar.javascript.lcov.reportPaths=src/main/webui/coverage/lcov.info
+            -Dsonar.issue.ignore.multicriteria=feedProlog
+            -Dsonar.issue.ignore.multicriteria.feedProlog.ruleKey=xml:S1778
+            -Dsonar.issue.ignore.multicriteria.feedProlog.resourceKey=src/main/resources/templates/feed/*.xml

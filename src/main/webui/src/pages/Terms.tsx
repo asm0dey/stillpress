@@ -29,7 +29,7 @@ export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
   const latest = useLatest();
   const load = () => latest(api<TermView[]>(`/terms?taxonomy=${taxonomy}`))
     .then(setTerms, () => setMessage(__('Could not load the list.', 'stillpress')));
-  useEffect(() => { setEditing(null); load(); }, [taxonomy]);
+  useEffect(() => { setEditing(null); void load(); }, [taxonomy]);
 
   function fail(e: unknown) {
     const err = asApiError(e);
@@ -54,7 +54,7 @@ export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
     try {
       await api(`/terms/${editing}`, { method: 'PUT', body: draft });
       setEditing(null);
-      load();
+      void load();
     } catch (err) { fail(err); }
   }
 
@@ -63,7 +63,7 @@ export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
     setMessage(null);
     try {
       await api(`/terms/${t.id}`, { method: 'DELETE' });
-      load();
+      void load();
     } catch (err) { fail(err); }
   }
 
@@ -75,7 +75,7 @@ export default function Terms({ taxonomy }: { taxonomy: Taxonomy }) {
       await api('/terms', { method: 'POST', body: { taxonomy, name: newName, parentId: newParent } });
       setNewName('');
       setNewParent(null);
-      load();
+      void load();
     } catch (err) { fail(err); }
   }
 

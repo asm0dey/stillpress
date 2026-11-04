@@ -40,7 +40,7 @@ export default function Setup() {
   async function startEmpty() {
     try {
       await api('/setup/start-empty', { method: 'POST' });
-      navigate('/');
+      void navigate('/');
     } catch (e) {
       const err = asApiError(e);
       setProblem(err.error === 'csrf' ? err.message! : __('Could not start an empty site. Try again.', 'stillpress'));
