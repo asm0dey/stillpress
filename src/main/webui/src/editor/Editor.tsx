@@ -250,7 +250,8 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
           categories: item.type === 'post' ? draft.categories : undefined,
           tags: item.type === 'post' ? await tagIds(draft.tags) : undefined,
           authorId: editor ? draft.authorId : undefined, commentStatus: draft.commentStatus,
-          parentId: item.type === 'page' ? draft.parentId : undefined, menuOrder: item.type === 'page' ? draft.menuOrder : undefined,
+          // 0 clears the parent; null would keep it
+          parentId: item.type === 'page' ? draft.parentId ?? 0 : undefined, menuOrder: item.type === 'page' ? draft.menuOrder : undefined,
           expectedModifiedAt: item.modifiedAt,
         },
       });

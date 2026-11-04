@@ -156,6 +156,29 @@ class ItemsResourceTest {
     }
 
     @Test
+    void clearingParentMovesPageToTopLevel() {
+        var parent = update(editor, create(editor, "page"), Map.of("title", "Guide", "status", "publish"))
+            .then()
+            .statusCode(200)
+            .extract()
+            .jsonPath();
+        var child = update(
+                editor,
+                create(editor, "page"),
+                Map.of("title", "Tips", "status", "publish", "parentId", parent.getLong("id"))
+        )
+            .then()
+            .statusCode(200)
+            .extract()
+            .jsonPath();
+        assertThat(child.getString("permalink")).isEqualTo("/guide/tips/");
+        var cleared = update(editor, child, Map.of("parentId", 0)).then().statusCode(200).extract().jsonPath();
+        assertThat(cleared.getString("parentId")).isNull();
+        assertThat(cleared.getString("permalink")).isEqualTo("/tips/");
+        assertThat(redirects.find("/guide/tips/").orElseThrow().getToPath()).isEqualTo("/tips/");
+    }
+
+    @Test
     void slugChangeOnPublishedPostRedirectsOldPath() {
         var item = create(author1, "post");
         var published = update(author1, item, Map.of("title", "Old", "status", "publish"))

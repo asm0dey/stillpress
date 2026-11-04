@@ -56,7 +56,7 @@ public class ItemService {
 
     /**
      * An editor save; a null field keeps the stored value. {@code slug} {@code ""} clears it, so the next permalink
-     * comes from the title. {@code localDate} is in the site's time zone.
+     * comes from the title, {@code parentId} {@code 0} clears the parent. {@code localDate} is in the site's time zone.
      */
     public record Update(
             String title,
@@ -206,10 +206,12 @@ public class ItemService {
         if (u.bodyFormat() != null && !Set.of("blocks", "classic").contains(u.bodyFormat())) {
             throw invalid("bodyFormat");
         }
-        var parentChanged =
-                "page".equals(r.getType()) && !Objects.equals(u.parentId(), r.getParentId()) && u.parentId() != null;
+        // null keeps the parent, 0 clears it
+        var parent = u.parentId() == null ? r.getParentId() : u.parentId() == 0 ? null : u.parentId();
+        var parentChanged = "page".equals(r.getType()) && !Objects.equals(parent, r.getParentId());
         if (parentChanged
-                && (u.parentId() == id || items.find(u.parentId()).filter(p -> "page".equals(p.getType())).isEmpty())) {
+                && parent != null
+                && (parent == id || items.find(parent).filter(p -> "page".equals(p.getType())).isEmpty())) {
             throw invalid("parentId");
         }
         Optional.ofNullable(u.title()).ifPresent(r::setTitle);
@@ -219,7 +221,7 @@ public class ItemService {
         Optional.ofNullable(u.commentStatus()).ifPresent(r::setCommentStatus);
         Optional.ofNullable(u.menuOrder()).ifPresent(r::setMenuOrder);
         if (parentChanged) {
-            r.setParentId(u.parentId());
+            r.setParentId(parent);
         }
         var slugChanged = u.slug() != null && !u.slug().equals(r.getSlug());
         if (slugChanged) {
