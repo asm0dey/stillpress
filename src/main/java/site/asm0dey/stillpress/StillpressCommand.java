@@ -6,6 +6,7 @@ import picocli.CommandLine.Command;
 import site.asm0dey.stillpress.account.UserCommand;
 import site.asm0dey.stillpress.importer.ImportCommand;
 import site.asm0dey.stillpress.publish.PublishCommand;
+import site.asm0dey.stillpress.serve.NginxConfigCommand;
 import site.asm0dey.stillpress.verify.VerifyUrlsCommand;
 
 @TopCommand
@@ -17,7 +18,8 @@ import site.asm0dey.stillpress.verify.VerifyUrlsCommand;
         ImportCommand.class,
         PublishCommand.class,
         VerifyUrlsCommand.class,
-        UserCommand.class
+        UserCommand.class,
+        NginxConfigCommand.class
         }
 )
 public class StillpressCommand implements Runnable {

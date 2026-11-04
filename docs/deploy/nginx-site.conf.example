@@ -1,0 +1,9 @@
+# TLS lines (listen 443 ssl, ssl_certificate, ...) go in this server block too.
+# nginx needs read access to the data directory's output/; the current symlink is relative, so output/ may be mounted anywhere.
+server {
+    listen 80;
+    server_name example.org;
+
+    # generated once: stillpress nginx-config > /etc/nginx/stillpress.conf
+    include /etc/nginx/stillpress.conf;
+}

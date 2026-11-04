@@ -11,6 +11,7 @@ class StillpressCommandTest {
             .containsKey("serve")
             .containsKey("import")
             .containsKey("publish")
-            .containsKey("user");
+            .containsKey("user")
+            .containsKey("nginx-config");
     }
 }

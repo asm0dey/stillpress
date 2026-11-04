@@ -14,6 +14,8 @@ public class Main {
         if (!serves(args)) {
             // runtime config, read when Quarkus starts below; the router still exists, nothing listens
             System.setProperty("quarkus.http.host-enabled", "false");
+            // stdout carries the command's output (nginx-config is redirected into a file); logs and the banner go to stderr
+            System.setProperty("quarkus.log.console.stderr", "true");
         }
         Quarkus.run(PicocliRunner.class, args);
     }

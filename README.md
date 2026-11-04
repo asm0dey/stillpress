@@ -64,7 +64,17 @@ Only `serve` binds the HTTP port, and the H2 database runs in auto-server mode. 
 
 ### Serving in production
 
-The intended default is **nginx serving `data/output/current` directly**, falling back to Stillpress only for files that don't exist (redirects, legacy `?p=` URLs, the 404 page) and, later, the admin ([ADR 0004](docs/adr/0004-nginx-serves-static-by-default.md)). Stillpress will generate that nginx include in plan 02; until then, run `serve` behind any TLS-terminating reverse proxy. Publishing swaps the `current` symlink atomically, so neither setup needs a reload.
+The default is **nginx serving `data/output/current` directly** and falling back to Stillpress for everything that is not a file: redirects, legacy `?p=` URLs, the 404 page and the admin ([ADR 0004](docs/adr/0004-nginx-serves-static-by-default.md)). Stillpress generates the nginx include:
+
+```bash
+java -jar target/quarkus-app/quarkus-run.jar nginx-config > /etc/nginx/stillpress.conf
+```
+
+Options: `--root <path>` is the site root as nginx sees it (default: the data directory's `output/current`), `--upstream <host:port>` is where Stillpress listens (default `127.0.0.1:8080`). Include the file inside your own `server {}` block, next to `listen`, `server_name` and TLS; [docs/deploy/nginx-site.conf.example](docs/deploy/nginx-site.conf.example) shows a whole one. nginx needs read access to `output/`. The include holds no site data, so it is generated once: publishing swaps the `current` symlink atomically and nginx picks the new release up without a reload.
+
+Stillpress takes the client IP and scheme from nginx's `X-Forwarded-*` headers only when the connection comes from a trusted proxy: `127.0.0.1` and `::1` by default. If nginx connects from another address (another host or container), list it in `STILLPRESS_TRUSTED_PROXIES` (comma-separated addresses or CIDRs; IPv6 in brackets, e.g. `[::1]`).
+
+Mode 1 still works for the simplest setups: run `serve` behind any TLS-terminating reverse proxy and it serves the files itself.
 
 Data lives in `./data`, or wherever `STILLPRESS_DATA_DIR` points: the H2 database, `media/` and `output/`.
 
