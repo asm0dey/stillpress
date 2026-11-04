@@ -7,6 +7,7 @@ import static site.asm0dey.stillpress.db.Tables.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
+import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Records;
 import org.jooq.impl.DSL;
@@ -98,5 +99,92 @@ public class ItemRepository {
             .where(ITEM.ID.in(ids))
             .forEach(r -> byId.put(r.getId(), r));
         return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+    }
+
+    /**
+     * One line of the admin's item list.
+     */
+    public record Row(
+            long id,
+            String type,
+            String title,
+            String status,
+            String author,
+            LocalDateTime date,
+            LocalDateTime modified,
+            String permalink
+    ) {}
+
+    /**
+     * What the admin list shows: items of {@code type}, optionally of one author, matching {@code search} in the
+     * title. {@code status} null means every status but {@code trash}.
+     */
+    public record Filter(String type, String status, Long authorId, String search) {
+        Condition condition(boolean withStatus) {
+            var c = ITEM.TYPE.eq(type);
+            if (authorId != null) {
+                c = c.and(ITEM.AUTHOR_ID.eq(authorId));
+            }
+            if (search != null && !search.isBlank()) {
+                c = c.and(ITEM.TITLE.containsIgnoreCase(search));
+            }
+            if (withStatus) {
+                c = c.and(status == null ? ITEM.STATUS.ne("trash") : ITEM.STATUS.eq(status));
+            }
+            return c;
+        }
+    }
+
+    /**
+     * Newest modified first.
+     */
+    public List<Row> list(Filter f, int offset, int limit) {
+        return db
+            .select(
+                    ITEM.ID,
+                    ITEM.TYPE,
+                    DSL.coalesce(ITEM.TITLE, ""),
+                    ITEM.STATUS,
+                    DSL.coalesce(AUTHOR.DISPLAY_NAME, AUTHOR.LOGIN),
+                    DSL.coalesce(ITEM.PUBLISHED_LOCAL, ITEM.PUBLISHED_AT),
+                    ITEM.MODIFIED_AT,
+                    ITEM.PERMALINK
+            )
+            .from(ITEM)
+            .leftJoin(AUTHOR)
+            .on(AUTHOR.ID.eq(ITEM.AUTHOR_ID))
+            .where(f.condition(true))
+            .orderBy(ITEM.MODIFIED_AT.desc().nullsLast(), ITEM.ID.desc())
+            .offset(offset)
+            .limit(limit)
+            .fetch(Records.mapping(Row::new));
+    }
+
+    public int count(Filter f) {
+        return db.fetchCount(ITEM, f.condition(true));
+    }
+
+    /**
+     * Items per status under the filter's type, author and search, in one {@code GROUP BY}.
+     */
+    public Map<String, Integer> countsByStatus(Filter f) {
+        var n = DSL.count();
+        return db
+            .select(ITEM.STATUS, n)
+            .from(ITEM)
+            .where(f.condition(false))
+            .groupBy(ITEM.STATUS)
+            .fetchMap(ITEM.STATUS, n);
+    }
+
+    /**
+     * Locks the row for the rest of the transaction, so concurrent saves of one item run one after the other.
+     */
+    public Optional<ItemRecord> lock(long id) {
+        return db.selectFrom(ITEM).where(ITEM.ID.eq(id)).forUpdate().fetchOptional();
+    }
+
+    public Optional<ItemRecord> find(long id) {
+        return db.selectFrom(ITEM).where(ITEM.ID.eq(id)).fetchOptional();
     }
 }
