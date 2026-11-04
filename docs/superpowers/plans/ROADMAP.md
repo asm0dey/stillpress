@@ -84,6 +84,9 @@ The open items from the 02b ledger, grouped by owner. Each was reviewed and acce
 - 02c: no unique index on `lower(email)` (concurrent creates can share an email), and one email error text is misleading; an over-long password counts against the account's login bucket; "pending review" email notifications.
 - Plan 03: the editor shows galleries in one column, and layout settings reach the editor without the global-styles CSS that the style generator will provide; the home page `<title>` repeats the site title instead of "Title – Tagline".
 - Plan 04: in the Classic block's canvas a YouTube iframe shows "Error 153" (blob: canvas, no Referer), imported embed previews are cropped and `[caption]` shows raw in TinyMCE (`wpeditimage` ships with PHP).
+- Plan 03: theme templates must not wrap content in a formatting element (`a`, `b`, `em`, …); `HtmlPolicy` tolerates misnested formatting end tags on that assumption, so a theme that breaks it means revisiting the tolerance.
+- Plan 03: Task 8's link and scripts-inert checks are verified only in the browser, and the classic block's failed/retry state is untested; the TinyMCE fidelity test's defaults omit `allow_script_urls`/`allow_unsafe_link_target`.
+- Plan 03: Gutenberg upgrade risk: a future `saveEntityRecord` on an existing `wp_block` would hit the translator's unknown route.
 
 ## Plan 03: Themes & Site Editor
 
@@ -173,6 +176,10 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - CLI: exit codes do not distinguish failure kinds.
 - CLI: `--help` is not wired; `nginx-config --help` prints "Unknown option" before the usage.
 - Build: the schema test covers only the `setting` table; some dependency versions are inline instead of properties; nothing enforces that runtime jOOQ equals the code-generation jOOQ; the dialect test checks the Quarkus mapping, not the property expansion.
+- Permalinks: stored permalinks do not follow their sources. Under `%category%` a post keeps its old path after its category is renamed or moved, and a child page keeps its old parent path after the parent's slug changes. The links still work, but WordPress would move them; recompute them with 301s.
+- Revisions: a partial unique index for one autosave per object and user.
+- Settings: a base swap (category and tag bases exchanged in one save) writes mutual 301s; harmless while static files win.
+- Incremental publish: the 02b acceptance run measured about 25% of a full publish against the <10% target; fixed overhead dominates at this site size. Re-measure on a larger site and make the hard-link copy cheaper if it still misses.
 - Licence: `LICENSE` was reflowed and carries no explicit "or later" statement.
 - Accounts (02a): `findByLoginOrEmail` lower-cases in Java and SQL separately (non-ASCII emails may disagree); `setRoleKeepingAdministrator` locks without `ORDER BY` and has no concurrency test; `PasswordsTest` lacks the 11-character case; only `AuthResourceTest` resets the shared login limiter; no rollback test for the set-password transaction; no test that no setup token is printed when an administrator already exists.
 - Import (02a): an old job's `finally` can briefly race a fast retry's `start()`; the upload file stays in `<data>/import` if the thread fails to start; no test for a publish failing after content was written; the admin media cap rejects a negative value only when an import starts and its test proves only a cap of 0.

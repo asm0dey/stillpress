@@ -14,3 +14,12 @@ bun install --frozen-lockfile
 curl -fsSL 'https://translate.wordpress.org/projects/wp/dev/ru/default/export-translations/?format=jed1x' -o "$full"
 bun scripts/filter-wp-ru.ts "$full" src/i18n/wp-ru.json
 """
+
+[tasks."test:ui"]
+description = "Run the admin UI's unit tests (bun test); mvn verify does not run them"
+dir = "src/main/webui"
+run = "bun test"
+
+[tasks.verify]
+description = "The full check before pushing: mvn verify, then the admin UI's unit tests"
+run = "mvn -q verify && cd src/main/webui && bun test"
