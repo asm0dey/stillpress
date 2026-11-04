@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router';
+import { Link, Navigate } from 'react-router';
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { type ApiError, type ImportStatus, api } from '../api.ts';
 import { Field } from '../Field.tsx';
@@ -63,7 +63,7 @@ export default function Import() {
       )}
       {state === 'done' && (
         <>
-          <p role="status">The import is done and the site is published. <a href="/">View site</a></p>
+          <p role="status">The import is done. The site is publishing in the background; the <Link to="/">dashboard</Link> shows its progress.</p>
           {status!.report && <pre className="report">{status!.report}</pre>}
         </>
       )}

@@ -12,12 +12,12 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import module java.base;
-import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SessionAuthMechanism;
 import site.asm0dey.stillpress.importer.ImportGuard;
-import site.asm0dey.stillpress.publish.SitePublisher;
+import site.asm0dey.stillpress.publish.Jobs;
+import site.asm0dey.stillpress.publish.PublishQueue;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
@@ -27,7 +27,6 @@ import site.asm0dey.stillpress.store.SettingRepository;
  */
 @Path("/admin/api/setup")
 public class SetupResource {
-    private static final Logger LOG = Logger.getLogger(SetupResource.class);
     private static final Pattern LANGUAGE = Pattern.compile("^[a-z]{2,3}(-[A-Z]{2})?$");
     private static final Map<String, String> DEFAULTS =
             Map.of("posts_per_page", "10", "posts_per_rss", "10", "category_base", "category", "tag_base", "tag");
@@ -42,7 +41,9 @@ public class SetupResource {
     @Inject
     SettingRepository settings;
     @Inject
-    SitePublisher publisher;
+    PublishQueue queue;
+    @Inject
+    Jobs jobs;
     @Inject
     ImportGuard guard;
     @Context
@@ -85,16 +86,16 @@ public class SetupResource {
             var home = request.scheme() + "://" + a.host() + (a.port() < 0 ? "" : ":" + a.port());
             raw = QuarkusTransaction
                 .requiringNew()
-                .call(() -> create(s, hash, home));
+                .call(() -> {
+                    var session = create(s, hash, home);
+                    // published in the background, once this commits
+                    queue.all();
+                    jobs.requestPublish();
+                    return session;
+                });
             token.discard();
         } finally {
             LOCK.unlock();
-        }
-        try {
-            publisher.publishAll();
-        } catch (RuntimeException e) {
-            // the site exists and the administrator can log in; a later publish retries this
-            LOG.error("Publishing the new site failed", e);
         }
         var cookie = SessionAuthMechanism.cookie(raw, "https".equals(request.scheme()));
         return Response.status(201).header(HttpHeaders.SET_COOKIE, cookie.encode()).build();

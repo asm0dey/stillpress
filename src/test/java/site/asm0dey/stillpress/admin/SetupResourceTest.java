@@ -137,6 +137,7 @@ class SetupResourceTest {
     @Test
     void setupPublishesAnEmptySite() {
         setup(token.current().orElseThrow()).then().statusCode(201);
+        TestStore.await(() -> Files.exists(dataDir.current().resolve("index.html")), 20);
         assertThat(dataDir.current().resolve("index.html")).exists();
     }
 

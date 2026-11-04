@@ -3,7 +3,11 @@ package site.asm0dey.stillpress.publish;
 import com.github.kagkarlsson.scheduler.Scheduler;
 import com.github.kagkarlsson.scheduler.SchedulerClient;
 import com.github.kagkarlsson.scheduler.serializer.JacksonSerializer;
+import static site.asm0dey.stillpress.db.Tables.ITEM;
+import static site.asm0dey.stillpress.db.Tables.PUBLISH_QUEUE;
+import com.github.kagkarlsson.scheduler.task.FailureHandler;
 import com.github.kagkarlsson.scheduler.task.Task;
+import com.github.kagkarlsson.scheduler.task.TaskInstanceId;
 import com.github.kagkarlsson.scheduler.task.helper.RecurringTask;
 import com.github.kagkarlsson.scheduler.task.helper.Tasks;
 import com.github.kagkarlsson.scheduler.task.schedule.Schedules;
@@ -20,6 +24,9 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
 import module java.base;
 import javax.sql.DataSource;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
+import org.jooq.DSLContext;
+import site.asm0dey.stillpress.content.ItemService;
 
 /**
  * Background work backed by the {@code scheduled_tasks} table: publishing and go-live of scheduled items. The
@@ -30,6 +37,7 @@ public class Jobs {
     public static final String PUBLISH_SITE = "publish-site";
     public static final String GO_LIVE = "go-live";
     public static final String PUBLISH_SWEEP = "publish-sweep";
+    private static final Logger LOG = Logger.getLogger(Jobs.class);
     @Inject
     DataSource dataSource;
     @Inject
@@ -37,20 +45,36 @@ public class Jobs {
     // as SetupToken: Main turns this off for CLI commands
     @ConfigProperty(name = "quarkus.http.host-enabled", defaultValue = "true")
     boolean httpEnabled;
-    // bodies arrive with the publish pipeline
+    @Inject
+    PublishLock lock;
+    @Inject
+    PublishQueue queue;
+    @Inject
+    SitePublisher publisher;
+    @Inject
+    ItemService itemService;
+    @Inject
+    DSLContext db;
+    @ConfigProperty(name = "stillpress.publish.sweep-interval", defaultValue = "1m")
+    Duration sweepInterval;
+    // a failing run retries a minute later instead of spinning
     private final Task<Void> publishSite = Tasks
         .oneTime(PUBLISH_SITE)
-        .execute((instance, ctx) -> {});
-    private final Task<Void> goLive = Tasks.oneTime(GO_LIVE).execute((instance, ctx) -> {});
-    private final RecurringTask<Void> publishSweep =
-            Tasks
-        .recurring(PUBLISH_SWEEP, Schedules.fixedDelay(Duration.ofMinutes(1)))
-        .execute((instance, ctx) -> {});
+        .onFailure(new FailureHandler.OnFailureRetryLater<>(Duration.ofMinutes(1)))
+        .execute((instance, ctx) -> drain());
+    private final Task<Void> goLive = Tasks
+        .oneTime(GO_LIVE)
+        .onFailure(new FailureHandler.OnFailureRetryLater<>(Duration.ofMinutes(1)))
+        .execute((instance, ctx) -> goLive(instance.getId()));
+    private RecurringTask<Void> publishSweep;
     private SchedulerClient client;
     private volatile Scheduler scheduler;
 
     @PostConstruct
     void init() {
+        publishSweep = Tasks
+            .recurring(PUBLISH_SWEEP, Schedules.fixedDelay(sweepInterval))
+            .execute((i, ctx) -> sweep());
         client = SchedulerClient.Builder
             .create(dataSource, publishSite, goLive, publishSweep)
             .serializer(new JacksonSerializer())
@@ -111,6 +135,65 @@ public class Jobs {
         if (s != null) {
             s.triggerCheckForDueExecutions();
         }
+    }
+
+    /**
+     * Publishes batch after batch under the lock until nothing is queued. A failure leaves the rows queued.
+     */
+    void drain() {
+        try {
+            lock.holding(() -> {
+                for (var b = queue.snapshot(); b.isPresent(); b = queue.snapshot()) {
+                    publisher.publish(b.get());
+                    queue.done(b.get());
+                }
+                return null;
+            });
+        } catch (RuntimeException e) {
+            LOG.error("Publishing failed; the changes stay queued", e);
+            throw e;
+        }
+    }
+
+    /**
+     * Catches rows whose after-commit request was lost (a crash between commit and scheduling, or a row queued while
+     * the last run was finishing): a row older than one sweep period with no publish pending gets one.
+     */
+    void sweep() {
+        var stale = db.fetchExists(
+                PUBLISH_QUEUE,
+                PUBLISH_QUEUE.QUEUED_AT.lt(LocalDateTime.now(ZoneOffset.UTC).minus(sweepInterval))
+        );
+        if (stale && client().getScheduledExecution(TaskInstanceId.of(PUBLISH_SITE, "site")).isEmpty()) {
+            requestPublish();
+        }
+    }
+
+    /**
+     * A task left over from a rescheduled or unscheduled item changes nothing: the item is no longer due.
+     */
+    void goLive(String instance) {
+        var id = Long.parseLong(instance.substring(0, instance.indexOf('@')));
+        QuarkusTransaction.requiringNew().run(() -> {
+            var changed = db
+                .update(ITEM)
+                .set(ITEM.STATUS, "publish")
+                .where(
+                        ITEM.ID.eq(id),
+                        ITEM.STATUS.eq("future"),
+                        ITEM.PUBLISHED_AT.le(LocalDateTime.now(ZoneOffset.UTC))
+                )
+                .execute();
+            if (changed == 1) {
+                var r = db.selectFrom(ITEM).where(ITEM.ID.eq(id)).fetchOne();
+                if (r.getPermalink() == null) {
+                    itemService.assignPermalink(r);
+                    r.update();
+                }
+                queue.item(id);
+                requestPublish();
+            }
+        });
     }
 
     /**

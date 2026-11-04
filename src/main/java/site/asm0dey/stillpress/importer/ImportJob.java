@@ -7,11 +7,12 @@ import module java.base;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.config.DataDir;
-import site.asm0dey.stillpress.publish.SitePublisher;
+import site.asm0dey.stillpress.publish.Jobs;
+import site.asm0dey.stillpress.publish.PublishQueue;
 import site.asm0dey.stillpress.store.ItemRepository;
 
 /**
- * Runs an uploaded WXR import and the first publish on a background thread, tracking progress for the admin.
+ * Runs an uploaded WXR import on a background thread and queues the first publish, tracking progress for the admin.
  */
 @ApplicationScoped
 public class ImportJob {
@@ -23,7 +24,9 @@ public class ImportJob {
     @Inject
     WordPressImporter importer;
     @Inject
-    SitePublisher publisher;
+    PublishQueue queue;
+    @Inject
+    Jobs jobs;
     @Inject
     DataDir dataDir;
     @Inject
@@ -88,8 +91,10 @@ public class ImportJob {
             report = importer
                 .importWxr(in, mediaLimit.orElse(Integer.MAX_VALUE), options, listener)
                 .toText(mediaLimit.orElse(null));
-            publisher.publishAll();
             guard.done();
+            // the dashboard follows the publish; the import itself is done
+            queue.all();
+            jobs.requestPublish();
         } catch (Throwable e) {
             fail(e);
             if (e instanceof VirtualMachineError vm) {
@@ -113,7 +118,7 @@ public class ImportJob {
             error = message;
         } else {
             LOG.error("WXR import failed", e);
-            error = report == null ? message : "Publishing failed after the import: " + message;
+            error = message;
         }
         guard.failed(error);
     }

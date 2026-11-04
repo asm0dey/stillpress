@@ -61,6 +61,8 @@ public class SitePublisher {
     PublishedItemRepository published;
     @Inject
     PublishQueue queue;
+    @Inject
+    PublishStatus status;
 
     public PublishResult publishAll() {
         return publish(new PublishQueue.Batch(Set.of(), Set.of(), Set.of(), false, true));
@@ -71,13 +73,26 @@ public class SitePublisher {
      * rows); otherwise only the batch's items, the listings they were and are in, and the comments feed.
      */
     public PublishResult publish(PublishQueue.Batch batch) {
+        try {
+            var r = run(batch);
+            status.finished(r.files());
+            LOG.infof("Published %d files in %d ms into %s", r.files(), r.took().toMillis(), r.release());
+            return r;
+        } catch (RuntimeException e) {
+            status.failed(Objects.requireNonNullElse(e.getMessage(), e.toString()));
+            throw e;
+        }
+    }
+
+    private PublishResult run(PublishQueue.Batch batch) {
         var start = Instant.now();
         var live = liveRelease();
         var incremental = !batch.all() && live != null && published.any();
+        LOG.infof("Publish started (%s)", incremental ? "incremental" : "full");
         var release = switcher.newRelease();
         Out out;
         try {
-            out = new Out(release, incremental ? live : null, batch);
+            out = new Out(release, incremental ? live : null, batch, status);
             if (incremental) {
                 // a fragment stored by a run that read the item just before it was saved is dropped here
                 fragments.delete(batch.items());
@@ -173,6 +188,14 @@ public class SitePublisher {
         if (out.live != null) {
             linkUntouched(out);
         }
+        // shortcut: media files are not counted, so done can pass total; count them if the bar ever matters
+        var total = rendered.size() * 2 + 1 + (out.live == null ? 2 + ASSETS.size() : 0);
+        for (var l : listings) {
+            if (out.wantsBase(l.base())) {
+                total += Math.max(1, (l.posts().size() + out.perPage - 1) / out.perPage) + (l.feed() ? 1 : 0);
+            }
+        }
+        status.running(total);
         // the only thing held for the whole run: ids, dates and links; bodies are loaded a page at a time
         for (var chunk : chunks(rendered)) {
             for (var v : views(chunk)) {
@@ -534,6 +557,7 @@ public class SitePublisher {
          */
         final Path live;
         final PublishQueue.Batch batch;
+        final PublishStatus status;
         /**
          * Listing bases to render in an incremental publish; filled once the walk knows them.
          */
@@ -554,10 +578,11 @@ public class SitePublisher {
         String origin = "";
         private final Map<Path, String> written = new HashMap<>();
 
-        Out(Path root, Path live, PublishQueue.Batch batch) {
+        Out(Path root, Path live, PublishQueue.Batch batch, PublishStatus status) {
             this.root = root;
             this.live = live;
             this.batch = batch;
+            this.status = status;
         }
 
         boolean wantsItem(long id) {
@@ -596,7 +621,7 @@ public class SitePublisher {
             var target = root.resolve(relative);
             claim(target);
             hardLink(relative, source);
-            files++;
+            status.progress(++files);
         }
 
         /**
@@ -615,7 +640,7 @@ public class SitePublisher {
             // never write through a link: the same inode is a file of the live release
             Files.deleteIfExists(target);
             Files.write(target, bytes);
-            files++;
+            status.progress(++files);
         }
     }
 }

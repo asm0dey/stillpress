@@ -66,7 +66,9 @@ class ImportResourceTest {
             .then()
             .body("items", equalTo(7))
             .body("report", containsString("Imported 7"));
-        assertThat(dataDir.current().resolve("2023/01/14/месяц-ноябрь-год-2022/index.html")).exists();
+        var post = dataDir.current().resolve("2023/01/14/месяц-ноябрь-год-2022/index.html");
+        TestStore.await(() -> Files.exists(post), 20);
+        assertThat(post).exists();
         try (var left = Files.list(dataDir.root().resolve("import"))) {
             assertThat(left).as("uploaded copy deleted").isEmpty();
         } catch (IOException e) {

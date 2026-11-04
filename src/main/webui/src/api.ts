@@ -19,6 +19,14 @@ export interface Site { title: string; homeUrl: string; language: string; items:
 export interface UserView {
   id: number; login: string; displayName: string; email: string; role: Role; hasPassword: boolean;
 }
+/** GET and POST /publish; total is an estimate, so done may pass it */
+export interface PublishState {
+  state: 'idle' | 'queued' | 'running' | 'failed';
+  done: number;
+  total: number;
+  lastPublishedAt: string | null;
+  error: string | null;
+}
 /** GET and POST /import */
 export interface ImportStatus {
   state: 'idle' | 'running' | 'done' | 'failed' | 'closed';

@@ -104,3 +104,8 @@ button:disabled { opacity: 0.6; cursor: progress; }
 .users select, #new-role { min-height: var(--control-height); font: inherit; }
 .link-box { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3); margin-bottom: var(--space-3); word-break: break-all; }
 .report { white-space: pre-wrap; border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3); font-size: var(--text-sm); }
+
+.publish { margin-top: var(--space-5); display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+.publish h2 { font-size: var(--text-lg); margin: 0; }
+.publish p { margin: 0; }
+.publish progress { width: 100%; max-width: 480px; height: var(--space-3); accent-color: var(--color-accent); }

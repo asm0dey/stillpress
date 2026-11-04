@@ -16,11 +16,12 @@ One install runs one site. Several sites means several installs.
   - Media is downloaded into `data/media/`, and its URLs are rewritten in HTML and block JSON, Jetpack Photon (`i0.wp.com`) links included.
   - A redirect map is built for `?p=`, `?page_id=`, `?attachment_id=` and attachment pages.
 - The publisher: every published post and page, home, category, tag, author and date archives (paginated), and RSS feeds, rendered into a fresh release that goes live atomically.
+- Background publishing: every change is queued and published by a [db-scheduler](https://github.com/kagkarlsson/db-scheduler) task in the server, which re-renders only what the queue touched. One publish runs at a time across the server, the CLI and replicas. Scheduled posts go live at their time. The dashboard shows the publish state and progress (`GET /admin/api/publish`), and administrators can start a full republish (`POST /admin/api/publish`). A failed publish keeps its queue and retries a minute later. `stillpress.publish.sweep-interval` (default `1m`) is how often a sweep re-requests a publish for queued changes whose request was lost.
 - Serving the live release with WordPress-compatible redirects as the fallback.
 - A URL parity checker that crawls the live site's sitemaps and feeds and compares every URL against Stillpress.
 - The admin at `/admin`, written in TypeScript (React, built by Bun through Quinoa):
   - A setup wizard on first start. It asks for the one-time setup token Stillpress prints to its log, creates the site and the first administrator, then offers **Start empty** or **Import from WordPress**.
-  - WXR upload import: the file is uploaded from the admin and imported as a background job with live progress, then published. A site is imported at most once, from the admin or the CLI: only into an empty site, and only when no import is running or done; a failed import that left nothing behind may be retried.
+  - WXR upload import: the file is uploaded from the admin and imported as a background job with live progress, then queued for publishing. A site is imported at most once, from the admin or the CLI: only into an empty site, and only when no import is running or done; a failed import that left nothing behind may be retried.
   - Users and roles (administrator, editor, author, contributor). Imported authors become accounts without a password; an administrator issues them a single-use set-password link, and `stillpress user reset-password <login>` prints one from the server.
   - Password login (Argon2id) with rate limits: 5 failures per account and 20 per client IP in 15 minutes, then 429 with `Retry-After`.
   - CSRF protection by [quarkus-rest-csrf](https://quarkus.io/guides/security-csrf-prevention): every state-changing admin API call must echo the `csrf-token` cookie in `X-CSRF-TOKEN`.
@@ -61,7 +62,7 @@ mise exec -- mvn package -DskipTests
 alias stillpress='java -jar target/quarkus-app/quarkus-run.jar'
 
 stillpress import --wxr export.xml     # one-shot; refuses a second import
-stillpress publish                     # render a new release and make it live
+stillpress publish                     # render a full release and make it live; consumes the publish queue
 stillpress serve                       # serve the live release on :8080 (also the default command)
 stillpress verify-urls --source https://old-blog.example --target http://localhost:8080
 stillpress user reset-password <login>  # print a single-use set-password link (valid 24 h); login or email
