@@ -99,9 +99,9 @@ button:disabled { opacity: 0.6; cursor: progress; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
 .bar nav { display: flex; align-items: center; gap: var(--space-4); }
-.users { width: 100%; border-collapse: collapse; margin-bottom: var(--space-5); }
-.users th, .users td { text-align: left; padding: var(--space-2); border-bottom: 1px solid var(--color-border); }
-.users select, #new-role { min-height: var(--control-height); font: inherit; }
+.users, .table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-5); }
+.users th, .users td, .table th, .table td { text-align: left; padding: var(--space-2); border-bottom: 1px solid var(--color-border); }
+.users select, .table select, #new-role { min-height: var(--control-height); font: inherit; }
 .link-box { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3); margin-bottom: var(--space-3); word-break: break-all; }
 .report { white-space: pre-wrap; border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3); font-size: var(--text-sm); }
 

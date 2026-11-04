@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.store.RedirectRepository;
@@ -103,6 +104,40 @@ public class Permalinker {
         }
         terms.setForItem(r.getId(), "category", List.of(defaultCategory()));
         return true;
+    }
+
+    /**
+     * {@link #ensureCategory(ItemRecord)} for many items at once: the posts among {@code itemIds} left without a
+     * category get the default one. Returns its id when any did.
+     */
+    public Optional<Long> ensureCategory(Collection<Long> itemIds) {
+        if (itemIds.isEmpty()) {
+            return Optional.empty();
+        }
+        var bare = db
+            .select(ITEM.ID)
+            .from(ITEM)
+            .where(
+                    ITEM.ID.in(itemIds),
+                    ITEM.TYPE.eq("post"),
+                    DSL.notExists(DSL
+                        .selectOne()
+                        .from(ITEM_TERM)
+                        .join(TERM)
+                        .on(TERM.ID.eq(ITEM_TERM.TERM_ID))
+                        .where(ITEM_TERM.ITEM_ID.eq(ITEM.ID), TERM.TAXONOMY.eq("category"))
+                    )
+            )
+            .fetch(ITEM.ID);
+        if (bare.isEmpty()) {
+            return Optional.empty();
+        }
+        var category = defaultCategory();
+        db
+            .insertInto(ITEM_TERM, ITEM_TERM.ITEM_ID, ITEM_TERM.TERM_ID)
+            .select(DSL.select(ITEM.ID, DSL.val(category)).from(ITEM).where(ITEM.ID.in(bare)))
+            .execute();
+        return Optional.of(category);
     }
 
     private long defaultCategory() {

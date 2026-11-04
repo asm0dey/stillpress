@@ -81,6 +81,13 @@ public final class Capabilities {
         return r != CONTRIBUTOR;
     }
 
+    /**
+     * Renaming, moving and deleting categories and tags: editors and administrators.
+     */
+    public static boolean canManageTerms(Role r) {
+        return editor(r);
+    }
+
     public static boolean canCreateBlock(Role r) {
         return r != CONTRIBUTOR;
     }

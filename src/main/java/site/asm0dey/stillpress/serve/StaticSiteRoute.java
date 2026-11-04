@@ -96,6 +96,14 @@ public class StaticSiteRoute {
             return;
         }
         var to = hit.get().getToPath();
+        if (absoluteUrl(to)) {
+            // an administrator's deliberate redirect off the site
+            ctx.response().setStatusCode(hit.get().getStatusCode()).putHeader(
+                    "Location",
+                    URI.create(to).toASCIIString()
+            ).end();
+            return;
+        }
         // only a site-local, single-slash absolute path; anything else could send visitors off-site
         if (to == null || !to.startsWith("/") || to.startsWith("//") || to.indexOf('\\') >= 0) {
             LOG.warnf("Ignoring unsafe redirect target %s for %s", to, key);
@@ -147,6 +155,18 @@ public class StaticSiteRoute {
         }
         // other content types come from the extension inside sendFile
         res.sendFile(file.toString());
+    }
+
+    /**
+     * An absolute http(s) URL with a host: the only off-site redirect target.
+     */
+    public static boolean absoluteUrl(String v) {
+        try {
+            var u = new URI(v);
+            return ("http".equals(u.getScheme()) || "https".equals(u.getScheme())) && u.getHost() != null;
+        } catch (URISyntaxException | NullPointerException e) {
+            return false;
+        }
     }
 
     private static void redirect(RoutingContext ctx, int status, String location) {

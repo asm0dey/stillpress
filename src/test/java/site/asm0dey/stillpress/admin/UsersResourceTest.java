@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
@@ -30,6 +31,8 @@ class UsersResourceTest {
     SessionRepository sessions;
     @Inject
     SettingRepository settings;
+    @Inject
+    DataDir dataDir;
     long adminId;
     long writerId;
     String adminCookie;
@@ -141,6 +144,76 @@ class UsersResourceTest {
             .<String>path("url");
         setPassword(url.substring(url.indexOf("token=") + 6), "another password 1").then().statusCode(204);
         asAdmin().post("/admin/api/users/999999/password-link").then().statusCode(404);
+    }
+
+    @Test
+    void userEditsOwnDisplayNameAndArchiveHeadingChanges() {
+        settings.put("title", "Blog");
+        as(writerCookie)
+            .body(Map.of("displayName", "  Wendy Writer ", "email", "wendy@example.org"))
+            .put("/admin/api/users/" + writerId)
+            .then()
+            .statusCode(204);
+        var u = users.findById(writerId).orElseThrow();
+        assertThat(u.getDisplayName()).isEqualTo("Wendy Writer");
+        assertThat(u.getEmail()).isEqualTo("wendy@example.org");
+        assertThat(u.getSlug()).isEqualTo("writer");
+        var archive = dataDir.current().resolve("author/writer/index.html");
+        TestStore.await(() -> {
+            try {
+                return Files.exists(archive) && Files.readString(archive).contains("Wendy Writer");
+            } catch (IOException e) {
+                return false;
+            }
+        }, 30);
+        assertThat(archive).content().contains("Wendy Writer");
+    }
+
+    @Test
+    void authorEditingSomeoneElseIs403() {
+        as(writerCookie)
+            .body(Map.of("displayName", "Hacked", "email", "admin@example.org"))
+            .put("/admin/api/users/" + adminId)
+            .then()
+            .statusCode(403);
+        assertThat(users.findById(adminId).orElseThrow().getDisplayName()).isEqualTo("admin");
+    }
+
+    @Test
+    void administratorEditsAnyoneAndEmailMustBeFree() {
+        asAdmin()
+            .body(Map.of("displayName", "W", "email", "w2@example.org"))
+            .put("/admin/api/users/" + writerId)
+            .then()
+            .statusCode(204);
+        as(writerCookie)
+            .body(Map.of("displayName", "W", "email", "ADMIN@example.org"))
+            .put("/admin/api/users/" + writerId)
+            .then()
+            .statusCode(409)
+            .body("error", equalTo("email_taken"));
+        asAdmin()
+            .body(Map.of("displayName", "W", "email", "x@example.org"))
+            .put("/admin/api/users/999999")
+            .then()
+            .statusCode(404);
+    }
+
+    @Test
+    void invalidProfileFieldsAre400AndLeaveImportOpen() {
+        asAdmin()
+            .body(Map.of("displayName", "x".repeat(251), "email", "w@example.org"))
+            .put("/admin/api/users/" + writerId)
+            .then()
+            .statusCode(400)
+            .body("field", equalTo("displayName"));
+        asAdmin()
+            .body(Map.of("displayName", "W", "email", "x".repeat(95) + "@e.org"))
+            .put("/admin/api/users/" + writerId)
+            .then()
+            .statusCode(400)
+            .body("field", equalTo("email"));
+        assertThat(settings.get("import_state")).isNotPresent();
     }
 
     private long user(String login, Role role) {

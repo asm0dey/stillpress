@@ -13,6 +13,8 @@ export default function Users() {
   const [message, setMessage] = useState<string | null>(null);
   const [link, setLink] = useState<{ login: string; url: string } | null>(null);
   const [form, setForm] = useState(EMPTY);
+  const [editing, setEditing] = useState<{ id: number; displayName: string; email: string } | null>(null);
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   const load = () => api<UserView[]>('/users').then(setUsers, () => setMessage('Could not load the users.'));
   useEffect(() => { load(); }, []);
@@ -27,6 +29,24 @@ export default function Users() {
         ? 'There must be at least one administrator with a password.' : 'Could not change the role.');
     }
     load();
+  }
+
+  async function saveProfile(e: FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    setMessage(null);
+    setEditErrors({});
+    try {
+      await api(`/users/${editing.id}`, { method: 'PUT', body: { displayName: editing.displayName, email: editing.email } });
+      setEditing(null);
+      load();
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.error === 'email_taken') setEditErrors({ email: 'Another user has this email.' });
+      else if (err.field === 'email') setEditErrors({ email: 'Use an email address of at most 100 characters.' });
+      else if (err.field === 'displayName') setEditErrors({ displayName: 'Enter a name of at most 250 characters.' });
+      else setMessage(err.error === 'csrf' ? err.message! : 'Could not save the profile.');
+    }
   }
 
   async function showLink(u: UserView) {
@@ -76,7 +96,21 @@ export default function Users() {
         <table className="users">
           <thead><tr><th>Login</th><th>Name</th><th>Email</th><th>Role</th><th /></tr></thead>
           <tbody>
-            {users.map((u) => (
+            {users.map((u) => editing?.id === u.id ? (
+              <tr key={u.id}>
+                <td>{u.login}</td>
+                <td colSpan={4}>
+                  <form onSubmit={saveProfile}>
+                    <Field label="Display name" name="edit-displayName" required value={editing.displayName} error={editErrors.displayName}
+                      hint="The author archive address stays the same." onChange={(e) => setEditing({ ...editing, displayName: e.target.value })} />
+                    <Field label="Email" name="edit-email" type="email" required value={editing.email} error={editErrors.email}
+                      onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
+                    <button type="submit" className="primary">Save</button>{' '}
+                    <button type="button" onClick={() => setEditing(null)}>Cancel</button>
+                  </form>
+                </td>
+              </tr>
+            ) : (
               <tr key={u.id}>
                 <td>{u.login}</td>
                 <td>{u.displayName}</td>
@@ -86,7 +120,10 @@ export default function Users() {
                     {ROLES.map((r) => <option key={r}>{r}</option>)}
                   </select>
                 </td>
-                <td><button type="button" onClick={() => showLink(u)}>Copy set-password link</button></td>
+                <td>
+                  <button type="button" onClick={() => { setEditErrors({}); setEditing({ id: u.id, displayName: u.displayName ?? '', email: u.email ?? '' }); }}>Edit</button>{' '}
+                  <button type="button" onClick={() => showLink(u)}>Copy set-password link</button>
+                </td>
               </tr>
             ))}
           </tbody>

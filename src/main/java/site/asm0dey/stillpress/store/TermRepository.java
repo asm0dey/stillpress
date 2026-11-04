@@ -1,11 +1,13 @@
 package site.asm0dey.stillpress.store;
 
+import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.ITEM_TERM;
 import static site.asm0dey.stillpress.db.Tables.TERM;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.Records;
 import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.content.Slugs;
 import site.asm0dey.stillpress.db.tables.records.TermRecord;
@@ -103,5 +105,57 @@ public class TermRepository {
             .select(ITEM_TERM.ITEM_ID, ITEM_TERM.TERM_ID)
             .from(ITEM_TERM)
             .fetchGroups(ITEM_TERM.ITEM_ID, ITEM_TERM.TERM_ID);
+    }
+
+    /**
+     * A term with the number of its published items, as the back office lists them.
+     */
+    public record Counted(long id, String name, String slug, Long parentId, String description, int count) {}
+
+    public List<Counted> byTaxonomyCounted(String taxonomy) {
+        return db
+            .select(TERM.ID, TERM.NAME, TERM.SLUG, TERM.PARENT_ID, TERM.DESCRIPTION, DSL.count(ITEM.ID))
+            .from(TERM)
+            .leftJoin(ITEM_TERM)
+            .on(ITEM_TERM.TERM_ID.eq(TERM.ID))
+            .leftJoin(ITEM)
+            .on(ITEM.ID.eq(ITEM_TERM.ITEM_ID), ITEM.STATUS.eq("publish"))
+            .where(TERM.TAXONOMY.eq(taxonomy))
+            .groupBy(TERM.ID, TERM.NAME, TERM.SLUG, TERM.PARENT_ID, TERM.DESCRIPTION)
+            .orderBy(TERM.NAME)
+            .fetch(Records.mapping(Counted::new));
+    }
+
+    public void update(long id, String name, String slug, Long parentId, String description) {
+        db
+            .update(TERM)
+            .set(TERM.NAME, name)
+            .set(TERM.SLUG, slug)
+            .set(TERM.PARENT_ID, parentId)
+            .set(TERM.DESCRIPTION, description)
+            .where(TERM.ID.eq(id))
+            .execute();
+    }
+
+    /**
+     * Removes the term from its items, hands its children to {@code parentId} (its own parent) and deletes it.
+     */
+    public void delete(long id, Long parentId) {
+        db.deleteFrom(ITEM_TERM).where(ITEM_TERM.TERM_ID.eq(id)).execute();
+        db.update(TERM).set(TERM.PARENT_ID, parentId).where(TERM.PARENT_ID.eq(id)).execute();
+        db.deleteFrom(TERM).where(TERM.ID.eq(id)).execute();
+    }
+
+    /**
+     * Ids of the items that have any of {@code termIds}; only published ones when {@code published}.
+     */
+    public List<Long> itemIds(Collection<Long> termIds, boolean published) {
+        return db
+            .selectDistinct(ITEM.ID)
+            .from(ITEM)
+            .join(ITEM_TERM)
+            .on(ITEM_TERM.ITEM_ID.eq(ITEM.ID))
+            .where(ITEM_TERM.TERM_ID.in(termIds), published ? ITEM.STATUS.eq("publish") : DSL.noCondition())
+            .fetch(ITEM.ID);
     }
 }

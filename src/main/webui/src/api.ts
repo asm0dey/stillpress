@@ -22,7 +22,9 @@ export interface SiteSettings {
   defaultCategory: number | null; defaultCommentStatus: 'open' | 'closed';
 }
 /** GET /terms */
-export interface TermView { id: number; name: string; slug: string; parentId: number | null }
+export interface TermView { id: number; name: string; slug: string; parentId: number | null; description?: string | null; count?: number }
+/** GET /redirects */
+export interface RedirectView { from: string; to: string; status: 301 | 302 }
 /** GET /users */
 export interface UserView {
   id: number; login: string; displayName: string; email: string; role: Role; hasPassword: boolean;

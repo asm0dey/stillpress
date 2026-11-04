@@ -20,7 +20,6 @@ import site.asm0dey.stillpress.content.Capabilities;
 import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.content.Permalinker;
 import site.asm0dey.stillpress.content.Revisions;
-import site.asm0dey.stillpress.content.TermService;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
@@ -29,7 +28,7 @@ import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.TermRepository;
 
 /**
- * The editor's items, revisions, autosaves and terms. Any logged-in user; {@link ItemService} enforces capabilities.
+ * The editor's items, revisions and autosaves. Any logged-in user; {@link ItemService} enforces capabilities.
  */
 @Path("/admin/api")
 @Authenticated
@@ -37,8 +36,6 @@ public class ItemsResource {
     private static final int PER_PAGE = 20;
     @Inject
     ItemService service;
-    @Inject
-    TermService termService;
     @Inject
     Permalinker permalinks;
     @Inject
@@ -93,10 +90,6 @@ public class ItemsResource {
             LocalDateTime createdAt,
             String author
     ) {}
-
-    public record TermView(long id, String name, String slug, Long parentId) {}
-
-    public record NewTerm(String taxonomy, String name, Long parentId) {}
 
     @ServerExceptionMapper
     public Response refused(ItemService.Refused e) {
@@ -238,29 +231,6 @@ public class ItemsResource {
     public ItemView restoreRevision(@PathParam("id") long id, @PathParam("rid") long rid) {
         var a = actor();
         return view(service.restoreRevision(id, rid, a), a);
-    }
-
-    @GET
-    @Path("terms")
-    public List<TermView> terms(@QueryParam("taxonomy") @DefaultValue("category") String taxonomy) {
-        return terms
-            .byTaxonomy(taxonomy)
-            .stream()
-            .map(t -> new TermView(t.getId(), t.getName(), t.getSlug(), t.getParentId()))
-            .toList();
-    }
-
-    @POST
-    @Path("terms")
-    public Response createTerm(NewTerm n) {
-        if (n == null) {
-            throw new ItemService.Refused(400, "invalid", null);
-        }
-        var t = termService.createTerm(n.taxonomy(), n.name(), n.parentId(), actor());
-        return Response
-            .status(201)
-            .entity(new TermView(t.getId(), t.getName(), t.getSlug(), t.getParentId()))
-            .build();
     }
 
     private ItemRecord viewable(long id, ItemService.Actor a) {

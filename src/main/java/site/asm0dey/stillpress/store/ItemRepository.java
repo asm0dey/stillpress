@@ -29,6 +29,17 @@ public class ItemRepository {
             .fetch();
     }
 
+    /**
+     * Ids of the published items by {@code authorId}.
+     */
+    public List<Long> publishedIdsBy(long authorId) {
+        return db
+            .select(ITEM.ID)
+            .from(ITEM)
+            .where(ITEM.AUTHOR_ID.eq(authorId), ITEM.STATUS.eq("publish"))
+            .fetch(ITEM.ID);
+    }
+
     public Optional<ItemRecord> findByPermalink(String decodedPath) {
         return db.selectFrom(ITEM).where(ITEM.PERMALINK.eq(decodedPath)).fetchOptional();
     }

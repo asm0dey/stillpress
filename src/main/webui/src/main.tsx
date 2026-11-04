@@ -10,6 +10,8 @@ import Dashboard from './pages/Dashboard.tsx';
 import Users from './pages/Users.tsx';
 import Import from './pages/Import.tsx';
 import Settings from './pages/Settings.tsx';
+import Terms from './pages/Terms.tsx';
+import Redirects from './pages/Redirects.tsx';
 
 const PUBLIC = ['/setup', '/login', '/set-password'];
 
@@ -53,6 +55,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/users" element={<Users />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/import" element={<Import />} />
+          <Route path="/categories" element={<Terms taxonomy="category" />} />
+          <Route path="/tags" element={<Terms taxonomy="post_tag" />} />
+          <Route path="/redirects" element={<Redirects />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Gate>

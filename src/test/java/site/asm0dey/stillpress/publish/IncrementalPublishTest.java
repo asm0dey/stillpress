@@ -12,7 +12,10 @@ import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
+import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.content.ItemService;
+import site.asm0dey.stillpress.content.TermService;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.store.FragmentRepository;
 
@@ -31,6 +34,10 @@ class IncrementalPublishTest {
     DataDir dataDir;
     @Inject
     DSLContext db;
+    @Inject
+    TermService terms;
+    @Inject
+    PublishLock lock;
 
     @BeforeEach
     void publishedSample() throws Exception {
@@ -116,6 +123,26 @@ class IncrementalPublishTest {
     }
 
     @Test
+    void incrementalEqualsFullAfterTermSlugChange() throws Exception {
+        var travel = db.selectFrom(TERM).where(TERM.SLUG.eq("travel")).fetchOne();
+        // held so the publish the save asks for cannot take the queue before this test reads it
+        var trees = lock.holding(() -> {
+            terms.updateTerm(
+                    travel.getId(),
+                    new TermService.Change("Trips", "trips", null, null),
+                    new ItemService.Actor(0, Role.ADMINISTRATOR)
+            );
+            var batch = queue.snapshot().orElseThrow();
+            var inc = tree(publisher.publish(batch).release());
+            queue.done(batch);
+            return List.of(inc, tree(publisher.publishAll().release()));
+        });
+        assertThat(trees.getFirst()).isEqualTo(trees.getLast());
+        assertThat(trees.getFirst()).containsKey("category/trips/europe/index.html");
+        assertThat(trees.getFirst().keySet()).noneMatch(k -> k.startsWith("category/travel/"));
+    }
+
+    @Test
     void untouchedFilesAreHardLinks() throws Exception {
         var live = dataDir.current().toRealPath();
         var full = publisher.publishAll();
@@ -167,7 +194,15 @@ class IncrementalPublishTest {
         publisher.publishAll();
     }
 
-    private static Map<String, String> tree(Path root) throws Exception {
+    private static Map<String, String> tree(Path root) {
+        try {
+            return walk(root);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static Map<String, String> walk(Path root) throws Exception {
         var out = new TreeMap<String, String>();
         try (var walk = Files.walk(root)) {
             for (var p : walk.filter(Files::isRegularFile).toList()) {

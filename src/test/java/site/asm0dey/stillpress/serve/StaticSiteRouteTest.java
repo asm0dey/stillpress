@@ -253,13 +253,25 @@ class StaticSiteRouteTest {
         db
             .insertInto(REDIRECT, REDIRECT.FROM_PATH, REDIRECT.TO_PATH, REDIRECT.STATUS_CODE)
             .values("/evil1/", "//evil.com/", 301)
-            .values("/evil2/", "https://evil.com/", 301)
+            .values("/evil2/", "javascript:alert(1)", 301)
             .values("/evil3/", "/\\evil.com/", 301)
             .values("?p=777", "//evil.com/", 301)
             .execute();
         for (var u : List.of("/evil1/", "/evil2/", "/evil3/", "/?p=777")) {
             given().redirects().follow(false).get(u).then().statusCode(404).header("Location", nullValue());
         }
+    }
+
+    @Test
+    void absoluteHttpTargetIsAnAdministratorsChoice() {
+        db
+            .insertInto(REDIRECT, REDIRECT.FROM_PATH, REDIRECT.TO_PATH, REDIRECT.STATUS_CODE)
+            .values("/away/", "https://example.org/x", 302)
+            .execute();
+        given().redirects().follow(false).get("/away/").then().statusCode(302).header(
+                "Location",
+                "https://example.org/x"
+        );
     }
 
     @Test

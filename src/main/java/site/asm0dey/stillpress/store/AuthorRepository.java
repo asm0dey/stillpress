@@ -64,6 +64,17 @@ public class AuthorRepository {
         return r;
     }
 
+    /**
+     * Whether a user other than {@code exceptId} has {@code email}, case-insensitively.
+     */
+    public boolean emailTaken(String email, long exceptId) {
+        return db.fetchExists(AUTHOR, lower(AUTHOR.EMAIL).eq(email.toLowerCase(Locale.ROOT)), AUTHOR.ID.ne(exceptId));
+    }
+
+    public void setProfile(long id, String displayName, String email) {
+        db.update(AUTHOR).set(AUTHOR.DISPLAY_NAME, displayName).set(AUTHOR.EMAIL, email).where(AUTHOR.ID.eq(id)).execute();
+    }
+
     public void setPassword(long id, String hash) {
         db.update(AUTHOR).set(AUTHOR.PASSWORD_HASH, hash).where(AUTHOR.ID.eq(id)).execute();
     }
