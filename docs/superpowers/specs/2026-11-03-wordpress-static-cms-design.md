@@ -115,14 +115,16 @@ without PHP.
    episodes), revisions, taxonomies (categories, tags, podcast series),
    media library, comments (read-only), reusable blocks, menus, widget
    areas, per-site settings, per-site plugin enablement, users.
-2. **Admin backend (REST)** — app-native API for the admin UI, **plus** the
-   slice of the WordPress REST contract the embedded editor requires
-   (discovered in the spike):
+2. **Admin backend (REST)** — one app-native API for the admin UI. The
+   embedded editor's own calls to the WordPress REST contract (discovered
+   in the spike) are translated **in the browser** onto it, so the server
+   exposes no `/wp-json` (decided 2026-11-04):
    - `wp/v2/blocks` CRUD (synced patterns), `wp/v2/types`, `wp/v2/themes`
-     (active theme + theme supports), `oembed/1.0/proxy`, media list/upload,
-     and whatever further calls the editor makes (log unknown `/wp-json`
-     calls in dev to find them).
-   - Accept `POST` + `X-HTTP-Method-Override` (apiFetch rewrites PUT/DELETE).
+     (active theme + theme supports), `oembed/1.0/proxy` (fetched by the
+     server, allow-listed), media, `users/me`, and whatever further calls the
+     editor makes (unknown calls are logged in the browser console).
+   - apiFetch's `POST` + `X-HTTP-Method-Override` is handled by the
+     translator.
 3. **Admin front end** — Gutenberg editor (posts, pages, episodes), a
    pattern editor screen (synced patterns are locked inside posts, so "edit
    original" opens a separate editor bound to the `wp_block` entity), media

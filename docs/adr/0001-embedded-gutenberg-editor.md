@@ -4,6 +4,6 @@ The admin hosts WordPress's standalone `@wordpress/*` editor packages instead of
 
 ## Consequences
 
-- Quarkus must emulate a slice of the WordPress REST contract (`wp/v2/blocks`, `wp/v2/types`, `wp/v2/themes`, `oembed/1.0/proxy`, media, users), including apiFetch's `POST` + `X-HTTP-Method-Override`.
+- The editor's calls to the WordPress REST contract (`wp/v2/blocks`, `wp/v2/types`, `wp/v2/themes`, `oembed/1.0/proxy`, media, users), including apiFetch's `POST` + `X-HTTP-Method-Override`, are translated in the browser onto the app's own admin API (decided 2026-11-04), so the server keeps a single API; only the oEmbed fetch runs server-side, behind an allow list.
 - The app must generate the layout/global-styles CSS WordPress produces in PHP.
 - Gutenberg packages are pinned; upgrades are deliberate because saved block HTML can change between versions.

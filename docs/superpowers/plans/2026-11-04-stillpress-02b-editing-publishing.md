@@ -4,7 +4,7 @@
 
 **Goal:** Users write and edit posts, pages and reusable blocks in the embedded Gutenberg editor (classic items in a Classic block), upload media, save drafts, submit for review, schedule and publish. Publishing rewrites only the files a change affects, in a new atomic release. Every save keeps a revision, and the editor autosaves, previews and restores. The admin speaks English and Russian.
 
-**Architecture:** Same single Quarkus app. Every change that must reach the static site is a row in a `publish_queue` table, written in the transaction that made the change. One db-scheduler task (`publish-site`) drains the queue: it builds a new release by hard-linking every unaffected file from the live one and rendering only the affected item pages and listings (listings are concatenated from cached per-post fragments). It holds a database row lock for the whole run, so the server, the CLI and replicas never publish at the same time. Scheduled items go live through one db-scheduler one-time task per item. The editor is `@wordpress/block-editor` hosted by our own React screen (the spike's approach, not `@wordpress/editor`). It saves through an app-native items API; a WordPress REST slice under `/wp-json` serves only what the block library itself calls.
+**Architecture:** Same single Quarkus app. Every change that must reach the static site is a row in a `publish_queue` table, written in the transaction that made the change. One db-scheduler task (`publish-site`) drains the queue: it builds a new release by hard-linking every unaffected file from the live one and rendering only the affected item pages and listings (listings are concatenated from cached per-post fragments). It holds a database row lock for the whole run, so the server, the CLI and replicas never publish at the same time. Scheduled items go live through one db-scheduler one-time task per item. The editor is `@wordpress/block-editor` hosted by our own React screen (the spike's approach, not `@wordpress/editor`). It saves through the app-native API; the WordPress calls the block library makes itself are translated in the browser onto that API, so the server has one API only.
 
 **Tech Stack:** existing stack (Java 25, Quarkus 3.40.1.1, jOOQ 3.21.9, Flyway, H2/PostgreSQL, Qute, Quinoa 2.9.3, Bun 1.4.4, React 19.3.1, TypeScript 7.0.2, Vite 8.3.5) plus `com.github.kagkarlsson:db-scheduler:15.6.0`; npm (exact pins): `@wordpress/block-editor` 20.0.0, `block-library` 12.1.0, `blocks` 17.1.0, `components` 44.0.0, `core-data` 9.1.0, `data` 11.1.0, `element` 10.1.0, `api-fetch` 8.1.0, `format-library` 6.1.0, `i18n` 7.1.0, `hooks` 5.1.0, `date` 6.1.0, `compose` 9.1.0, `notices` 6.1.0, `tinymce` 4.9.11, `diff` 9.0.0.
 
@@ -44,7 +44,7 @@
 - db-scheduler runs only when the HTTP server is enabled (`quarkus.http.host-enabled`, as `SetupToken` reads it); the CLI only enqueues or runs publishes directly under the lock.
 - Uploads: allowed extensions `jpg jpeg png gif webp avif mp3 m4a ogg wav mp4 webm mov pdf zip`. Never `svg`, `html`, `htm`, `js`, `xml` (they would run as script on the site's origin). Stored under `<data>/media/YYYY/MM/<sanitized name>`, with `-2`, `-3`… on a clash; public URL `/media/YYYY/MM/<name>`.
 - The oEmbed proxy fetches only allow-listed providers (`youtube.com`, `youtu.be`, `vimeo.com`), host matched exactly or as a subdomain; anything else is 404 `oembed_invalid_url` without any outbound request.
-- WordPress REST slice: prefix `/wp-json/`, authenticated only (`quarkus.http.auth.permission` policy `authenticated`); apiFetch's `POST` + `X-HTTP-Method-Override` is honoured; any unknown route logs WARN `Unknown /wp-json call: <METHOD> <path>?<query>` and answers 404 `{"code":"rest_no_route"}`. `/wp-json` joins `NginxConfig.DYNAMIC_PREFIXES`.
+- No server-side WordPress REST API (user decision at execution, 2026-11-04). The block library's `/wp/v2/...` and `/oembed/1.0/proxy` calls are translated in the browser by an apiFetch fetch handler (`editor/wpapi.ts`, Task 7) onto `/admin/api`; unknown calls are logged to the browser console as `Unknown WordPress API call: <METHOD> <path>`. The server keeps one API, `/admin/api`.
 - Admin languages: `en`, `ru`. Per-user `author.locale`; missing means the site `language` if it starts with `ru`, else `en`. Our strings use `@wordpress/i18n` with text domain `stillpress`; Gutenberg's strings use WordPress's community translation (`translate.wordpress.org` project `wp/dev`, locale `ru`, Jed 1.x export), committed as a pinned snapshot.
 - The editor bundle is code-split: login, setup and dashboard never download Gutenberg.
 - Gutenberg packages and TinyMCE are pinned exactly (spec §9); `bun.lock` committed.
@@ -64,7 +64,7 @@
 
 ```
 pom.xml                                       + db-scheduler
-src/main/resources/application.properties     + /wp-json auth policy, media upload policy, quinoa ignored /preview
+src/main/resources/application.properties     + media upload policy, quinoa ignored /preview
 src/main/resources/db/migration/common/V4__editing.sql
 src/main/java/site/asm0dey/stillpress/
   content/Slugs.java                 sanitize_title for post slugs (Unicode kept)
@@ -92,9 +92,7 @@ src/main/java/site/asm0dey/stillpress/
   admin/PublishResource.java         /admin/api/publish
   admin/PreviewResource.java         /admin/preview/{id}
   admin/SessionLocale (in AuthResource) PUT /admin/api/session/locale
-  wpapi/WpApiResource.java           /wp-json slice
-  wpapi/MethodOverrideFilter.java    X-HTTP-Method-Override
-  wpapi/OEmbedProxy.java             allow-listed oEmbed fetch
+  wpapi/OEmbedProxy.java             allow-listed oEmbed fetch behind GET /admin/api/oembed
 src/main/resources/templates/plain/entry.html   list-entry fragment
 src/main/webui/src/
   editor/Editor.tsx, editor/Sidebar.tsx, editor/MediaLibrary.tsx, editor/classic.ts, editor/wpapi.ts
@@ -462,30 +460,25 @@ class CapabilitiesTest {
 
 ---
 
-### Task 5: Reusable blocks and the WordPress REST slice
+### Task 5: Reusable blocks, oEmbed proxy, media lookup
+
+(Scope changed at execution, user decision 2026-11-04: no server-side `/wp-json`; the browser translates the block library's WordPress calls onto these endpoints in Task 7.)
 
 **Files:**
-- Create: `content/ReusableBlockService.java`, `admin/ReusableBlocksResource.java`, `wpapi/WpApiResource.java`, `wpapi/MethodOverrideFilter.java`, `wpapi/OEmbedProxy.java`
-- Modify: `store/ReusableBlockRepository.java`, `serve/NginxConfig.java` (`/wp-json` in `DYNAMIC_PREFIXES`), `application.properties` (`quarkus.http.auth.permission.wp-json.paths=/wp-json/*`, `policy=authenticated`)
-- Test: `content/ReusableBlockServiceTest.java`, `wpapi/WpApiResourceTest.java`, `wpapi/OEmbedProxyTest.java`, `serve/NginxConfigTest.java` (asserts `location ^~ /wp-json`)
+- Create: `content/ReusableBlockService.java`, `admin/ReusableBlocksResource.java`, `wpapi/OEmbedProxy.java`, `admin/OEmbedResource.java` (or a method on an existing admin resource)
+- Modify: `store/ReusableBlockRepository.java`, `store/MediaRepository.java` (`findById`), `admin/MediaResource.java` (created here with `GET /{id}` only; Task 6 adds upload and listing)
+- Test: `content/ReusableBlockServiceTest.java`, `admin/ReusableBlocksResourceTest.java`, `wpapi/OEmbedProxyTest.java`
 
 **Interfaces:**
-- Consumes: `Revisions`, `PublishQueue`, `Jobs`, `Capabilities`, `BlockParser`, `MediaRepository` (Task 6 adds listing; here only `findById`).
+- Consumes: `Revisions`, `PublishQueue`, `Jobs`, `Capabilities` (`canCreateBlock`, `canEditBlock`), `BlockParser`, `ImportGuard.close()`, `ItemService.Actor`.
 - Produces:
-  - Reusable-block ids: the id everywhere (REST, `wp:block {"ref":N}`) is `source_id`. A block created here gets `source_id = coalesce(max(source_id), 0) + 1` in its insert statement (the unique constraint guards the race; retry once on violation).
+  - Reusable-block ids: the id everywhere (API, `wp:block {"ref":N}`) is `source_id`. A block created here gets `source_id = coalesce(max(source_id), 0) + 1` in its insert statement (the unique constraint guards the race; retry once on violation).
   - `ReusableBlockRepository { Optional<String> content(long ref) /* unchanged */; List<ReusableBlockRecord> all(); Optional<ReusableBlockRecord> find(long ref); ReusableBlockRecord create(String title, String content); void update(long ref, String title, String content); List<Long> itemsUsing(Set<Long> refs) /* body LIKE '%"ref":N}%' or '%"ref":N,%' per ref in one query, then confirmed with BlockParser */ }`
-  - `ReusableBlockService.save(Long ref /*null = create*/, String title, String content, LocalDateTime expectedModifiedAt, ItemService.Actor a) -> ReusableBlockRecord` (`@Transactional`): create needs `canCreateBlock` and sets `author_id` = the actor; update needs `canEditBlock` (403), conflict check (409), revision `reusable_block`, then enqueue `item` for every published item using this block or a block that (transitively, depth ≤ `BlockRenderer.MAX_DEPTH`) contains it; their fragments are not touched (archives show excerpts only).
-  - App API: `GET /admin/api/blocks` `[{"id","title","author","modifiedAt","usedBy","canEdit"}]`, `GET /admin/api/blocks/{id}`, `POST`, `PUT /{id}` (with `expectedModifiedAt`), revisions as for items (`/blocks/{id}/revisions`, restore).
-  - `/wp-json` slice (`WpApiResource`, JSON in WordPress's shapes):
-    - `GET /wp/v2/blocks`, `GET /wp/v2/blocks/{id}`, `POST /wp/v2/blocks`, `POST|PUT /wp/v2/blocks/{id}` → `{"id","type":"wp_block","status":"publish","wp_pattern_sync_status":"","title":{"raw","rendered"},"content":{"raw","protected":false},"wp_pattern_category":[]}`; writes go through `ReusableBlockService` (in-post edits of a synced pattern are saved as dirty entities; an author editing a block they do not own gets 403).
-    - `OPTIONS` on `/wp/v2/blocks` and `/wp/v2/blocks/{id}` → 200 with `Allow: GET` or `Allow: GET, POST, PUT, PATCH, DELETE` by role (core-data's `canUser`).
-    - `GET /wp/v2/types` and `/wp/v2/types/{slug}` (`post`, `page`, `wp_block`, `attachment`), `GET /wp/v2/themes?status=active` (one theme `plain`, `theme_supports`: `align-wide`, `responsive-embeds`, `editor-styles`).
-    - `GET /wp/v2/media/{id}` and `GET /wp/v2/media?include=…&per_page=…` → `{"id","source_url","media_type":"image|file","mime_type","alt_text","title":{"rendered"},"media_details":{"width","height","sizes":{}}}`; unknown id 404 `rest_post_invalid_id` (imported content refers to WordPress attachment ids; 404 is harmless, as the spike showed).
-    - `GET /wp/v2/users/me` → `{"id","name","slug"}`.
-    - `GET /oembed/1.0/proxy?url=` → `OEmbedProxy.fetch(url)`: provider JSON, or 404 `{"code":"oembed_invalid_url"}`.
-    - Catch-all for any method on any other path: the WARN log line and 404 from Global Constraints.
-  - `MethodOverrideFilter`: JAX-RS `@PreMatching ContainerRequestFilter`, only for `/wp-json/` requests that are `POST` with `X-HTTP-Method-Override: PUT|PATCH|DELETE` → `setMethod(header)`. CSRF still applies, because the original request was a POST.
-  - `final class OEmbedProxy { Response fetch(String url) }` — allow list from Global Constraints, `URI` parsed and host compared exactly or by `.`-suffix, `https` only, provider endpoints `https://www.youtube.com/oembed?format=json&url=` and `https://vimeo.com/api/oembed.json?url=`; JDK `HttpClient` with 5 s timeout, no redirects followed; non-200 → 404 `oembed_invalid_url`.
+  - `ReusableBlockService.save(Long ref /*null = create*/, String title, String content, LocalDateTime expectedModifiedAt /* null = no conflict check, used by the editor's in-post saves */, ItemService.Actor a) -> ReusableBlockRecord` (`@Transactional`): `ImportGuard.close()` first; create needs `canCreateBlock` and sets `author_id` = the actor; update needs `canEditBlock` (403), row lock then conflict check (409), revision `reusable_block`, then enqueue `item` for every published item using this block or a block that (transitively, depth ≤ `BlockRenderer.MAX_DEPTH`) contains it.
+  - App API: `GET /admin/api/blocks` `[{"id","title","author","modifiedAt","usedBy","canEdit"}]`, `GET /admin/api/blocks/{id}` `{"id","title","content","author","modifiedAt","usedBy","canEdit","autosave"}`, `POST`, `PUT /{id}` (`expectedModifiedAt` optional), `PUT|GET /{id}/autosave`, revisions as for items (`/blocks/{id}/revisions`, restore). `GET /admin/api/blocks?can=create` is not needed: the session's role decides creation in the client.
+  - `GET /admin/api/oembed?url=` (any logged-in role) → `OEmbedProxy.fetch(url)`: provider JSON, or 404 `{"code":"oembed_invalid_url"}`.
+  - `final class OEmbedProxy { Response fetch(String url) }` — allow list from Global Constraints, `URI` parsed and host compared exactly or by `.`-suffix, `https` only, provider endpoints `https://www.youtube.com/oembed?format=json&url=` and `https://vimeo.com/api/oembed.json?url=` (a config value, so a test can point them at WireMock); JDK `HttpClient` with 5 s timeout, no redirects followed; non-200 → 404 `oembed_invalid_url`.
+  - `GET /admin/api/media/{id}` → `{"id","url","mimeType","width","height","title","alt"}`; 404 `not_found` (imported content refers to WordPress attachment ids; a 404 is harmless).
 
 - [ ] **Step 1: Write failing tests**
 
@@ -504,22 +497,13 @@ class CapabilitiesTest {
   @Test void ownerlessImportedBlockOnlyForEditors() { /* block with author_id null: author → 403, editor → saved */ }
 }
 
-@QuarkusTest class WpApiResourceTest {
-  @Test void anonymousIs401() { given().get("/wp-json/wp/v2/types").then().statusCode(401); }
-  @Test void methodOverridePutUpdatesBlock() {
-    // editor: POST /wp-json/wp/v2/blocks/{id} with X-HTTP-Method-Override: PUT, body {content: "<!-- wp:paragraph -->…"} → 200, content.raw updated
-  }
-  @Test void overrideWithoutCsrfIs400() { }
-  @Test void optionsAllowDependsOnRole() {
-    // per block: editor → Allow contains "PUT"; the owning author → contains "PUT"; another author → equalTo "GET"
-    // collection /wp/v2/blocks: author → contains "POST"; contributor → equalTo "GET"
-  }
-  @Test void unknownRouteIs404AndLogged() { /* GET /wp-json/wp/v2/settings → 404, body code rest_no_route */ }
-  @Test void typesListsPostPageAndBlock() { }
+@QuarkusTest class ReusableBlocksResourceTest {
+  @Test void staleExpectedModifiedAtIs409() { }
+  @Test void autosaveRoundTrip() { /* PUT autosave → GET block has autosave.createdAt */ }
+  @Test void anonymousOEmbedIs401() { given().get("/admin/api/oembed?url=https://youtu.be/x").then().statusCode(401); }
 }
 
 class OEmbedProxyTest {
-  // WireMock is on the test classpath; the proxy's endpoint map is constructor-injectable for the test
   @Test void metadataAddressIsRefusedWithoutFetching() { /* url http://169.254.169.254/ → 404, WireMock saw 0 requests */ }
   @Test void lookAlikeHostIsRefused() { /* https://youtube.com.evil.example/watch?v=x → 404 */ }
   @Test void youtubeIsProxied() { /* stub the provider endpoint → 200 body passed through */ }
@@ -528,8 +512,8 @@ class OEmbedProxyTest {
 
 - [ ] **Step 2: Run, verify fail.**
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run, verify pass** (plus `NginxConfigTest`, `NginxModeTwoTest`).
-- [ ] **Step 5: Commit and push** — `git commit -m "feat: reusable blocks service and the WordPress REST slice for the editor"`.
+- [ ] **Step 4: Run, verify pass.**
+- [ ] **Step 5: Commit and push** — `git commit -m "feat: reusable blocks service, oEmbed proxy and media lookup"`.
 
 ---
 
@@ -537,7 +521,7 @@ class OEmbedProxyTest {
 
 **Files:**
 - Create: `content/MediaService.java`, `admin/MediaResource.java`
-- Modify: `store/MediaRepository.java`, `account/BodyLimitFilter.java` (exclude `POST /admin/api/media`), `application.properties` (`quarkus.http.auth.permission.media-upload.paths=/admin/api/media`, `policy=authenticated`), `templates/nginx/stillpress.conf` (`client_max_body_size 1g` only in `location = /admin/api/import` and `location = /admin/api/media`; `^~ /admin` and `^~ /wp-json` get `client_max_body_size 1m`)
+- Modify: `store/MediaRepository.java`, `account/BodyLimitFilter.java` (exclude `POST /admin/api/media`), `application.properties` (`quarkus.http.auth.permission.media-upload.paths=/admin/api/media`, `policy=authenticated`), `templates/nginx/stillpress.conf` (`client_max_body_size 1g` only in `location = /admin/api/import` and `location = /admin/api/media`; `^~ /admin` gets `client_max_body_size 1m`)
 - Test: `content/MediaServiceTest.java`, `admin/MediaResourceTest.java`, `serve/NginxConfigTest.java`, `admin/AdminBodyLimitTest.java`
 
 **Interfaces:**
@@ -751,7 +735,16 @@ Lets an administrator try Stillpress on a fresh install, then wipe the experimen
 **Interfaces:**
 - Consumes: Tasks 4–6 APIs.
 - Produces:
-  - `editor/wpapi.ts`: `apiFetch.use(apiFetch.createRootURLMiddleware('/wp-json/'))` plus a middleware adding `X-CSRF-TOKEN` from the cookie (the same read as `api.ts`, extracted into an exported `csrfToken()`), called once before the editor mounts; `registerCoreBlocks()` once.
+  - `editor/wpapi.ts`: `installWordPressApi(session: SessionUser): void`, called once before the editor mounts (with `registerCoreBlocks()`). It sets `apiFetch.setFetchHandler` to a translator onto `/admin/api` (requests carry `X-CSRF-TOKEN` via an exported `csrfToken()` shared with `api.ts`):
+    - `GET /wp/v2/blocks[?…]`, `GET /wp/v2/blocks/{id}` ← `/admin/api/blocks…`, reshaped to `{"id","type":"wp_block","status":"publish","wp_pattern_sync_status":"","title":{"raw","rendered"},"content":{"raw","protected":false},"wp_pattern_category":[]}`.
+    - `POST /wp/v2/blocks`, `POST|PUT /wp/v2/blocks/{id}` (and apiFetch's `X-HTTP-Method-Override`) → `POST`/`PUT /admin/api/blocks…` without `expectedModifiedAt`; a 403 surfaces as an apiFetch error.
+    - `OPTIONS /wp/v2/blocks[/{id}]` (core-data `canUser`) → a synthetic response with `Allow` from the session role and the block's `canEdit`.
+    - `GET /wp/v2/types[/{slug}]`, `GET /wp/v2/themes?status=active` → static JSON (`post`, `page`, `wp_block`, `attachment`; theme `plain` with `align-wide`, `responsive-embeds`, `editor-styles`).
+    - `GET /wp/v2/media/{id}` ← `/admin/api/media/{id}`, reshaped to `{"id","source_url","media_type","mime_type","alt_text","title":{"rendered"},"media_details":{"width","height","sizes":{}}}`; 404 passes through.
+    - `GET /wp/v2/users/me` ← `/admin/api/session`.
+    - `GET /oembed/1.0/proxy?url=` ← `/admin/api/oembed?url=`.
+    - anything else: `console.warn('Unknown WordPress API call: ' + method + ' ' + path)` and an apiFetch error `{code: 'rest_no_route'}`.
+    - Unit-tested with `bun test` (`editor/wpapi.test.ts`): each mapping's request and reshaped response, the override header, and the unknown-call warning.
   - `Items.tsx`: list for `type` post or page. Status filter tabs from `counts` (All, Drafts, Pending, Scheduled, Published, Private, Trash), search, pages of 20, "Add new". Rows link to `/edit/:id`; Trash and Restore actions.
   - `Editor.tsx` (route `/edit/:id`):
     - Loads the item. If `autosave` is present, a notice "There is an autosave of this post that is more recent than the version below. View the autosave / Dismiss"; "View" loads `GET /items/{id}/autosave` into the editor.
@@ -952,7 +945,7 @@ test('no Russian entry is orphaned', () => { expect(orphansIn(ruJson, extracted(
 
 ## Self-review notes
 
-- Roadmap coverage for 02b: editor (T7), WP REST slice incl. method override, `canUser` and unknown-call logging (T5), classic block with on-demand conversion (T8), reusable blocks with the separate pattern editor and dirty-entity saving (T5, T7, T9), media library and upload (T6, T7), statuses and scheduling (T3, T4), incremental and background republish with dependency tracking and the fragment/hard-link design (T2, T3), preview (T4), revisions and autosave with compare, restore and 25 kept (T4, T10), admin i18n (T11), every 02a item labelled 02b (T6 nginx split and body-limit exclusion, T12 the rest).
+- Roadmap coverage for 02b: editor (T7), WordPress API calls translated in the browser incl. method override, `canUser` and unknown-call logging (T7; no server-side `/wp-json`, user decision at execution), classic block with on-demand conversion (T8), reusable blocks with the separate pattern editor and dirty-entity saving (T5, T7, T9), media library and upload (T6, T7), statuses and scheduling (T3, T4), incremental and background republish with dependency tracking and the fragment/hard-link design (T2, T3), preview (T4), revisions and autosave with compare, restore and 25 kept (T4, T10), admin i18n (T11), every 02a item labelled 02b (T6 nginx split and body-limit exclusion, T12 the rest).
 - Decided with the user at plan time: db-scheduler for publishing jobs (replicas on PostgreSQL stay possible; H2 means single node; static output is synced between replicas by external tools).
 - Calls made here (reviewable): `@wordpress/block-editor` hosted by our own screen rather than `@wordpress/editor` (the spike's proven path; `@wordpress/editor` would need most of the WordPress posts, settings, taxonomies and statuses REST API). Reusable blocks have owners: authors create and edit their own, editors and administrators edit any, contributors only insert (WordPress maps `wp_block` to post capabilities the same way). A slug change on a published item moves its permalink and leaves a 301, as WordPress's old-slug redirect does.
 - Reset to experiment and then import (user request at plan review): Task 6d.

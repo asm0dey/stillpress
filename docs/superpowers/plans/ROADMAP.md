@@ -19,7 +19,7 @@ Migration order from the spec (§10): the blog site goes first (plans 01-04), th
 Split into three plans (agreed 2026-11-04):
 
 - **02a admin foundation** (done; `2026-11-04-stillpress-02a-admin-foundation.md`, results in `2026-11-04-stillpress-02a-results.md`): Mode 2 nginx include, setup wizard with token and WXR upload, admin shell (Quinoa + Bun), `/wp-admin` redirects, password login with rate limiting, users and roles, CLI password reset, server-side import-once guard.
-- **02b editing and publishing**: editor, WP REST slice, classic block, reusable blocks, media library, statuses and scheduling, incremental and background republish, preview, revisions, admin i18n.
+- **02b editing and publishing**: editor, WordPress API calls translated in the browser, classic block, reusable blocks, media library, statuses and scheduling, incremental and background republish, preview, revisions, admin i18n.
   - Scheduled publishing: choose with the user at plan time between in-process db-scheduler (the precedent in four projects) and quarkus-scheduler.
 - **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications.
   - Secrets stored at rest (TOTP seeds, SMTP password, Turnstile secret, ALTCHA HMAC key) are encrypted with Google Tink: a keyset, per-row AEAD, and a keyed HMAC for anything looked up by value (precedent `encryption-tink`).
@@ -28,7 +28,7 @@ Split into three plans (agreed 2026-11-04):
 - Setup wizard at `/admin` with one-time setup token; wizard screens for Start empty and WXR upload (§6.4).
 - Admin on each site's own domain at `/admin`; `/wp-admin` and `/wp-login.php` redirect there (§6.2 item 10).
 - Admin front end: Quinoa + Bun (pinned equal to `mise.toml`, with a build check), ui-ux-pro-max design (§6.1, §6.2 item 3).
-- Admin REST backend plus the WordPress REST slice the editor needs (`wp/v2/blocks`, `types`, `themes`, `users`, `oembed/1.0/proxy`, media), including `POST` + `X-HTTP-Method-Override`, and logging of unknown `/wp-json` calls (§6.2 item 2).
+- Admin REST backend; the WordPress REST calls the editor makes (`wp/v2/blocks`, `types`, `themes`, `users`, `oembed/1.0/proxy`, media, `POST` + `X-HTTP-Method-Override`) are translated in the browser onto it, with unknown calls logged in the console (§6.2 item 2; no server-side `/wp-json`, decided 2026-11-04).
 - Embedded Gutenberg editor for posts and pages, saving dirty `core-data` entities with the post (§6.2 item 3, ADR 0001).
 - Classic block (TinyMCE) for classic items, with "Convert to blocks" on demand, never automatic (§10).
 - Reusable blocks: separate pattern editor screen bound to the `wp_block` entity (§6.2 item 3).
