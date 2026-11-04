@@ -1,6 +1,7 @@
 package site.asm0dey.stillpress.pg;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static site.asm0dey.stillpress.db.Tables.SCHEDULED_TASKS;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -56,6 +57,17 @@ class PostgresJobsTest {
             }
             assertThat(ids).doesNotHaveDuplicates().hasSize(8);
         }
+    }
+
+    @Test
+    void anUnknownAuthorFailsWithTheForeignKeyErrorNotAPublicIdError() {
+        store.reset();
+        assertThatThrownBy(() -> QuarkusTransaction
+            .requiringNew()
+            .call(() -> items.create("post", 987654L)))
+            .hasRootCauseInstanceOf(java.sql.SQLException.class)
+            .hasStackTraceContaining("foreign key")
+            .hasMessageNotContaining("No free public id");
     }
 
     @Test
