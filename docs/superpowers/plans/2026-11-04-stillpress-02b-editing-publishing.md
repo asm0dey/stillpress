@@ -34,7 +34,7 @@
 
 - Optimistic concurrency: every item and reusable-block update carries `expectedModifiedAt`; a mismatch is **409** `{"error":"conflict"}` and changes nothing.
 - Permalinks of new items come from setting `permalink_structure` (WordPress tokens `%year% %monthnum% %day% %hour% %minute% %second% %postname% %post_id% %category% %author%`); default `/%year%/%monthnum%/%day%/%postname%/`. The import infers it from the imported posts. Pages are `/<ancestor slugs>/<slug>/`. An item gets its permalink when it is first published. When a published item's permalink changes, the old path gets a 301 to the new one in the redirect map.
-- A site's origin is decided once: imported, or never imported. Start empty, or any admin write (items, media, terms, reusable blocks, settings, redirects, users), sets `import_state` to `closed` in the same transaction via `ImportGuard.close()` (Task 1b). An import into a closed or non-empty site is refused (409 in the admin, exit 1 in the CLI).
+- A site's origin is decided once: imported, or never imported. Start empty, or any admin write (items, media, terms, reusable blocks, settings, redirects, users), sets `import_state` to `closed` in the same transaction via `ImportGuard.close()` (Task 1b). An import into a closed or non-empty site is refused (409 in the admin, exit 1 in the CLI). Reset (Task 6d) is the only way back to an import-capable site; it keeps the resetting administrator and the wizard's basics (title, language, site address, timezone).
 - Everything an import fills in can also be set in the admin, so a site started empty is a full peer of an imported one: site settings (Task 6b), users, categories and tags, redirects (Task 6c), item author, comment status and page order (Tasks 4, 7).
 - New items get a WordPress-style public id: `source_id` = `coalesce(max(source_id), 0) + 1` in the insert. It cannot collide with imported ids, whose `?p=N` redirects already exist. The id feeds `guid` = `<home_url>/?p=<source_id>` (set at creation, never changed, as WordPress does) and, on publish, the redirects `?p=<source_id>` (and `?page_id=<source_id>` for pages) → permalink.
 - Site time zone: setting `timezone` (IANA id). The wizard stores the browser's `Intl.DateTimeFormat().resolvedOptions().timeZone`; missing means `UTC`. `published_local` = `published_at` in that zone.
@@ -685,6 +685,62 @@ Whatever an import sets must also be settable by hand, so a site started empty i
 
 ---
 
+### Task 6d: Reset the site
+
+Lets an administrator try Stillpress on a fresh install, then wipe the experiment and import (or start empty again) without touching the data directory by hand. It also replaces "wipe the data directory and run setup again" as the way to redo a bad import.
+
+**Files:**
+- Create: `content/SiteReset.java`, `admin/ResetResource.java`, `ResetCommand.java` (CLI, registered in `StillpressCommand`)
+- Modify: `pages/Settings.tsx` (a "Reset site" section at the bottom), `importer/ImportJob.java` and `pages/Import.tsx` (their "wipe the data directory" texts point to Reset instead), `README.md` (one paragraph)
+- Test: `content/SiteResetTest.java`, `admin/ResetResourceTest.java`, `ResetCommandTest.java`
+
+**Interfaces:**
+- Consumes: `PublishLock`, `ImportGuard`, `SitePublisher.publishAll()`, `DataDir`, `LoginLimiter`, `Passwords`, the generated jOOQ schema (`site.asm0dey.stillpress.db.DefaultSchema` or `Public`, whichever codegen produced).
+- Produces:
+  - `@ApplicationScoped class SiteReset { void reset(long keepAdministratorId); void wipe(); }`
+    - `reset` (admin): under `PublishLock`, one transaction, refused with `ImportRunningException` while an import runs. It deletes every row of every content table in foreign-key order: items and everything hanging off them, terms, comments, media, reusable blocks, revisions, redirects, the publish queue, fragments, `published_item`, user tokens, every session except the caller's, every user except `keepAdministratorId`, and `scheduled_tasks` rows except recurring tasks.
+    - Settings: deletes all except `title`, `language`, `home_url`, `timezone` and `publish_lock`, then writes setup's defaults again (`posts_per_page` 10, `posts_per_rss` 10, `category_base`, `tag_base`). `import_state` is removed, so import is open again.
+    - Files: deletes the contents of `media/` and `import/`, publishes the now-empty site (the old content stops being served at once), then deletes every other release.
+    - The administrator's `source_id` is cleared, so the next import merges by login as on a fresh install.
+  - `wipe` (CLI): the same, but it also deletes every user and every setting except `publish_lock`, so the next `serve` prints a new setup token and the wizard starts from step 1.
+  - `POST /admin/api/reset` (`@RolesAllowed("administrator")`) `{"password","confirm"}`: `confirm` must equal the site title exactly (400 `field: "confirm"`). The password is checked like a login and counts towards the same `LoginLimiter` (wrong → 403 `{"error":"invalid_credentials"}`, over the limit → 429). 409 `import_running`. Success → 204; the caller stays logged in and lands on the dashboard with the Start empty / Import choice.
+  - CLI `stillpress reset --yes`: `wipe()`. Without `--yes` it prints what would be deleted (counts per table and the data directory path) and exits 1.
+  - Settings screen: a "Reset site" section, visually separated, stating "Deletes all posts, pages, media, users other than you, categories, redirects and settings. This cannot be undone; copy the data directory first if you may want it back." The password and title fields are filled in before the button enables.
+- [ ] **Step 1: Write failing tests**
+
+```java
+@QuarkusTest class SiteResetTest {
+  @Test void resetLeavesOnlyTheAdministratorAndWizardSettings() {
+    // setup, start empty, then a published post with an uploaded image, a term, a block, a redirect, a second user,
+    // a settings change; reset(adminId)
+    // every table in the generated schema except author, setting, flyway_schema_history, scheduled_tasks has 0 rows;
+    // author has exactly the admin (password kept); setting keys are exactly the kept and default ones;
+    // media/ is empty; current/index.html exists and lists no posts; only one release directory remains
+    assertThat(tablesWithRows()).containsExactlyInAnyOrder("author", "setting", "flyway_schema_history");
+  }
+  @Test void importWorksAfterReset() { /* reset, then store.importSample() via ImportGuard.begin → report items 6 */ }
+  @Test void refusedWhileImportRuns() { /* guard.begin(); assertThatThrownBy(() -> reset.reset(adminId)).isInstanceOf(ImportRunningException.class) */ }
+  @Test void wipeLeavesNoUsersAndASetupToken() { /* wipe() → author empty; SetupToken after onStart → present */ }
+}
+
+@QuarkusTest class ResetResourceTest {
+  @Test void wrongPasswordIs403AndNothingDeleted() { }
+  @Test void wrongConfirmIs400() { }
+  @Test void otherUsersAreLoggedOutCallerIsNot() { /* editor's cookie → 401 after reset; admin's cookie → 200 on /session */ }
+  @Test void editorIs403() { }
+}
+// ResetCommandTest: without --yes exits 1 and deletes nothing; with --yes empties the store
+```
+
+`tablesWithRows()` iterates the generated schema's tables, so a table added by a later plan fails this test until reset covers it.
+
+- [ ] **Step 2: Run, verify fail.**
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run, verify pass**, plus `ImportGuardTest`, `SetupResourceTest`.
+- [ ] **Step 5: Commit and push** — `git commit -m "feat: reset the site from the admin or the CLI"`.
+
+---
+
 ### Task 7: The editor screen
 
 **Files:**
@@ -888,6 +944,7 @@ test('no Russian entry is orphaned', () => { expect(orphansIn(ruJson, extracted(
   - Schedule a post 3 minutes ahead and watch it appear.
   - Restore a revision.
   - Switch the admin to Russian.
+- [ ] **Step 3b: Reset then import** — on the Step 0 scratch site: Settings → Reset site; the posts, uploaded image and page are gone from nginx; the dashboard offers Import; import `blog.xml` and it succeeds. The CLI `reset` without `--yes` deletes nothing.
 - [ ] **Step 4: Parity unchanged** — `verify-urls --source https://blog.asm0dey.ru --target http://localhost:18083`. Expected: the same pass count as 02a (830), plus the new post's URL.
 - [ ] **Step 5: Write the results note and update `ROADMAP.md`.** Add under the hardening backlog "Replicas (PostgreSQL only)": the in-memory login limiter and import progress are per process; the output of the publishing node must be synced to the others by an external tool; CLI `publish` beside a live server is now safe (row lock). Commit and push.
 
@@ -898,6 +955,7 @@ test('no Russian entry is orphaned', () => { expect(orphansIn(ruJson, extracted(
 - Roadmap coverage for 02b: editor (T7), WP REST slice incl. method override, `canUser` and unknown-call logging (T5), classic block with on-demand conversion (T8), reusable blocks with the separate pattern editor and dirty-entity saving (T5, T7, T9), media library and upload (T6, T7), statuses and scheduling (T3, T4), incremental and background republish with dependency tracking and the fragment/hard-link design (T2, T3), preview (T4), revisions and autosave with compare, restore and 25 kept (T4, T10), admin i18n (T11), every 02a item labelled 02b (T6 nginx split and body-limit exclusion, T12 the rest).
 - Decided with the user at plan time: db-scheduler for publishing jobs (replicas on PostgreSQL stay possible; H2 means single node; static output is synced between replicas by external tools).
 - Calls made here (reviewable): `@wordpress/block-editor` hosted by our own screen rather than `@wordpress/editor` (the spike's proven path; `@wordpress/editor` would need most of the WordPress posts, settings, taxonomies and statuses REST API). Reusable blocks have owners: authors create and edit their own, editors and administrators edit any, contributors only insert (WordPress maps `wp_block` to post capabilities the same way). A slug change on a published item moves its permalink and leaves a 301, as WordPress's old-slug redirect does.
+- Reset to experiment and then import (user request at plan review): Task 6d.
 - Import closed for sites started empty (user request at plan review): Task 1b, the Global Constraint, Review Focus 5, `ImportClosedTest` in Task 6c.
 - Back office parity (user request at plan review): Task 6c plus the item fields in Tasks 4 and 7, and the public-id rule in Global Constraints.
 - From scratch (user request at plan review): Task 6b (settings screen, lazy default category, automatic excerpts) and Task 13 Step 0.
