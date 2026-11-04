@@ -82,7 +82,7 @@ public class ReusableBlockRepository {
     }
 
     /**
-     * Items using any of {@code refs}: a LIKE pre-filter in one query ({@code "ref":12} must not match
+     * Items using any of {@code refs}, trashed ones too: a LIKE pre-filter in one query ({@code "ref":12} must not match
      * {@code "ref":123}), then each candidate body is parsed to confirm.
      */
     public List<Use> itemsUsing(Set<Long> refs) {
@@ -96,7 +96,7 @@ public class ReusableBlockRepository {
         return db
             .select(ITEM.ID, ITEM.STATUS, ITEM.BODY)
             .from(ITEM)
-            .where(ITEM.STATUS.ne("trash"), DSL.or(like))
+            .where(DSL.or(like))
             .fetch()
             .stream()
             .map(r -> {

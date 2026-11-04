@@ -197,6 +197,8 @@ public class ReusableBlocksResource {
         var counts = new HashMap<Long, Integer>();
         blocks
             .itemsUsing(refs)
+            .stream()
+            .filter(u -> !"trash".equals(u.status()))
             .forEach(u -> u.refs().forEach(r -> counts.merge(r, 1, Integer::sum)));
         return counts;
     }

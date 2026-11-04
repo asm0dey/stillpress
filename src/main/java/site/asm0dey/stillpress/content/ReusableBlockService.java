@@ -79,6 +79,9 @@ public class ReusableBlockService {
                 a.userId(),
                 now()
         );
+        // items may already show the new public id; a refusal rolls the insert back
+        var ref = r.getSourceId();
+        html.block(a.role(), ref, title, content, () -> blocks.itemsUsing(withContainers(ref)));
         revisions.saved(OBJECT_TYPE, r.getSourceId(), r.getTitle(), r.getContent(), "blocks", null, a.userId());
         return r;
     }

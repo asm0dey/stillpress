@@ -184,12 +184,13 @@ public class ItemService {
         if (!Capabilities.canEdit(a.role(), a.userId(), r)) {
             throw forbidden();
         }
+        // the state as stored after this save, so a status- or format-only change is judged too
         html.item(
                 a.role(),
-                u.title(),
-                u.body(),
-                Objects.requireNonNullElse(u.bodyFormat(), r.getBodyFormat()),
-                u.excerpt()
+                or(u.title(), r.getTitle()),
+                or(u.body(), r.getBody()),
+                or(u.bodyFormat(), r.getBodyFormat()),
+                or(u.excerpt(), r.getExcerpt())
         );
         guard.close();
         var wasPublished = "publish".equals(r.getStatus());
@@ -359,7 +360,6 @@ public class ItemService {
     }
 
     private void setTrashed(long id, Actor a, boolean trash) {
-        guard.close();
         var r = items
             .lock(id)
             .orElseThrow(() -> new Refused(404, "not_found", null));
@@ -369,6 +369,11 @@ public class ItemService {
         if (trash == "trash".equals(r.getStatus())) {
             throw invalid("status");
         }
+        if (!trash) {
+            // reusable blocks it shows may have changed while it was in the trash
+            html.item(a.role(), r.getTitle(), r.getBody(), r.getBodyFormat(), r.getExcerpt());
+        }
+        guard.close();
         var wasPublished = "publish".equals(r.getStatus());
         r.setStatus(trash ? "trash" : "draft");
         r.setModifiedAt(now());
@@ -385,6 +390,10 @@ public class ItemService {
      */
     private static LocalDateTime now() {
         return LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
+    }
+
+    private static <T> T or(T value, T stored) {
+        return value != null ? value : stored;
     }
 
     private static Refused forbidden() {

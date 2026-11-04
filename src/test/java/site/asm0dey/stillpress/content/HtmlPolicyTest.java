@@ -122,4 +122,26 @@ class HtmlPolicyTest {
         assertThat(HtmlPolicy.violations("<!-- wp:x {\"a\":[{\"HREF\":\" javascript:x\"}]} /-->"))
             .containsExactly("javascript: URL in a block attribute");
     }
+
+    @Test
+    void unclosedMarkupAtTheEndIsRefused() {
+        for (var payload :
+                List.of(
+                        "<img src=x alt='",
+                        "<p>a</p><textarea>b",
+                        "<p>a</p><!-- open",
+                        "<svg><circle r=\"1\"></circle>",
+                        "<p>a</p><style>p{}",
+                        "<p>a</p><table><tr><td>x"
+        )) {
+            assertThat(HtmlPolicy.balanced(payload)).as(payload).containsExactly("unclosed markup at the end");
+        }
+        assertThat(HtmlPolicy.balanced("<!-- wp:paragraph --><p>a</p><!-- /wp:paragraph -->\n<p>b</p>")).isEmpty();
+        assertThat(HtmlPolicy.balanced("<svg><circle r=\"1\"></circle></svg>")).isEmpty();
+        assertThat(HtmlPolicy.balanced("Plain classic text\n\nwith paragraphs")).isEmpty();
+        assertThat(HtmlPolicy.balanced("<b id=\"sp-sentinel\"></b><img alt='")).containsExactly(
+                "unclosed markup at the end"
+        );
+        assertThat(HtmlPolicy.balanced(null)).isEmpty();
+    }
 }

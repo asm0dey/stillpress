@@ -160,7 +160,17 @@ class ReusableBlocksResourceTest {
         // a tag split across a reusable block and the post that shows it; each half alone is plain text
         var half = "<img src=x alt='";
         var rest = "' onerror=alert(1)>";
-        var b = create(author1, half);
+        settings.delete("import_state");
+        // an author's half is unclosed markup, refused on its own (R27)
+        as(author1)
+            .body(Map.of("title", "T", "content", half))
+            .post("/admin/api/blocks")
+            .then()
+            .statusCode(400)
+            .body("violations", org.hamcrest.Matchers.contains("unclosed markup at the end"));
+        // an editor's half is not checked; the post that completes the tag is
+        var editor = sessions.create(users.create("editor", "e@example.org", "Ed", Role.EDITOR).getId());
+        var b = create(editor, half);
         var post = ItemsResourceTest.create(author1, "post");
         var ref = "<!-- wp:block {\"ref\":" + b.getLong("id") + "} /-->";
         settings.delete("import_state");
@@ -169,7 +179,12 @@ class ReusableBlocksResourceTest {
             .then()
             .statusCode(400)
             .body("error", equalTo("unsafe_html"))
-            .body("violations", org.hamcrest.Matchers.contains("onerror attribute on <img>"));
+            .body(
+                    "violations",
+                    org.hamcrest.Matchers.contains(
+                            "onerror attribute on <img> in a reusable block owned by an editor; an editor must change it"
+                    )
+            );
         // the review's payload 5: the block reference inside an attribute
         ItemsResourceTest
             .update(author1, post, Map.of("body", "<img src=x alt='" + ref + "'>"))
@@ -194,7 +209,7 @@ class ReusableBlocksResourceTest {
             .then()
             .statusCode(400)
             .body("error", equalTo("unsafe_html"))
-            .body("violations", org.hamcrest.Matchers.contains("in \"Split\": onerror attribute on <img>"));
+            .body("violations", org.hamcrest.Matchers.contains("unclosed markup at the end"));
         as(author1).get("/admin/api/blocks/" + c.getLong("id")).then().body("content", equalTo("x"));
         assertThat(settings.get("import_state")).isNotPresent();
     }

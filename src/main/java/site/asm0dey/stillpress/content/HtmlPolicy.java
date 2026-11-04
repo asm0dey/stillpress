@@ -77,6 +77,34 @@ public final class HtmlPolicy {
         return all.equals(asComments) ? List.of() : List.of("block comment inside HTML");
     }
 
+    /**
+     * {@code unclosed markup at the end} unless every tag, attribute, comment and raw-text element the fragment opens
+     * is closed, so whatever follows it on a page (template markup, the next fragment) is parsed as written. A sentinel
+     * element appended to the fragment must come out as the last child of {@code body}. The sentinel is a custom
+     * element, which, unlike {@code <b>}, does not break out of SVG or MathML.
+     */
+    public static List<String> balanced(String fragment) {
+        if (fragment == null || fragment.isEmpty()) {
+            return List.of();
+        }
+        var id = "sp-sentinel-" + UUID.randomUUID();
+        var doc = Jsoup.parse(fragment + "<sp-sentinel id=\"" + id + "\"></sp-sentinel>");
+        var sentinel = doc.getElementById(id);
+        var closed = sentinel != null && sentinel.parent() == doc.body() && sentinel.nextSibling() == null;
+        return closed ? List.of() : List.of("unclosed markup at the end");
+    }
+
+    /**
+     * Everything a fragment written by a lower role must pass on its own: {@link #violations}, {@link #balanced} and
+     * {@link #structure}. Balanced, violation-free fragments stay safe when put side by side.
+     */
+    public static List<String> fragment(String fragment) {
+        var out = new LinkedHashSet<>(violations(fragment));
+        out.addAll(balanced(fragment));
+        out.addAll(structure(fragment));
+        return List.copyOf(out);
+    }
+
     private static void blocks(List<Block> blocks, Set<String> out) {
         for (var b : blocks) {
             attributes(b.attrs(), "", out);
