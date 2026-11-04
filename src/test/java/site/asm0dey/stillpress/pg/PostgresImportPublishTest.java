@@ -23,7 +23,7 @@ class PostgresImportPublishTest {
     void sampleImportsAndPublishes() throws Exception {
         store.reset();
         var report = store.importSample();
-        assertThat(report.items()).isEqualTo(7);
+        assertThat(report.items()).isEqualTo(9);
         var rel = publisher.publishAll().release();
         assertThat(rel.resolve("2023/01/14/месяц-ноябрь-год-2022/index.html")).exists();
         assertThat(rel.resolve("category/travel/europe/index.html")).exists();
