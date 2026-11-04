@@ -18,7 +18,7 @@ Migration order from the spec (§10): the blog site goes first (plans 01-04), th
 
 Split into three plans (agreed 2026-11-04):
 
-- **02a admin foundation** (`2026-11-04-stillpress-02a-admin-foundation.md`): Mode 2 nginx include, setup wizard with token and WXR upload, admin shell (Quinoa + Bun), `/wp-admin` redirects, password login with rate limiting, users and roles, CLI password reset, server-side import-once guard.
+- **02a admin foundation** (done; `2026-11-04-stillpress-02a-admin-foundation.md`, results in `2026-11-04-stillpress-02a-results.md`): Mode 2 nginx include, setup wizard with token and WXR upload, admin shell (Quinoa + Bun), `/wp-admin` redirects, password login with rate limiting, users and roles, CLI password reset, server-side import-once guard.
 - **02b editing and publishing**: editor, WP REST slice, classic block, reusable blocks, media library, statuses and scheduling, incremental and background republish, preview, revisions, admin i18n.
 - **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications.
 
@@ -52,6 +52,13 @@ Split into three plans (agreed 2026-11-04):
 ### Carried over from plan 01
 
 - The importer's one-shot check only looks at whether items exist; the wizard must enforce "import once" more completely (for example also for media, comments and settings).
+
+### Carried over from 02a (acceptance run)
+
+- 02b: `GET /admin` without the trailing slash answers the site's 404 (Quinoa serves only `/admin/`), while the admin's own nav link and post-login redirect point at `/admin`; redirect it to `/admin/`.
+- 02b: an author who opens `/admin/users` directly sees "Could not load the users." and the Add user form; hide screens the role cannot use.
+- 02c: set-password links are built from the imported site URL, so before cutover they point at the live WordPress host; invites and email reset reuse the same builder and should use the admin's own host until cutover.
+- Docs: `docs/deploy/nginx-site.conf.example` should mention `STILLPRESS_TRUSTED_PROXIES` for nginx on another host or in a container.
 
 ## Plan 03: Themes & Site Editor
 
@@ -139,6 +146,7 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - Importer: uploads under a home path that differs from the site URL are reported missing; host matching is case-sensitive; a failed folded original leaves a media row with no path that blocks retry; reusable-block references are matched by source id only.
 - Importer tests: no test for an attachment whose parent is a draft; the media count in the report is not asserted.
 - CLI: exit codes do not distinguish failure kinds.
+- CLI: `--help` is not wired; `nginx-config --help` prints "Unknown option" before the usage.
 - Build: the schema test covers only the `setting` table; some dependency versions are inline instead of properties; nothing enforces that runtime jOOQ equals the code-generation jOOQ; the dialect test checks the Quarkus mapping, not the property expansion.
 - Licence: `LICENSE` was reflowed and carries no explicit "or later" statement.
 
