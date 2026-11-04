@@ -29,6 +29,18 @@ class AdminShellTest {
     }
 
     @Test
+    void shellIsRevalidatedButAssetsStayCached() {
+        // a cached shell after an upgrade points at bundles that are gone
+        for (var path : new String[] {"/admin/", "/admin/setup"}) {
+            given().get(path).then().statusCode(200).header("Cache-Control", "no-cache");
+        }
+        var html = given().get("/admin/").asString();
+        var asset = html.replaceFirst("(?s).*src=\"(/admin/assets/[^\"]+\\.js)\".*", "$1");
+        // prod marks them immutable; the test profile sends no Cache-Control for static files
+        given().get(asset).then().statusCode(200).header("Cache-Control", not("no-cache"));
+    }
+
+    @Test
     void adminWithoutSlashRedirects() {
         given().redirects().follow(false).get("/admin").then().statusCode(302).header("Location", "/admin/");
         given()
