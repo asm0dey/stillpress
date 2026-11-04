@@ -91,7 +91,7 @@ public class ReusableBlockRepository {
         }
         var like = refs
             .stream()
-            .flatMap(n -> Stream.of(ITEM.BODY.like("%\"ref\":" + n + "}%"), ITEM.BODY.like("%\"ref\":" + n + ",%")))
+            .flatMap(n -> Stream.of(ITEM.BODY.like("%\"ref\":%" + n + "}%"), ITEM.BODY.like("%\"ref\":%" + n + ",%")))
             .toList();
         return db
             .select(ITEM.ID, ITEM.STATUS, ITEM.BODY)

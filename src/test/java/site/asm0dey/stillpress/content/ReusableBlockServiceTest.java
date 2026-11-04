@@ -90,6 +90,14 @@ class ReusableBlockServiceTest {
     }
 
     @Test
+    void refWithWhitespaceStillMatches() {
+        ownerless(7);
+        var item = publishedItem("<!-- wp:block {\"ref\": 7} /-->");
+        db.deleteFrom(PUBLISH_QUEUE).execute();
+        assertThat(queuedAfterSaving(7, editor)).containsExactly(String.valueOf(item));
+    }
+
+    @Test
     void authorEditsOwnBlockButNotOthers() {
         var b = service.save(null, "Mine", "one", null, author1);
         assertThat(b.getAuthorId()).isEqualTo(author1.userId());
