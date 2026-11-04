@@ -36,7 +36,7 @@ export default function Import() {
       setStatus(await api<ImportStatus>('/import', { method: 'POST', body }));
     } catch (e) {
       const err = e as ApiError;
-      setMessage(err.status === 409 ? err.message ?? 'This site has already been imported.'
+      setMessage(err.error === 'csrf' ? err.message! : err.status === 409 ? err.message ?? 'This site has already been imported.'
         : err.status === 400 ? err.error ?? 'Check the settings.' : 'The upload failed. Try again.');
     } finally {
       setBusy(false);

@@ -1,6 +1,9 @@
 export type Role = 'administrator' | 'editor' | 'author' | 'contributor';
 
 /** The body of a non-2xx response, plus its status. */
+/** Shown when the server refuses a call for a missing or stale CSRF token. */
+export const CSRF_MESSAGE = 'Your session token has expired. Reload the page and try again.';
+
 export interface ApiError {
   status: number;
   error?: string;
@@ -49,6 +52,11 @@ export async function api<T = void>(
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     const e: ApiError = { status: res.status, error: data?.error, field: data?.field, message: data?.message };
+    // every 400 our endpoints send names an error; a bare one is the CSRF guard's refusal
+    if (res.status === 400 && !e.error && !e.field) {
+      e.error = 'csrf';
+      e.message = CSRF_MESSAGE;
+    }
     throw e;
   }
   return data as T;

@@ -22,7 +22,8 @@ export default function Users() {
     try {
       await api(`/users/${u.id}/role`, { method: 'PUT', body: { role } });
     } catch (e) {
-      setMessage((e as ApiError).error === 'last_administrator'
+      const err = e as ApiError;
+      setMessage(err.error === 'csrf' ? err.message! : err.error === 'last_administrator'
         ? 'There must be at least one administrator with a password.' : 'Could not change the role.');
     }
     load();
@@ -33,8 +34,9 @@ export default function Users() {
     try {
       const { url } = await api<{ url: string }>(`/users/${u.id}/password-link`, { method: 'POST' });
       await copy(u.login, url);
-    } catch {
-      setMessage('Could not create the link.');
+    } catch (e) {
+      const err = e as ApiError;
+      setMessage(err.error === 'csrf' ? err.message! : 'Could not create the link.');
     }
   }
 
@@ -53,7 +55,8 @@ export default function Users() {
       setForm(EMPTY);
       load();
     } catch (e) {
-      setMessage((e as ApiError).error === 'login_taken' ? 'That login is already taken.' : 'Check the fields and try again.');
+      const err = e as ApiError;
+      setMessage(err.error === 'csrf' ? err.message! : err.error === 'login_taken' ? 'That login is already taken.' : 'Check the fields and try again.');
     }
   }
 

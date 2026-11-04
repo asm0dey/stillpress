@@ -46,7 +46,8 @@ export default function Setup() {
       setDone(true);
     } catch (e) {
       const err = e as ApiError;
-      if (err.status === 403) setErrors({ token: 'That token does not match the one in the server log.' });
+      if (err.error === 'csrf') setProblem(err.message!);
+      else if (err.status === 403) setErrors({ token: 'That token does not match the one in the server log.' });
       else if (err.status === 400) setErrors({ [err.field!]: MESSAGES[err.field!] ?? 'Check this value.' });
       else if (err.status === 409) setProblem('already');
       else setProblem('Setup failed. Check the server log and try again.');

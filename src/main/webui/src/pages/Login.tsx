@@ -22,7 +22,7 @@ export default function Login() {
       navigate(next?.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true });
     } catch (e) {
       const err = e as ApiError;
-      setError(err.status === 429 ? 'Too many attempts. Wait a few minutes and try again.'
+      setError(err.error === 'csrf' ? err.message : err.status === 429 ? 'Too many attempts. Wait a few minutes and try again.'
         : err.status === 401 ? 'The login or password is incorrect.' : 'Login failed. Try again.');
     } finally {
       setBusy(false);

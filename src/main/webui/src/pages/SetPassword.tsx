@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { type ApiError, api } from '../api.ts';
+import { type ApiError, CSRF_MESSAGE, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 
 export default function SetPassword() {
@@ -8,7 +8,7 @@ export default function SetPassword() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({});
-  const [state, setState] = useState<'form' | 'done' | 'expired' | 'failed'>('form');
+  const [state, setState] = useState<'form' | 'done' | 'expired' | 'failed' | 'csrf'>('form');
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -22,7 +22,8 @@ export default function SetPassword() {
       setState('done');
     } catch (e) {
       const err = e as ApiError;
-      if (err.status === 400) setErrors({ password: 'Use 12 to 1024 characters.' });
+      if (err.error === 'csrf') setState('csrf');
+      else if (err.status === 400) setErrors({ password: 'Use 12 to 1024 characters.' });
       else setState(err.status === 410 ? 'expired' : 'failed');
     }
   }
@@ -34,6 +35,7 @@ export default function SetPassword() {
     <main className="page narrow">
       <h1>Set your password</h1>
       {state === 'expired' && <p role="alert" className="error">This link is invalid or has expired. Ask an administrator for a new one.</p>}
+      {state === 'csrf' && <p role="alert" className="error">{CSRF_MESSAGE}</p>}
       {state === 'failed' && <p role="alert" className="error">Could not set the password. Try again.</p>}
       <form onSubmit={submit} noValidate>
         <Field label="New password" type="password" autoComplete="new-password" required minLength={12}
