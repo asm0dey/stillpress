@@ -38,25 +38,54 @@ class JobsTest {
     }
 
     @Test
-    void requestPublishTwiceLeavesOneExecution() {
-        // counted before commit: once committed, the scheduler picks the row up and removes it
-        var inside = new AtomicInteger();
-        rolledBack(() -> {
+    void requestPublishWaitsForTheCommit() throws Exception {
+        var inside = new AtomicInteger(-1);
+        QuarkusTransaction.requiringNew().run(() -> {
             jobs.requestPublish();
             jobs.requestPublish();
             inside.set(rows("publish-site"));
         });
-        assertThat(inside).hasValue(1);
+        assertThat(inside).hasValue(0);
     }
 
     @Test
-    void rolledBackRequestsLeaveNoTask() {
-        rolledBack(() -> {
+    void rolledBackRequestsLeaveNoTask() throws Exception {
+        var peak = peakPublishSiteRows(() -> rolledBack(() -> {
             jobs.requestPublish();
             jobs.scheduleGoLive(7, Instant.now().plusSeconds(3600));
-        });
-        assertThat(rows("publish-site")).isZero();
+        }));
+        assertThat(peak).isZero();
         assertThat(rows("go-live")).isZero();
+    }
+
+    @Test
+    void controlCommittedRequestIsSeen() throws Exception {
+        // shows the watcher can see a committed request, so the zero above is not vacuous; the scheduler may
+        // consume the row between two reads, so it gets a few tries
+        var peak = 0;
+        for (var attempt = 0; attempt < 5 && peak == 0; attempt++) {
+            peak = peakPublishSiteRows(() -> QuarkusTransaction.requiringNew().run(jobs::requestPublish));
+        }
+        assertThat(peak).isEqualTo(1);
+    }
+
+    /**
+     * The most publish-site rows seen while {@code action} ran and the scheduler had a second to react. The scheduler
+     * deletes the row once the task ran, so a spinning reader watches the whole time.
+     */
+    private int peakPublishSiteRows(Runnable action) throws InterruptedException {
+        var peak = new AtomicInteger();
+        var stop = new AtomicBoolean();
+        var watcher = Thread.ofPlatform().start(() -> {
+            while (!stop.get()) {
+                peak.accumulateAndGet(rows("publish-site"), Math::max);
+            }
+        });
+        action.run();
+        Thread.sleep(1000);
+        stop.set(true);
+        watcher.join();
+        return peak.get();
     }
 
     @Test

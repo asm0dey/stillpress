@@ -12,7 +12,11 @@ import io.quarkus.runtime.StartupEvent;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.inject.Inject;
+import jakarta.transaction.Status;
+import jakarta.transaction.Synchronization;
+import jakarta.transaction.TransactionSynchronizationRegistry;
 import module java.base;
 import javax.sql.DataSource;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -28,6 +32,8 @@ public class Jobs {
     public static final String PUBLISH_SWEEP = "publish-sweep";
     @Inject
     DataSource dataSource;
+    @Inject
+    TransactionSynchronizationRegistry registry;
     // as SetupToken: Main turns this off for CLI commands
     @ConfigProperty(name = "quarkus.http.host-enabled", defaultValue = "true")
     boolean httpEnabled;
@@ -76,10 +82,30 @@ public class Jobs {
     }
 
     /**
-     * Asks for a publish; one pending request covers every change made before it runs. Call inside the transaction
-     * that made the change: the row commits or rolls back with it.
+     * Asks for a publish; one pending request covers every change made before it runs. Inside a transaction the
+     * request is scheduled after it commits (a rollback asks for nothing): scheduling inside would make concurrent
+     * saves collide on the one {@code site} row, which PostgreSQL turns into an aborted transaction. Without a
+     * transaction it is scheduled at once.
      */
     public void requestPublish() {
+        if (registry.getTransactionStatus() == Status.STATUS_ACTIVE) {
+            registry.registerInterposedSynchronization(new Synchronization() {
+                @Override
+                public void beforeCompletion() {}
+
+                @Override
+                public void afterCompletion(int status) {
+                    if (status == Status.STATUS_COMMITTED) {
+                        QuarkusTransaction.suspendingExisting().run(Jobs.this::scheduleNow);
+                    }
+                }
+            });
+        } else {
+            scheduleNow();
+        }
+    }
+
+    private void scheduleNow() {
         client().scheduleIfNotExists(publishSite.instance("site"), Instant.now());
         var s = scheduler;
         if (s != null) {

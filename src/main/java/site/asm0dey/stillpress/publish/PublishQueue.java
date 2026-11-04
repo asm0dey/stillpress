@@ -16,9 +16,9 @@ public class PublishQueue {
     DSLContext db;
 
     /**
-     * Everything queued up to {@code upTo}, folded by kind.
+     * Everything read by one snapshot, folded by kind; {@code ids} are the queue rows it covers.
      */
-    public record Batch(long upTo, Set<Long> items, Set<String> bases, boolean media, boolean all) {}
+    public record Batch(Set<Long> ids, Set<Long> items, Set<String> bases, boolean media, boolean all) {}
 
     public void item(long id) {
         add("item", String.valueOf(id));
@@ -57,9 +57,9 @@ public class PublishQueue {
         var items = new LinkedHashSet<Long>();
         var bases = new LinkedHashSet<String>();
         boolean media = false, all = false;
-        long upTo = 0;
+        var ids = new HashSet<Long>();
         for (var r : rows) {
-            upTo = Math.max(upTo, r.value1());
+            ids.add(r.value1());
             switch (r.value2()) {
                 case "item" -> items.add(Long.parseLong(r.value3()));
                 case "base" -> bases.add(r.value3());
@@ -67,13 +67,13 @@ public class PublishQueue {
                 default -> all = true;
             }
         }
-        return Optional.of(new Batch(upTo, items, bases, media, all));
+        return Optional.of(new Batch(ids, items, bases, media, all));
     }
 
     /**
-     * Removes the rows {@code b} covers; rows queued since stay.
+     * Removes exactly the rows {@code b} read; rows queued since stay, even those with a lower id that committed late.
      */
     public void done(Batch b) {
-        db.deleteFrom(PUBLISH_QUEUE).where(PUBLISH_QUEUE.ID.le(b.upTo())).execute();
+        db.deleteFrom(PUBLISH_QUEUE).where(PUBLISH_QUEUE.ID.in(b.ids())).execute();
     }
 }
