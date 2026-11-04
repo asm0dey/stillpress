@@ -2,7 +2,7 @@ package site.asm0dey.stillpress.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import java.util.List;
+import module java.base;
 import org.junit.jupiter.api.Test;
 
 class PasswordsTest {

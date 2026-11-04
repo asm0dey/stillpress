@@ -3,10 +3,8 @@ package site.asm0dey.stillpress.verify;
 import module java.base;
 import module java.net.http;
 import module java.xml;
+// java.xml also exports a Duration (javax.xml.datatype); this single-type import picks java.time's
 import java.time.Duration;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import org.jsoup.Jsoup;
 import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.verify.ParityReport.Cause;
