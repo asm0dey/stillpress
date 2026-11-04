@@ -21,6 +21,10 @@ Split into three plans (agreed 2026-11-04):
 - **02a admin foundation** (done; `2026-11-04-stillpress-02a-admin-foundation.md`, results in `2026-11-04-stillpress-02a-results.md`): Mode 2 nginx include, setup wizard with token and WXR upload, admin shell (Quinoa + Bun), `/wp-admin` redirects, password login with rate limiting, users and roles, CLI password reset, server-side import-once guard.
 - **02b editing and publishing** (done; `2026-11-04-stillpress-02b-editing-publishing.md`, results in `2026-11-04-stillpress-02b-results.md`): editor, WordPress API calls translated in the browser, classic block, reusable blocks, media library, statuses and scheduling, incremental and background republish, preview, revisions, admin i18n, site settings, reset, and back-office parity for a site started empty.
   - Scheduled publishing: db-scheduler (chosen at plan time). Replicas stay possible on PostgreSQL; H2 means a single node.
+- **02b follow-up (before 02c): incremental publish cost**
+  - Acceptance measured an incremental publish at ~25% of a full publish, against a target under 10%. On the real blog: a full publish wrote 1,008 files in ~1,012 ms; a one-post incremental wrote 21 files in 228–260 ms.
+  - First log per-phase timings: lock, snapshot, summaries/terms/published_item reads, the hard-link walk over unchanged files, rendering, fragment reads/writes, activate, bookkeeping. Measure on the real blog import.
+  - Then fix the dominant phase while keeping every incremental == full test green. Candidates: avoid the per-file hard-link walk, narrow the whole-site DB reads, cache more rendered output.
 - **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications.
   - Secrets stored at rest (TOTP seeds, SMTP password, Turnstile secret, ALTCHA HMAC key) are encrypted with Google Tink: a keyset, per-row AEAD, and a keyed HMAC for anything looked up by value (precedent `encryption-tink`).
 
@@ -179,7 +183,6 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - Permalinks: stored permalinks do not follow their sources. Under `%category%` a post keeps its old path after its category is renamed or moved, and a child page keeps its old parent path after the parent's slug changes. The links still work, but WordPress would move them; recompute them with 301s.
 - Revisions: a partial unique index for one autosave per object and user.
 - Settings: a base swap (category and tag bases exchanged in one save) writes mutual 301s; harmless while static files win.
-- Incremental publish: the 02b acceptance run measured about 25% of a full publish against the <10% target; fixed overhead dominates at this site size. Re-measure on a larger site and make the hard-link copy cheaper if it still misses.
 - Licence: `LICENSE` was reflowed and carries no explicit "or later" statement.
 - Accounts (02a): `findByLoginOrEmail` lower-cases in Java and SQL separately (non-ASCII emails may disagree); `setRoleKeepingAdministrator` locks without `ORDER BY` and has no concurrency test; `PasswordsTest` lacks the 11-character case; only `AuthResourceTest` resets the shared login limiter; no rollback test for the set-password transaction; no test that no setup token is printed when an administrator already exists.
 - Import (02a): an old job's `finally` can briefly race a fast retry's `start()`; the upload file stays in `<data>/import` if the thread fails to start; no test for a publish failing after content was written; the admin media cap rejects a negative value only when an import starts and its test proves only a cap of 0.
