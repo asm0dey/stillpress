@@ -312,7 +312,7 @@ git push
 
 **Files:**
 - Create: `content/Capabilities.java`, `content/ItemService.java`, `content/Revisions.java`, `store/RevisionRepository.java`, `admin/ItemsResource.java`, `admin/PreviewResource.java`
-- Modify: `store/ItemRepository.java` (list query with counts), `store/TermRepository.java` (`create`), `store/RedirectRepository.java` (`put(from, to)`), `application.properties` (`quarkus.quinoa.ignored-path-prefixes=/api,/preview`)
+- Modify: `store/ItemRepository.java` (list query with counts), `store/TermRepository.java` (`create(taxonomy, name, parentId)`, `findBySlug(taxonomy, slug)`), `store/RedirectRepository.java` (`put(from, to)`), `application.properties` (`quarkus.quinoa.ignored-path-prefixes=/api,/preview`)
 - Test: `content/CapabilitiesTest.java`, `admin/ItemsResourceTest.java`, `content/RevisionsTest.java`, `admin/PreviewResourceTest.java`
 
 **Interfaces:**
@@ -519,6 +519,59 @@ class OEmbedProxyTest {
 
 ---
 
+### Task 6b: Site settings and a blog from scratch
+
+A site started empty in the wizard must work as a blog without any WordPress import: settings can be edited, the first post lands in a default category, and archive pages show excerpts.
+
+**Files:**
+- Create: `admin/SettingsResource.java`, `src/main/webui/src/pages/Settings.tsx`
+- Modify: `content/ItemService.java` (default category), `publish/views/ViewFactory.java` or `EntryView` (automatic excerpt), `main.tsx` + `Shell.tsx` (route `/settings`, administrators only)
+- Test: `admin/SettingsResourceTest.java`, `admin/FromScratchBlogTest.java`
+
+**Interfaces:**
+- Consumes: `SettingRepository`, `TermRepository.create`, `PublishQueue.all()`, `Jobs.requestPublish()`, `PermalinkStructure`.
+- Produces:
+  - `GET /admin/api/settings` / `PUT /admin/api/settings` (`@RolesAllowed("administrator")`): `{"title","description","language","timezone","postsPerPage","postsPerRss","permalinkStructure","defaultCategory"}`. Validation: language as in setup; timezone a `ZoneId`; both counts 1–100; `permalinkStructure` starts and ends with `/` and contains `%postname%` or `%post_id%`; `defaultCategory` an existing category id or null. A bad field → 400 `{"error":"invalid","field"}`. Saving title, description, language or either count enqueues `all` (spec §6.2.1: a settings change triggers the background full republish). A permalink-structure change applies only to items published afterwards: existing permalinks never change (spec §9), and the screen says so.
+  - Default category: when a post is saved with no categories and is published (now or by go-live), it gets setting `default_category`. If that setting is unset, `ItemService` uses the category with slug `Slugs.title(name)`, creating it if missing, where name = "Без рубрики" when the site language starts with `ru`, else "Uncategorized". It then stores its id as `default_category`. The term is created lazily, never at setup, because the import guard requires an empty `term` table.
+  - Automatic excerpt (WordPress `wp_trim_excerpt`): an entry whose `excerpt` is blank shows the first **55** words of the rendered body with tags stripped, followed by ` […]` when it was cut. Feeds keep using the stored excerpt as today.
+  - `Settings.tsx`: one form with the fields above. Permalink presets: Day and name (`DEFAULT`), Month and name, Post name, Numeric (`/archives/%post_id%/`), Custom. The default-category select lists the categories. Linked from the dashboard for administrators.
+
+- [ ] **Step 1: Write failing tests**
+
+```java
+@QuarkusTest class SettingsResourceTest {
+  @Test void titleChangeRepublishesTheWholeSite() {
+    // PUT title "New name" → publish_queue has an "all" row; poll until current/index.html contains "New name"
+  }
+  @Test void permalinkStructureChangeKeepsExistingPermalinks() {
+    // published post at /2026/11/04/a/; PUT permalinkStructure "/%postname%/"; publish post b
+    // → a still at its old path, b at "/b/"
+  }
+  @Test void invalidFieldsAre400() { /* postsPerPage 0, timezone "Mars/Base", structure "/%year%/" → field names */ }
+  @Test void editorIs403() { }
+}
+
+@QuarkusTest class FromScratchBlogTest {
+  @Test void startEmptyThenFirstPostMakesAWorkingBlog() {
+    // reset; POST /admin/api/setup (language ru-RU, timezone Europe/Moscow); no import
+    // create a post "Первый пост" with a 100-word paragraph and no categories, publish; poll until published
+    // home "/" lists it; /category/без-рубрики/ lists it; /feed/ has its <guid>; /author/<login>/ lists it;
+    // the home entry text ends with " […]" and has 55 words
+    assertThat(terms.findBySlug("category", "без-рубрики")).isPresent();
+  }
+  @Test void importAfterSetupStillAllowed() {
+    // setup (no post written) → the import guard still accepts an import (no term was created)
+  }
+}
+```
+
+- [ ] **Step 2: Run, verify fail.**
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run, verify pass**, plus `IncrementalPublishTest` (the automatic excerpt changes archive output in both modes alike).
+- [ ] **Step 5: Commit and push** — `git commit -m "feat: site settings screen; a blog from scratch gets a default category and excerpts"`.
+
+---
+
 ### Task 7: The editor screen
 
 **Files:**
@@ -713,6 +766,7 @@ test('no Russian entry is orphaned', () => { expect(orphansIn(ruJson, extracted(
 
 **Files:** results note `docs/superpowers/plans/2026-11-04-stillpress-02b-results.md`; `ROADMAP.md` (02b done; carried-over items; replica notes below).
 
+- [ ] **Step 0: Blog from scratch through nginx** — a second fresh data directory (`data-02b-empty`): wizard, "Start empty", Settings (title, tagline, Day and name). Write two posts with an uploaded image and a category, and one page. Through nginx: home, both post URLs, the category and author archives, `/feed/`, the page. Expected: all 200 with the right content, and the posts' URLs follow the chosen structure.
 - [ ] **Step 1: Fresh install through nginx**, as in 02a Task 7 (wizard, import `blog.xml` with media limit 100, posts per page 30, per feed 50). Expected: the inferred `permalink_structure` is `/%year%/%monthnum%/%day%/%postname%/`, and the timezone is the browser's.
 - [ ] **Step 2: Republish timing** — on the dashboard, "Republish site": progress moves, and the time is recorded. Then edit one post's title and record the incremental publish time and the number of files written (log line). Expected: incremental is under 10 % of the full time.
 - [ ] **Step 3: Hands-on** (spec §12.1 item 5, the 02b part):
@@ -731,4 +785,5 @@ test('no Russian entry is orphaned', () => { expect(orphansIn(ruJson, extracted(
 - Roadmap coverage for 02b: editor (T7), WP REST slice incl. method override, `canUser` and unknown-call logging (T5), classic block with on-demand conversion (T8), reusable blocks with the separate pattern editor and dirty-entity saving (T5, T7, T9), media library and upload (T6, T7), statuses and scheduling (T3, T4), incremental and background republish with dependency tracking and the fragment/hard-link design (T2, T3), preview (T4), revisions and autosave with compare, restore and 25 kept (T4, T10), admin i18n (T11), every 02a item labelled 02b (T6 nginx split and body-limit exclusion, T12 the rest).
 - Decided with the user at plan time: db-scheduler for publishing jobs (replicas on PostgreSQL stay possible; H2 means single node; static output is synced between replicas by external tools).
 - Calls made here (reviewable): `@wordpress/block-editor` hosted by our own screen rather than `@wordpress/editor` (the spike's proven path; `@wordpress/editor` would need most of the WordPress posts, settings, taxonomies and statuses REST API). Reusable blocks have owners: authors create and edit their own, editors and administrators edit any, contributors only insert (WordPress maps `wp_block` to post capabilities the same way). A slug change on a published item moves its permalink and leaves a 301, as WordPress's old-slug redirect does.
-- Left for later: per-site permalink and timezone settings screen (plan 03 with site settings), layout/global-styles CSS generator (plan 03; T7 only passes layout settings to the editor), episodes in the editor (plan 05), comment moderation (plan 04), email "pending review" notifications (02c).
+- From scratch (user request at plan review): Task 6b (settings screen, lazy default category, automatic excerpts) and Task 13 Step 0.
+- Left for later: theme and appearance settings (plan 03), layout/global-styles CSS generator (plan 03; T7 only passes layout settings to the editor), episodes in the editor (plan 05), comment moderation (plan 04), email "pending review" notifications (02c).
