@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static site.asm0dey.stillpress.Csrf.csrf;
 import static site.asm0dey.stillpress.db.Tables.SESSION;
+import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import module java.base;
@@ -27,6 +28,8 @@ class SessionAuthTest {
     SessionRepository sessions;
     @Inject
     DSLContext db;
+    @TestHTTPResource("/")
+    URL app;
 
     @BeforeEach
     void reset() {
@@ -103,9 +106,31 @@ class SessionAuthTest {
     }
 
     @Test
-    void csrfGuardSeesThePathTheRouterSees() {
+    void csrfGuardSeesThePathTheRouterSees() throws IOException {
+        // a raw socket, because HTTP clients normalise these paths before sending them
+        var token = "Cookie: csrf-token=" + Csrf.TOKEN + "\r\nX-CSRF-TOKEN: " + Csrf.TOKEN + "\r\n";
         for (var path : List.of("/admin//api/logout", "/admin/%61pi/logout", "/admin/x/../api/logout")) {
-            given().urlEncodingEnabled(false).post(path).then().statusCode(400);
+            assertThat(rawPostStatus(path, "")).as(path + " without a token").isEqualTo(400);
+            // the same path with a token reaches logout, so the 400 above is the CSRF guard, not path rejection
+            assertThat(rawPostStatus(path, token)).as(path + " with a token").isEqualTo(204);
+        }
+    }
+
+    private int rawPostStatus(String path, String headers) throws IOException {
+        try (var s = new Socket(app.getHost(), app.getPort())) {
+            s.setSoTimeout(5000);
+            s
+                .getOutputStream()
+                .write(("POST "
+                        + path
+                        + " HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n"
+                        + headers
+                        + "\r\n")
+                    .getBytes(StandardCharsets.US_ASCII)
+                );
+            var line =
+                    new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.US_ASCII)).readLine();
+            return Integer.parseInt(line.split(" ")[1]);
         }
     }
 

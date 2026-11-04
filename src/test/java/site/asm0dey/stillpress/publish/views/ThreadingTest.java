@@ -11,7 +11,7 @@ class ThreadingTest {
         r.setId(id);
         r.setParentId(parent);
         r.setContent("x");
-        r.setCreatedAt(java.time.LocalDateTime.of(2020, 1, 1, 0, 0));
+        r.setCreatedAt(LocalDateTime.of(2020, 1, 1, 0, 0));
         return r;
     }
 

@@ -1,6 +1,7 @@
 package site.asm0dey.stillpress.publish;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import module java.base;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -69,6 +70,7 @@ class ReleaseSwitcherTest {
     @Test
     void pruneFailureNeverBreaksTheSwapOrDeletesTheLiveRelease() throws Exception {
         var dir = new DataDir(tmp.toString());
+        assumeFalse("root".equals(System.getProperty("user.name")), "root ignores read-only directories");
         var s = switcher(dir);
         var releases = new ArrayList<Path>();
         Path last = null;

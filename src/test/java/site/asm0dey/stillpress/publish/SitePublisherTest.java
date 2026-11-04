@@ -174,14 +174,17 @@ class SitePublisherTest {
     }
 
     @Test
-    void failureAfterEveryFileIsWrittenStillKeepsPreviousReleaseLive() throws Exception {
+    void failureSwappingInTheRenderedReleaseKeepsPreviousReleaseLive() throws Exception {
         var good = publisher.publishAll().release();
         var before = releases();
         // the switch cannot clear a non-empty directory where it stages the new symlink, so it fails after rendering
         var blocker = dataDir.current().resolveSibling("current.tmp");
         Files.createDirectories(blocker.resolve("x"));
         try {
-            assertThatThrownBy(publisher::publishAll).isInstanceOf(UncheckedIOException.class);
+            // the swap runs only after rendering finished, so this failure comes after every file was written
+            assertThatThrownBy(publisher::publishAll)
+                .isInstanceOf(UncheckedIOException.class)
+                .hasCauseInstanceOf(DirectoryNotEmptyException.class);
         } finally {
             ReleaseSwitcher.deleteTree(blocker);
         }
@@ -244,7 +247,7 @@ class SitePublisherTest {
         var item = db.select(ITEM.ID).from(ITEM).where(ITEM.SLUG.eq("qa")).fetchOne(ITEM.ID);
         var held = db
             .insertInto(COMMENT, COMMENT.ITEM_ID, COMMENT.CONTENT, COMMENT.CREATED_AT, COMMENT.STATUS)
-            .values(item, "held", java.time.LocalDateTime.of(2999, 1, 1, 0, 0), "hold")
+            .values(item, "held", LocalDateTime.of(2999, 1, 1, 0, 0), "hold")
             .returningResult(COMMENT.ID)
             .fetchOne(COMMENT.ID);
         db
@@ -257,7 +260,7 @@ class SitePublisherTest {
                     COMMENT.CREATED_AT,
                     COMMENT.STATUS
             )
-            .values(item, held, "Orphan Olga", "reply", java.time.LocalDateTime.of(2999, 1, 2, 0, 0), "approved")
+            .values(item, held, "Orphan Olga", "reply", LocalDateTime.of(2999, 1, 2, 0, 0), "approved")
             .execute();
         var rel = publisher.publishAll().release();
         assertThat(rel.resolve("comments/feed/index.html")).content().contains("Orphan Olga");

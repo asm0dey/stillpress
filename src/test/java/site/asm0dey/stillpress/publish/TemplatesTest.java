@@ -112,10 +112,10 @@ class TemplatesTest {
 
     @Test
     void emptyExcerptFallsBackToTrimmedContentInFeed() {
-        var words = String.join(" ", java.util.Collections.nCopies(60, "w"));
+        var words = String.join(" ", Collections.nCopies(60, "w"));
         var i = item("T", "<p>" + words + " <b>x</b></p>", List.of());
         var xml = render("feed/rss2.xml", "site", site(), "items", List.of(i), "selfUrl", "u", "lastBuildDate", "x");
-        var expected = String.join(" ", java.util.Collections.nCopies(55, "w")) + " [&hellip;]";
+        var expected = String.join(" ", Collections.nCopies(55, "w")) + " [&hellip;]";
         assertThat(xml).contains("<description><![CDATA[" + expected + "]]></description>");
         var withExcerpt = new ItemView(
                 1,

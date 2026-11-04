@@ -86,10 +86,7 @@ class WxrReaderTest {
                 "<rss xmlns:wp=\"http://wordpress.org/export/1.2/\"><channel><title><![CDATA[A &amp; B]]></title>"
                 + "<item><title><![CDATA[Q&A]]></title><wp:post_id>1</wp:post_id><wp:post_type>post</wp:post_type></item>"
                 + "<item><title><![CDATA[Q&amp;amp;A]]></title><wp:post_id>2</wp:post_id><wp:post_type>post</wp:post_type></item></channel></rss>";
-        var d =
-                WxrDocument.read(
-                        new java.io.ByteArrayInputStream(xml.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-        );
+        var d = WxrDocument.read(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
         assertThat(d.site().title()).isEqualTo("A & B");
         assertThat(d.items()).extracting(WxrItem::title).containsExactly("Q&A", "Q&amp;A");
     }
