@@ -80,3 +80,12 @@ interface TinyHtml {
     Serializer: new (s: object, schema: object) => { serialize(node: object): string };
   };
 }
+
+test('a Classic block shows a placeholder until TinyMCE is installed; other blocks render as they are', async () => {
+  const { createElement } = await import('react');
+  const { renderToString } = await import('react-dom/server');
+  const Original = ({ name }: { name: string }) => createElement('p', null, `edit ${name}`);
+  const Filtered = c.withClassicEditor(Original);
+  expect(renderToString(createElement(Filtered, { name: 'core/freeform' }))).toContain('Loading the classic editor…');
+  expect(renderToString(createElement(Filtered, { name: 'core/paragraph' }))).toBe('<p>edit core/paragraph</p>');
+});

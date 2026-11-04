@@ -2,6 +2,8 @@ import {
   type Block as BlockInstance, __unstableSerializeAndClean, createBlock, parse, serialize, setFreeformContentHandlerName,
 } from '@wordpress/blocks';
 import { autop } from '@wordpress/autop';
+import { addFilter } from '@wordpress/hooks';
+import { type ComponentType, createElement, useEffect, useState } from 'react';
 import type { TinyMCE } from 'tinymce';
 
 // HTML outside block delimiters is a Classic block and serializes without delimiters, as in WordPress. Its
@@ -43,6 +45,8 @@ export const SETTINGS = {
   relative_urls: false,
   convert_urls: false,
   entity_encoding: 'raw',
+  // ruling R24: editors and administrators keep everything (WordPress's unfiltered_html); Task 8b refuses
+  // script-capable HTML from authors and contributors on the server
   // old posts carry iframes, embeds, scripts and event attributes; TinyMCE's schema would drop what the user never
   // touched (inside the editor TinyMCE keeps scripts inert)
   valid_elements: '*[*]',
@@ -57,6 +61,24 @@ declare global {
 }
 
 let installed: Promise<void> | null = null;
+let ready = false;
+
+// core/freeform's edit modal reads wp.oldEditor the moment it opens, so a Classic block that appears after load
+// (inserter, autosave, revision, reusable block) shows a placeholder until TinyMCE is installed
+export const withClassicEditor = (BlockEdit: ComponentType<{ name: string }>) =>
+  function ClassicReady(props: { name: string }) {
+    const [state, setState] = useState<'loading' | 'ready' | 'failed'>(ready ? 'ready' : 'loading');
+    const classic = props.name === 'core/freeform';
+    useEffect(() => {
+      if (classic && state === 'loading') installClassicEditor().then(() => setState('ready'), () => setState('failed'));
+    }, [classic, state]);
+    if (!classic || state === 'ready') return createElement(BlockEdit, props);
+    return state === 'loading'
+      ? createElement('p', { role: 'status' }, 'Loading the classic editor…')
+      : createElement('p', { role: 'alert' }, 'Could not load the classic editor. ',
+        createElement('button', { type: 'button', onClick: () => setState('loading') }, 'Try again'));
+  };
+addFilter('editor.BlockEdit', 'stillpress/classic-editor', withClassicEditor);
 
 /** Loads TinyMCE 4 and the globals core/freeform's edit modal reads; only classic items pay for the download. */
 export function installClassicEditor(): Promise<void> {
@@ -110,4 +132,5 @@ async function load(): Promise<void> {
         ?? (document.getElementById(id) as HTMLTextAreaElement | null)?.value ?? '',
     },
   };
+  ready = true;
 }

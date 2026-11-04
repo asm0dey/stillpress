@@ -180,9 +180,6 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     return () => window.removeEventListener('beforeunload', warn);
   }, [unsaved]);
 
-  // a Classic block inserted into a blocks post
-  useEffect(() => { if (hasClassic(blocks)) installClassicEditor(); }, [blocks]);
-
   const autosave = useCallback(async () => {
     const { title: t, blocks: b, excerpt, format } = latest.current;
     // the autosave carries no format; the preview renders it in the item's stored one
