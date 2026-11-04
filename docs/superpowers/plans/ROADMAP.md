@@ -55,10 +55,8 @@ Split into three plans (agreed 2026-11-04):
 
 ### Carried over from 02a (acceptance run)
 
-- 02b: `GET /admin` without the trailing slash answers the site's 404 (Quinoa serves only `/admin/`), while the admin's own nav link and post-login redirect point at `/admin`; redirect it to `/admin/`.
 - 02b: an author who opens `/admin/users` directly sees "Could not load the users." and the Add user form; hide screens the role cannot use.
 - 02c: set-password links are built from the imported site URL, so before cutover they point at the live WordPress host; invites and email reset reuse the same builder and should use the admin's own host until cutover.
-- Docs: `docs/deploy/nginx-site.conf.example` should mention `STILLPRESS_TRUSTED_PROXIES` for nginx on another host or in a container.
 
 ## Plan 03: Themes & Site Editor
 

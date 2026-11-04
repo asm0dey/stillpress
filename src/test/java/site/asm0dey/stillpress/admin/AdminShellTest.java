@@ -29,6 +29,19 @@ class AdminShellTest {
     }
 
     @Test
+    void adminWithoutSlashRedirects() {
+        given().redirects().follow(false).get("/admin").then().statusCode(302).header("Location", "/admin/");
+        given()
+            .redirects()
+            .follow(false)
+            .urlEncodingEnabled(false)
+            .get("/admin?x=1")
+            .then()
+            .statusCode(302)
+            .header("Location", "/admin/?x=1");
+    }
+
+    @Test
     void apiIsNotSwallowedBySpaRouting() {
         given().get("/admin/api/setup").then().statusCode(200).contentType(startsWith("application/json"));
         // an unknown API path is a real 404, not the SPA shell

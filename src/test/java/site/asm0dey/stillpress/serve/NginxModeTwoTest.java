@@ -19,6 +19,8 @@ import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.images.builder.Transferable;
 import site.asm0dey.stillpress.TestStore;
+import site.asm0dey.stillpress.account.Limiters;
+import site.asm0dey.stillpress.account.LoginLimiter;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.publish.SitePublisher;
 
@@ -34,6 +36,8 @@ class NginxModeTwoTest {
     SitePublisher publisher;
     @Inject
     DataDir dataDir;
+    @Inject
+    LoginLimiter limiter;
     @TestHTTPResource("/")
     URL app;
 
@@ -115,6 +119,33 @@ class NginxModeTwoTest {
     @Test
     void adminIsProxied() {
         get("/admin/api/setup").then().statusCode(200).contentType(startsWith("application/json"));
+    }
+
+    @Test
+    void adminWithoutSlashAndWpLoginRedirectToAdmin() {
+        get("/admin").then().statusCode(302).header("Location", "/admin/");
+        get("/wp-login.php").then().statusCode(302).header("Location", "/admin/");
+    }
+
+    @Test
+    void clientSentForwardedForCannotChangeTheClientIp() {
+        Limiters.reset(limiter);
+        try {
+            for (int i = 0; i <= 20; i++) {
+                given()
+                    .baseUri("http://" + nginx.getHost())
+                    .port(nginx.getMappedPort(80))
+                    .header("X-Forwarded-For", "198.51.100." + i)
+                    .header("X-Requested-With", "stillpress")
+                    .contentType("application/json")
+                    .body(Map.of("login", "nobody" + i, "password", "wrong horse battery!"))
+                    .post("/admin/api/login")
+                    .then()
+                    .statusCode(i < 20 ? 401 : 429);
+            }
+        } finally {
+            Limiters.reset(limiter);
+        }
     }
 
     @Test

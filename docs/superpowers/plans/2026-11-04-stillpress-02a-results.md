@@ -44,11 +44,11 @@ Every row matches plan 01's count exactly; there is no new cause.
 
 | Problem | Detail | Owner |
 |---|---|---|
-| `GET /admin` (no trailing slash) → 404 | Both through nginx and directly on :8080 it answers the site's 404 page. `/admin/`, `/admin/users`, `/admin/login` are 200. The admin's own "Stillpress" nav link and the post-login redirect point at `/admin`, so a reload there (or typing the address) shows the site's 404. Quinoa's `ui-root-path=/admin` serves only `/admin/`. | 02b (first task touching the shell): redirect `/admin` → `/admin/`. |
+| `GET /admin` (no trailing slash) → 404 | Both through nginx and directly on :8080 it answers the site's 404 page. `/admin/`, `/admin/users`, `/admin/login` are 200. The admin's own "Stillpress" nav link and the post-login redirect point at `/admin`, so a reload there (or typing the address) shows the site's 404. Quinoa's `ui-root-path=/admin` serves only `/admin/`. | Fixed in 02a: `/admin` (exactly) → 302 `/admin/`, query kept (`LegacyAdminRoutes`). |
 | Set-password links use the imported site URL | After the import the link is `https://blog.asm0dey.ru/admin/set-password?token=…`. Before cutover that host is still WordPress, so the link must be edited by hand to the Stillpress host. | 02c, with invites and email reset (same link builder). |
 | Author on `/admin/users` | An author who types the address gets "Could not load the users." plus the Add user form; the server correctly answers 403. Cosmetic. | 02b (role-aware screens). |
 | `nginx-config --help` | Prints "Unknown option: '--help'" before the usage. No command has `--help` wired. | Hardening backlog. |
-| Proxy trust in Docker | The README tells the reader to set `STILLPRESS_TRUSTED_PROXIES` when nginx is elsewhere; the example config does not mention it, and with Docker it is always needed. | Docs, with the next README touch. |
+| Proxy trust in Docker | The README tells the reader to set `STILLPRESS_TRUSTED_PROXIES` when nginx is elsewhere; the example config does not mention it, and with Docker it is always needed. | Fixed in 02a: the example config says so. |
 
 ## Not checked here
 
