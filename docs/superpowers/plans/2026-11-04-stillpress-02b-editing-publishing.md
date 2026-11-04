@@ -807,6 +807,53 @@ test('format stays classic until a block is added or converted', () => {
 
 ---
 
+### Task 8b: Authors and contributors cannot save script-capable HTML
+
+(Added at execution, user decision 2026-11-04.) WordPress grants `unfiltered_html` only to administrators and editors; everything else is filtered on save. Here the server **refuses** such a save instead of stripping it, so nothing changes silently.
+
+**Files:**
+- Create: `content/HtmlPolicy.java`
+- Modify: `content/ItemService.java` (update, autosave), `content/ReusableBlockService.java` (create, update, autosave), `content/Capabilities.java` (`canPostUnfilteredHtml(Role)`: administrator, editor)
+- Test: `content/HtmlPolicyTest.java`, additions to `admin/ItemsResourceTest.java`, `admin/ReusableBlocksResourceTest.java`
+
+**Interfaces:**
+- Consumes: `BlockParser` (block comment delimiters stay untouched), jsoup (already a dependency).
+- Produces:
+  - `final class HtmlPolicy { static List<String> violations(String body) }` — empty when allowed. It reports, per finding, a short human description (`<script> element`, `onclick attribute on <a>`, `javascript: URL in href`, `<iframe> from example.com`). It checks the HTML parts of the body. Block comment delimiters and their JSON attributes are parsed with `BlockParser`, and any string attribute value that contains `<` is checked as HTML too. Refused:
+    - `script`, `style`, `object`, `embed`, `base`, `form`, `meta`, `link` elements;
+    - any `on*` attribute;
+    - `javascript:`, `vbscript:` and `data:` (except `data:image/` on `img src`) in `href`, `src`, `action`, `formaction`, `xlink:href`;
+    - `iframe` whose `src` host is not in the oEmbed allow-list (`youtube.com`, `youtube-nocookie.com`, `youtu.be`, `vimeo.com`, `player.vimeo.com`, exact or `.`-suffix).
+  - Title and excerpt are checked as well.
+  - Item and block saves and autosaves by a role without `canPostUnfilteredHtml`: when `violations` is non-empty → 400 `{"error":"unsafe_html","field":"body","violations":[...]}`. The check runs before `ImportGuard.close()` and before any write (R17). Administrators and editors are never checked.
+  - Editor UI: a 400 `unsafe_html` shows "This post contains HTML your role cannot publish: …" with the list, and keeps the text.
+
+- [ ] **Step 1: Write failing tests**
+
+```java
+class HtmlPolicyTest {
+  @Test void plainBlocksPass() { assertThat(HtmlPolicy.violations("<!-- wp:paragraph --><p><a href=\"/x\">x</a></p><!-- /wp:paragraph -->")).isEmpty(); }
+  @Test void scriptAndHandlersAreReported() {
+    assertThat(HtmlPolicy.violations("<p onclick=\"go()\">a</p><script>x()</script>"))
+      .containsExactlyInAnyOrder("onclick attribute on <p>", "<script> element");
+  }
+  @Test void javascriptUrl() { assertThat(HtmlPolicy.violations("<a href=\" JavaScript:alert(1)\">x</a>")).hasSize(1); }
+  @Test void youtubeIframeAllowedOtherNot() {
+    assertThat(HtmlPolicy.violations("<iframe src=\"https://www.youtube.com/embed/x\"></iframe>")).isEmpty();
+    assertThat(HtmlPolicy.violations("<iframe src=\"https://evil.example/\"></iframe>")).hasSize(1);
+  }
+  @Test void htmlInsideBlockAttributesIsChecked() { /* <!-- wp:x {"content":"<img src=x onerror=y>"} /--> → 1 violation */ }
+  @Test void dataImageAllowedOnImgOnly() { }
+}
+// ItemsResourceTest: author saving "<p onclick=...>" → 400 unsafe_html, body unchanged, import still open on a fresh site; editor saving it → 200
+// ReusableBlocksResourceTest: author's own block with <script> → 400; editor → 200
+```
+
+- [ ] **Step 2: Run, verify fail. Step 3: Implement. Step 4: Run, verify pass; full verify.**
+- [ ] **Step 5: Commit and push** — `git commit -m "feat: authors and contributors cannot save script-capable HTML"`.
+
+---
+
 ### Task 9: Reusable blocks screen
 
 **Files:**
@@ -949,6 +996,7 @@ test('no Russian entry is orphaned', () => { expect(orphansIn(ruJson, extracted(
 - Decided with the user at plan time: db-scheduler for publishing jobs (replicas on PostgreSQL stay possible; H2 means single node; static output is synced between replicas by external tools).
 - Calls made here (reviewable): `@wordpress/block-editor` hosted by our own screen rather than `@wordpress/editor` (the spike's proven path; `@wordpress/editor` would need most of the WordPress posts, settings, taxonomies and statuses REST API). Reusable blocks have owners: authors create and edit their own, editors and administrators edit any, contributors only insert (WordPress maps `wp_block` to post capabilities the same way). A slug change on a published item moves its permalink and leaves a 301, as WordPress's old-slug redirect does.
 - Reset to experiment and then import (user request at plan review): Task 6d.
+- Script-capable HTML from authors and contributors is refused on save (user decision at execution): Task 8b.
 - Import closed for sites started empty (user request at plan review): Task 1b, the Global Constraint, Review Focus 5, `ImportClosedTest` in Task 6c.
 - Back office parity (user request at plan review): Task 6c plus the item fields in Tasks 4 and 7, and the public-id rule in Global Constraints.
 - From scratch (user request at plan review): Task 6b (settings screen, lazy default category, automatic excerpts) and Task 13 Step 0.
