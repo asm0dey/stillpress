@@ -1,6 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
-import static io.restassured.RestAssured.given;
+import static site.asm0dey.stillpress.Csrf.csrf;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import io.quarkus.test.junit.QuarkusTest;
@@ -40,7 +40,7 @@ class ImportMediaLimitTest {
         store.reset();
         var id = users.create("admin", "admin@example.org", "admin", Role.ADMINISTRATOR).getId();
         users.setPassword(id, Passwords.hash("correct horse battery"));
-        var req = given().header("X-Requested-With", "stillpress").cookie("sp_session", sessions.create(id));
+        var req = csrf().cookie("sp_session", sessions.create(id));
         try (var in = TestStore.sample()) {
             req
                 .multiPart("file", "export.xml", in.readAllBytes(), "text/xml")

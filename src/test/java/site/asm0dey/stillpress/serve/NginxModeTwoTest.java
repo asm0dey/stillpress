@@ -1,5 +1,6 @@
 package site.asm0dey.stillpress.serve;
 
+import static site.asm0dey.stillpress.Csrf.csrf;
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -132,11 +133,10 @@ class NginxModeTwoTest {
         Limiters.reset(limiter);
         try {
             for (int i = 0; i <= 20; i++) {
-                given()
+                csrf()
                     .baseUri("http://" + nginx.getHost())
                     .port(nginx.getMappedPort(80))
                     .header("X-Forwarded-For", "198.51.100." + i)
-                    .header("X-Requested-With", "stillpress")
                     .contentType("application/json")
                     .body(Map.of("login", "nobody" + i, "password", "wrong horse battery!"))
                     .post("/admin/api/login")

@@ -1,6 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
-import static io.restassured.RestAssured.given;
+import static site.asm0dey.stillpress.Csrf.csrf;
 import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -144,7 +144,7 @@ class UsersResourceTest {
     }
 
     private RequestSpecification as(String cookie) {
-        return given().header("X-Requested-With", "stillpress").contentType(JSON).cookie("sp_session", cookie);
+        return csrf().contentType(JSON).cookie("sp_session", cookie);
     }
 
     private RequestSpecification asAdmin() {
@@ -158,18 +158,13 @@ class UsersResourceTest {
     }
 
     private static Response setPassword(String token, String password) {
-        return given()
-            .header("X-Requested-With", "stillpress")
+        return csrf()
             .contentType(JSON)
             .body(Map.of("token", token, "password", password))
             .post("/admin/api/set-password");
     }
 
     private static Response login(String login, String password) {
-        return given()
-            .header("X-Requested-With", "stillpress")
-            .contentType(JSON)
-            .body(Map.of("login", login, "password", password))
-            .post("/admin/api/login");
+        return csrf().contentType(JSON).body(Map.of("login", login, "password", password)).post("/admin/api/login");
     }
 }

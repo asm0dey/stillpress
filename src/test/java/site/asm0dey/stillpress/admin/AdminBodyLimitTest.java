@@ -47,11 +47,7 @@ class AdminBodyLimitTest {
         try (var s = new Socket(app.getHost(), app.getPort())) {
             s.setSoTimeout(5000);
             var out = s.getOutputStream();
-            out.write(("POST "
-                    + path
-                    + " HTTP/1.1\r\nHost: localhost\r\nX-Requested-With: stillpress\r\n"
-                    + headers
-                    + "\r\n\r\n")
+            out.write(("POST " + path + " HTTP/1.1\r\nHost: localhost\r\n" + headers + "\r\n\r\n")
                 .getBytes(StandardCharsets.US_ASCII)
             );
             out.flush();

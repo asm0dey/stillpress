@@ -1,10 +1,10 @@
 package site.asm0dey.stillpress.account;
 
 import static io.restassured.RestAssured.given;
+import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
+import static site.asm0dey.stillpress.Csrf.csrf;
 import static site.asm0dey.stillpress.db.Tables.SESSION;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -12,6 +12,7 @@ import module java.base;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import site.asm0dey.stillpress.Csrf;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
@@ -83,26 +84,43 @@ class SessionAuthTest {
     }
 
     @Test
-    void postWithoutCsrfHeaderIs403() {
-        given().post("/admin/api/logout").then().statusCode(403).body(equalTo("Missing X-Requested-With"));
-        given().header("X-Requested-With", "XMLHttpRequest").delete("/admin/api/logout").then().statusCode(403);
+    void stateChangingCallWithoutValidCsrfTokenIs400() {
+        given().post("/admin/api/logout").then().statusCode(400);
+        given().header("X-CSRF-TOKEN", Csrf.TOKEN).post("/admin/api/logout").then().statusCode(400);
+        given()
+            .cookie("csrf-token", Csrf.TOKEN)
+            .contentType(JSON)
+            .body("{}")
+            .post("/admin/api/login")
+            .then()
+            .statusCode(400);
+        given()
+            .cookie("csrf-token", Csrf.TOKEN)
+            .header("X-CSRF-TOKEN", "d3JvbmctdG9rZW4tLS0tLQ")
+            .post("/admin/api/logout")
+            .then()
+            .statusCode(400);
     }
 
     @Test
     void csrfGuardSeesThePathTheRouterSees() {
         for (var path : List.of("/admin//api/logout", "/admin/%61pi/logout", "/admin/x/../api/logout")) {
-            given().urlEncodingEnabled(false).post(path).then().statusCode(403);
+            given().urlEncodingEnabled(false).post(path).then().statusCode(400);
         }
     }
 
     @Test
-    void csrfHeaderPassesTheFilter() {
+    void csrfTokenFromAnAnonymousGetPassesTheGuard() {
+        var cookie = given().get("/admin/api/setup").then().statusCode(200).extract().detailedCookie("csrf-token");
+        // the admin UI reads it from JavaScript to send it back in the header
+        assertThat(cookie.isHttpOnly()).isFalse();
         given()
-            .header("X-Requested-With", "stillpress")
+            .cookie("csrf-token", cookie.getValue())
+            .header("X-CSRF-TOKEN", cookie.getValue())
             .post("/admin/api/logout")
             .then()
-            .statusCode(not(403))
-            .body(not(containsString("Missing X-Requested-With")));
+            .statusCode(204);
+        csrf().post("/admin/api/logout").then().statusCode(204);
     }
 
     @Test

@@ -27,14 +27,17 @@ export interface ImportStatus {
 }
 
 /**
- * Calls the admin JSON API. Every request carries the CSRF header; a FormData body goes as multipart (the browser
- * sets its Content-Type), anything else as JSON. Non-2xx throws an ApiError; T is the JSON response type (void for 204).
+ * Calls the admin JSON API. Every request echoes the csrf-token cookie (set by any API GET) in X-CSRF-TOKEN; a
+ * FormData body goes as multipart (the browser sets its Content-Type), anything else as JSON. Non-2xx throws an
+ * ApiError; T is the JSON response type (void for 204).
  */
 export async function api<T = void>(
   path: string,
   { method = 'GET', body }: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  const headers: Record<string, string> = { 'X-Requested-With': 'stillpress' };
+  const headers: Record<string, string> = {};
+  const token = document.cookie.match(/(?:^|; )csrf-token=([^;]*)/)?.[1];
+  if (token) headers['X-CSRF-TOKEN'] = token;
   const form = body instanceof FormData;
   if (body !== undefined && !form) headers['Content-Type'] = 'application/json';
   const res = await fetch('/admin/api' + path, {

@@ -1,5 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
+import static site.asm0dey.stillpress.Csrf.csrf;
 import static io.restassured.RestAssured.given;
 import static io.restassured.http.ContentType.JSON;
 import static io.restassured.matcher.RestAssuredMatchers.detailedCookie;
@@ -64,8 +65,7 @@ class SetupResourceTest {
 
     @Test
     void homeUrlAndSecureCookieFollowTheForwardedRequest() {
-        given()
-            .header("X-Requested-With", "stillpress")
+        csrf()
             .header("X-Forwarded-Proto", "https")
             .header("X-Forwarded-Host", "blog.example.org")
             .contentType(JSON)
@@ -80,8 +80,7 @@ class SetupResourceTest {
     @Test
     void keepsAnImportedHomeUrl() {
         settings.put("home_url", "https://blog.example.ru");
-        given()
-            .header("X-Requested-With", "stillpress")
+        csrf()
             .header("X-Forwarded-Host", "tunnel.example.net")
             .contentType(JSON)
             .body(body(token.current().orElseThrow(), "admin0"))
@@ -184,10 +183,6 @@ class SetupResourceTest {
     }
 
     private static Response post(Map<String, String> body) {
-        return given()
-            .header("X-Requested-With", "stillpress")
-            .contentType(JSON)
-            .body(body)
-            .post("/admin/api/setup");
+        return csrf().contentType(JSON).body(body).post("/admin/api/setup");
     }
 }

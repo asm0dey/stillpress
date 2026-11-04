@@ -1,5 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
+import static site.asm0dey.stillpress.Csrf.csrf;
 import static io.restassured.RestAssured.given;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -161,6 +162,17 @@ class ImportResourceTest {
     }
 
     @Test
+    void uploadWithoutCsrfTokenIs400() {
+        given()
+            .cookie("sp_session", adminCookie)
+            .multiPart("file", "export.xml", sampleBytes(), "text/xml")
+            .post("/admin/api/import")
+            .then()
+            .statusCode(400);
+        as(adminCookie).get("/admin/api/import").then().body("state", equalTo("idle"));
+    }
+
+    @Test
     void nonAdministratorIs403() {
         as(writerCookie)
             .multiPart("file", "export.xml", sampleBytes(), "text/xml")
@@ -206,7 +218,7 @@ class ImportResourceTest {
     }
 
     private static RequestSpecification as(String cookie) {
-        return given().header("X-Requested-With", "stillpress").cookie("sp_session", cookie);
+        return csrf().cookie("sp_session", cookie);
     }
 
     private static byte[] sampleBytes() {

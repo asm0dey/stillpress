@@ -1,12 +1,12 @@
 package site.asm0dey.stillpress.admin;
 
+import static site.asm0dey.stillpress.Csrf.csrf;
 import static io.restassured.RestAssured.given;
 import static io.restassured.http.ContentType.JSON;
 import static io.restassured.matcher.RestAssuredMatchers.detailedCookie;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
 import jakarta.inject.Inject;
@@ -64,8 +64,7 @@ class AuthResourceTest {
     @Test
     void missingFieldsAre401() {
         for (var body : List.of(Map.of("login", "admin"), Map.of("password", "correct horse battery"), Map.of())) {
-            given()
-                .header("X-Requested-With", "stillpress")
+            csrf()
                 .contentType(JSON)
                 .body(body)
                 .post("/admin/api/login")
@@ -121,18 +120,16 @@ class AuthResourceTest {
     @Test
     void ipLimitUsesTheForwardedClientAddress() {
         for (int i = 0; i < 20; i++) {
-            given()
+            csrf()
                 .header("X-Forwarded-For", "203.0.113.7")
-                .header("X-Requested-With", "stillpress")
                 .contentType(JSON)
                 .body(Map.of("login", "user" + i, "password", "wrong horse battery!"))
                 .post("/admin/api/login")
                 .then()
                 .statusCode(401);
         }
-        given()
+        csrf()
             .header("X-Forwarded-For", "203.0.113.7")
-            .header("X-Requested-With", "stillpress")
             .contentType(JSON)
             .body(Map.of("login", "admin", "password", "correct horse battery"))
             .post("/admin/api/login")
@@ -149,9 +146,8 @@ class AuthResourceTest {
 
     @Test
     void secureCookieBehindHttpsProxy() {
-        given()
+        csrf()
             .header("X-Forwarded-Proto", "https")
-            .header("X-Requested-With", "stillpress")
             .contentType(JSON)
             .body(Map.of("login", "admin", "password", "correct horse battery"))
             .post("/admin/api/login")
@@ -178,8 +174,7 @@ class AuthResourceTest {
     @Test
     void logoutKillsTheSession() {
         var cookie = login("admin", "correct horse battery").cookie("sp_session");
-        given()
-            .header("X-Requested-With", "stillpress")
+        csrf()
             .cookie("sp_session", cookie)
             .post("/admin/api/logout")
             .then()
@@ -187,13 +182,15 @@ class AuthResourceTest {
             .cookie("sp_session", detailedCookie().value("").maxAge(0));
         given().cookie("sp_session", cookie).get("/admin/api/session").then().statusCode(401);
         // anonymous logout is fine too
-        given().header("X-Requested-With", "stillpress").post("/admin/api/logout").then().statusCode(204);
+        csrf().post("/admin/api/logout").then().statusCode(204);
     }
 
     @Test
     void setPasswordTokenIsSingleUse() {
         var raw = tokens.create(adminId, "set_password", Duration.ofHours(24));
-        setPassword(raw, "a brand new password").then().statusCode(204).header("Set-Cookie", nullValue());
+        // setting a password does not log in
+        assertThat(setPassword(raw, "a brand new password").then().statusCode(204).extract().cookies())
+            .doesNotContainKey("sp_session");
         setPassword(raw, "another new password").then().statusCode(410).body("error", equalTo("invalid_token"));
         login("admin", "a brand new password").then().statusCode(204);
     }
@@ -252,21 +249,13 @@ class AuthResourceTest {
     }
 
     private static Response login(String login, String password) {
-        return given()
-            .header("X-Requested-With", "stillpress")
-            .contentType(JSON)
-            .body(Map.of("login", login, "password", password))
-            .post("/admin/api/login");
+        return csrf().contentType(JSON).body(Map.of("login", login, "password", password)).post("/admin/api/login");
     }
 
     private static Response setPassword(String token, String password) {
         var body = new HashMap<String, String>();
         body.put("token", token);
         body.put("password", password);
-        return given()
-            .header("X-Requested-With", "stillpress")
-            .contentType(JSON)
-            .body(body)
-            .post("/admin/api/set-password");
+        return csrf().contentType(JSON).body(body).post("/admin/api/set-password");
     }
 }
