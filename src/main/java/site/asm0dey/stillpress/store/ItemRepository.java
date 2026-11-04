@@ -1,6 +1,9 @@
 package site.asm0dey.stillpress.store;
 
-import static site.asm0dey.stillpress.db.Tables.ITEM;
+import static org.jooq.impl.DSL.field;
+import static org.jooq.impl.DSL.notExists;
+import static org.jooq.impl.DSL.selectOne;
+import static site.asm0dey.stillpress.db.Tables.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
@@ -29,6 +32,23 @@ public class ItemRepository {
 
     public int count() {
         return db.fetchCount(ITEM);
+    }
+
+    /**
+     * No items, comments, media, terms or reusable blocks: nothing an import would collide with.
+     */
+    public boolean contentEmpty() {
+        return db
+            .select(
+                    field(notExists(selectOne().from(ITEM))
+                        .and(notExists(selectOne().from(COMMENT)))
+                        .and(notExists(selectOne().from(MEDIA)))
+                        .and(notExists(selectOne().from(TERM)))
+                        .and(notExists(selectOne().from(REUSABLE_BLOCK)))
+                    )
+            )
+            .fetchSingle()
+            .value1();
     }
 
     /**

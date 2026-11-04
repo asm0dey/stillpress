@@ -53,16 +53,21 @@ public class WordPressImporter {
         return importWxr(in, mediaLimit, ImportOptions.DEFAULTS);
     }
 
+    public ImportReport importWxr(InputStream in, int mediaLimit, ImportOptions options) throws AlreadyImportedException {
+        return importWxr(in, mediaLimit, options, ImportListener.NONE);
+    }
+
     /**
      * @param mediaLimit download at most this many distinct originals; later ones stay at the source and get no row
      */
     @Transactional
     @TransactionConfiguration(timeout = 24 * 60 * 60)
-    public ImportReport importWxr(InputStream in, int mediaLimit, ImportOptions options) throws AlreadyImportedException {
+    public ImportReport importWxr(InputStream in, int mediaLimit, ImportOptions options, ImportListener listener)
+            throws AlreadyImportedException {
         if (items.count() > 0) {
             throw new AlreadyImportedException();
         }
-        var run = new Run(mediaLimit, options);
+        var run = new Run(mediaLimit, options, listener);
         WxrReader.read(in, run);
         run.finish();
         return run.report();
@@ -75,11 +80,15 @@ public class WordPressImporter {
     private final class Run implements WxrHandler {
         private final int mediaLimit;
         private final ImportOptions options;
+        private final ImportListener listener;
         private final Set<String> skippedMedia = new LinkedHashSet<>();
 
-        Run(int mediaLimit, ImportOptions options) {
+        Run(int mediaLimit, ImportOptions options, ImportListener listener) {
             this.mediaLimit = mediaLimit;
             this.options = options;
+            this.listener = listener;
+            // users created before the import (the wizard's administrator) keep their slugs
+            authorSlugs.addAll(db.select(AUTHOR.SLUG).from(AUTHOR).fetch(AUTHOR.SLUG));
         }
 
         private String homeScheme = "https", homeAuth = "", siteAuth = "";
@@ -130,11 +139,19 @@ public class WordPressImporter {
 
         @Override
         public void author(WxrAuthor a) {
-            var r = db.newRecord(AUTHOR);
-            r.setLogin(a.login());
-            r.setDisplayName(a.displayName());
-            r.setEmail(a.email());
-            r.setSlug(uniqueAuthorSlug(a));
+            // an existing user with this login (the wizard's administrator) is the same person: keep role and password
+            var r = db.fetchOne(AUTHOR, AUTHOR.LOGIN.eq(a.login()));
+            if (r == null) {
+                r = db.newRecord(AUTHOR);
+                r.setLogin(a.login());
+                r.setSlug(uniqueAuthorSlug(a));
+            }
+            if (r.getDisplayName() == null) {
+                r.setDisplayName(a.displayName());
+            }
+            if (r.getEmail() == null) {
+                r.setEmail(a.email());
+            }
             r.setSourceId(a.id());
             r.store();
             authorIds.put(a.login(), r.getId());
@@ -238,7 +255,7 @@ public class WordPressImporter {
             }
             r.store();
             long id = r.getId();
-            itemCount++;
+            listener.item(++itemCount);
 
             if (attachment != null) {
                 db.update(MEDIA).set(MEDIA.ITEM_ID, id).where(MEDIA.SOURCE_URL.eq(attachment)).execute();
@@ -429,7 +446,7 @@ public class WordPressImporter {
             r.setMimeType(URLConnection.guessContentTypeFromName(name));
             r.setSha256(sha);
             r.store();
-            mediaCount++;
+            listener.media(++mediaCount);
             return Permalinks.encode(path);
         }
 

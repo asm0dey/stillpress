@@ -5,6 +5,10 @@ package site.asm0dey.stillpress.importer;
  */
 public class AlreadyImportedException extends Exception {
     public AlreadyImportedException() {
-        super("store already contains imported items; import is one-shot");
+        this("store already contains imported items; import is one-shot");
+    }
+
+    public AlreadyImportedException(String message) {
+        super(message);
     }
 }

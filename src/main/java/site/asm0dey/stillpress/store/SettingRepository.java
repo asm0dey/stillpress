@@ -20,4 +20,8 @@ public class SettingRepository {
             db.insertInto(SETTING, SETTING.KEY, SETTING.VALUE).values(key, value).execute();
         }
     }
+
+    public void delete(String key) {
+        db.deleteFrom(SETTING).where(SETTING.KEY.eq(key)).execute();
+    }
 }

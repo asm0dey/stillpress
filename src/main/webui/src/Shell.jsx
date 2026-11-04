@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api } from './api.js';
 
-/** The admin header; the Users link shows for administrators only. */
+/** The admin header; the Users and Import links show for administrators only. */
 export default function Shell({ children }) {
   const navigate = useNavigate();
   const [role, setRole] = useState(null);
@@ -21,6 +21,7 @@ export default function Shell({ children }) {
         <nav>
           <Link to="/" className="brand">Stillpress</Link>
           {role === 'administrator' && <Link to="/users">Users</Link>}
+          {role === 'administrator' && <Link to="/import">Import</Link>}
         </nav>
         <button type="button" onClick={logout}>Log out</button>
       </header>

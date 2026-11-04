@@ -32,6 +32,8 @@ public class ImportCommand implements Callable<Integer> {
     String tagBase;
     @Inject
     WordPressImporter importer;
+    @Inject
+    ImportGuard guard;
 
     ImportOptions options() {
         return new ImportOptions(postsPerPage, categoryBase, tagBase, postsPerRss);
@@ -51,12 +53,26 @@ public class ImportCommand implements Callable<Integer> {
             return 2;
         }
         try (var in = new BufferedInputStream(Files.newInputStream(wxr))) {
-            var report = importer.importWxr(in, mediaLimit == null ? Integer.MAX_VALUE : mediaLimit, options);
+            try {
+                guard.begin();
+            } catch (AlreadyImportedException e) {
+                System.err.println(e.getMessage());
+                return 1;
+            }
+            ImportReport report;
+            try {
+                report = importer.importWxr(in, mediaLimit == null ? Integer.MAX_VALUE : mediaLimit, options);
+            } catch (AlreadyImportedException e) {
+                guard.failed(e.getMessage());
+                System.err.println(e.getMessage());
+                return 1;
+            } catch (RuntimeException e) {
+                guard.failed(e.getMessage());
+                throw e;
+            }
+            guard.done();
             System.out.print(report.toText(mediaLimit));
             return 0;
-        } catch (AlreadyImportedException e) {
-            System.err.println(e.getMessage());
-            return 1;
         }
     }
 }

@@ -12,6 +12,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
+import site.asm0dey.stillpress.account.Passwords;
+import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.store.*;
 
@@ -40,10 +42,14 @@ class WordPressImporterTest {
     DataDir dataDir;
     @Inject
     DSLContext db;
+    @Inject
+    AuthorRepository users;
 
     @BeforeEach
     void clean() {
         store.reset();
+        // other test classes import through the same fetcher
+        fetcher.reset();
     }
 
     @AfterEach
@@ -123,6 +129,51 @@ class WordPressImporterTest {
     void secondImportRefused() throws Exception {
         importer.importWxr(sample());
         assertThatThrownBy(() -> importer.importWxr(sample())).isInstanceOf(AlreadyImportedException.class);
+    }
+
+    @Test
+    void existingAdministratorIsMergedByLogin() throws Exception {
+        var admin = users.create("mama", "m@example.org", null, Role.ADMINISTRATOR);
+        users.setPassword(admin.getId(), Passwords.hash("correct horse battery"));
+        store.importSample();
+        var mama = users.findByLoginOrEmail("mama").orElseThrow();
+        assertThat(mama.getId()).isEqualTo(admin.getId());
+        assertThat(mama.getRole()).isEqualTo("administrator");
+        assertThat(mama.getPasswordHash()).isEqualTo(users.findById(admin.getId()).orElseThrow().getPasswordHash());
+        assertThat(mama.getSlug()).isEqualTo("mama");
+        assertThat(mama.getEmail()).as("kept").isEqualTo("m@example.org");
+        assertThat(mama.getDisplayName()).as("filled where null").isEqualTo("Мама");
+        assertThat(mama.getSourceId()).isEqualTo(1L);
+        assertThat(users.findByLoginOrEmail("papa").orElseThrow().getRole()).isEqualTo("author");
+        assertThat(items.findByPermalink(MONTH).orElseThrow().getAuthorId()).isNotNull();
+    }
+
+    @Test
+    void newAuthorSlugsAvoidExistingUsers() throws Exception {
+        users.create("Papa", "other@example.org", "Other", Role.EDITOR);
+        store.importSample();
+        assertThat(users.findByLoginOrEmail("papa").orElseThrow().getSlug()).isEqualTo("papa-2");
+    }
+
+    @Test
+    void listenerSeesEveryItemAndMediaFile() throws Exception {
+        var lastItem = new AtomicInteger();
+        var lastMedia = new AtomicInteger();
+        var listener = new ImportListener() {
+            @Override
+            public void item(int done) {
+                assertThat(done).isEqualTo(lastItem.get() + 1);
+                lastItem.set(done);
+            }
+
+            @Override
+            public void media(int done) {
+                lastMedia.set(done);
+            }
+        };
+        var report = importer.importWxr(sample(), Integer.MAX_VALUE, ImportOptions.DEFAULTS, listener);
+        assertThat(lastItem.get()).isEqualTo(report.items());
+        assertThat(lastMedia.get()).isEqualTo(report.media()).isPositive();
     }
 
     @Test
