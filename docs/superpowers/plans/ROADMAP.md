@@ -23,6 +23,8 @@ Split into three plans (agreed 2026-11-04):
   - Scheduled publishing: db-scheduler (chosen at plan time). Replicas stay possible on PostgreSQL; H2 means a single node.
 - **02b follow-up (before 02c): incremental publish cost**
   - Acceptance measured an incremental publish at ~25% of a full publish, against a target under 10%. On the real blog: a full publish wrote 1,008 files in ~1,012 ms; a one-post incremental wrote 21 files in 228–260 ms.
+  - Leading hypothesis, to confirm with the timings: feeds don't use cached fragments. `SitePublisher.feed()` calls `views(...)` for the newest `posts_per_rss` posts (50 on the blog), and `ViewFactory.item` re-renders each post's full body and runs per-post queries for terms, author and comments. A one-post edit dirties about 8 bases: about 400 body renders and about 1,200 queries.
+  - Likely fix: cache a per-post feed `<item>` fragment next to the archive entry, with the same invalidation, and batch the per-item queries in `ViewFactory`.
   - First log per-phase timings: lock, snapshot, summaries/terms/published_item reads, the hard-link walk over unchanged files, rendering, fragment reads/writes, activate, bookkeeping. Measure on the real blog import.
   - Then fix the dominant phase while keeping every incremental == full test green. Candidates: avoid the per-file hard-link walk, narrow the whole-site DB reads, cache more rendered output.
 - **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications.
