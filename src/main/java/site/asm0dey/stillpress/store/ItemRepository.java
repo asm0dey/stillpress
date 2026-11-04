@@ -75,7 +75,7 @@ public class ItemRepository {
                     ITEM.TYPE,
                     ITEM.PERMALINK,
                     ITEM.PUBLISHED_AT,
-                    DSL.coalesce(ITEM.PUBLISHED_LOCAL, ITEM.PUBLISHED_AT),
+                    DSL.<LocalDateTime>coalesce(ITEM.PUBLISHED_LOCAL, ITEM.PUBLISHED_AT),
                     ITEM.AUTHOR_ID
             )
             .from(ITEM)
@@ -143,10 +143,10 @@ public class ItemRepository {
             .select(
                     ITEM.ID,
                     ITEM.TYPE,
-                    DSL.coalesce(ITEM.TITLE, ""),
+                    DSL.<String>coalesce(ITEM.TITLE, ""),
                     ITEM.STATUS,
-                    DSL.coalesce(AUTHOR.DISPLAY_NAME, AUTHOR.LOGIN),
-                    DSL.coalesce(ITEM.PUBLISHED_LOCAL, ITEM.PUBLISHED_AT),
+                    DSL.<String>coalesce(AUTHOR.DISPLAY_NAME, AUTHOR.LOGIN),
+                    DSL.<LocalDateTime>coalesce(ITEM.PUBLISHED_LOCAL, ITEM.PUBLISHED_AT),
                     ITEM.MODIFIED_AT,
                     ITEM.PERMALINK
             )

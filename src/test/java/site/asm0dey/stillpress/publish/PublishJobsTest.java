@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.store.RedirectRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 
 @QuarkusTest
@@ -42,6 +43,8 @@ class PublishJobsTest {
     SettingRepository settings;
     @Inject
     CommandLine.IFactory factory;
+    @Inject
+    RedirectRepository redirects;
 
     @BeforeEach
     void sample() throws Exception {
@@ -105,6 +108,26 @@ class PublishJobsTest {
             );
         TestStore.await(() -> Files.exists(dataDir.current().resolve(permalink.substring(1) + "index.html")), 20);
         assertThat(dataDir.current().resolve(permalink.substring(1) + "index.html")).exists();
+    }
+
+    @Test
+    void goLiveOfReDatedPostMovesItsPermalink() {
+        var id = itemId(5994);
+        var old = db.select(ITEM.PERMALINK).from(ITEM).where(ITEM.ID.eq(id)).fetchOne(ITEM.PERMALINK);
+        // a published post re-dated into the future, now due
+        QuarkusTransaction
+            .requiringNew()
+            .run(() -> db
+                .update(ITEM)
+                .set(ITEM.STATUS, "future")
+                .set(ITEM.PUBLISHED_AT, LocalDateTime.of(2025, 5, 6, 7, 0))
+                .set(ITEM.PUBLISHED_LOCAL, LocalDateTime.of(2025, 5, 6, 10, 0))
+                .where(ITEM.ID.eq(id))
+                .execute());
+        jobs.goLive(id + "@0");
+        var moved = db.select(ITEM.PERMALINK).from(ITEM).where(ITEM.ID.eq(id)).fetchOne(ITEM.PERMALINK);
+        assertThat(moved).isEqualTo("/2025/05/06/месяц-ноябрь-год-2022/");
+        assertThat(redirects.find(old).orElseThrow().getToPath()).isEqualTo(moved);
     }
 
     @Test

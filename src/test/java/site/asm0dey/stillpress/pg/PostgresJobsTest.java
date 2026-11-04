@@ -10,6 +10,9 @@ import module java.base;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
+import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.content.ItemService;
+import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;
 
@@ -24,6 +27,37 @@ class PostgresJobsTest {
     DSLContext db;
     @Inject
     TestStore store;
+    @Inject
+    ItemService items;
+    @Inject
+    AuthorRepository users;
+
+    @Test
+    void concurrentCreatesGetDistinctPublicIds() throws Exception {
+        store.reset();
+        var author = users.create("writer", "writer@example.org", "Writer", Role.AUTHOR).getId();
+        var start = new CyclicBarrier(2);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var creates = List
+                .of(1, 2)
+                .stream()
+                .map(i -> pool.submit(() -> QuarkusTransaction
+                    .requiringNew()
+                    .call(() -> {
+                        start.await(10, TimeUnit.SECONDS);
+                        var id = items.create("post", author).getSourceId();
+                        // keep the transaction open so the other insert meets this uncommitted id
+                        Thread.sleep(300);
+                        return id;
+                    })))
+                .toList();
+            var ids = new ArrayList<Long>();
+            for (var c : creates) {
+                ids.add(c.get(30, TimeUnit.SECONDS));
+            }
+            assertThat(ids).doesNotHaveDuplicates().hasSize(2);
+        }
+    }
 
     @Test
     void concurrentSavesBothCommitAndLeaveOnePublishRequest() throws Exception {

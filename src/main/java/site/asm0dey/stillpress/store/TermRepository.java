@@ -57,6 +57,17 @@ public class TermRepository {
         return db.selectFrom(TERM).where(TERM.TAXONOMY.eq(taxonomy)).orderBy(TERM.NAME).fetch();
     }
 
+    public Set<Long> idsForItem(long itemId, String taxonomy) {
+        return Set.copyOf(db
+            .select(TERM.ID)
+            .from(TERM)
+            .join(ITEM_TERM)
+            .on(ITEM_TERM.TERM_ID.eq(TERM.ID))
+            .where(ITEM_TERM.ITEM_ID.eq(itemId), TERM.TAXONOMY.eq(taxonomy))
+            .fetch(TERM.ID)
+        );
+    }
+
     /**
      * Replaces the item's terms of {@code taxonomy} with those of {@code ids} that exist in it.
      */

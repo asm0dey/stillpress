@@ -18,7 +18,9 @@ import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
 import site.asm0dey.stillpress.content.Capabilities;
 import site.asm0dey.stillpress.content.ItemService;
+import site.asm0dey.stillpress.content.Permalinker;
 import site.asm0dey.stillpress.content.Revisions;
+import site.asm0dey.stillpress.content.TermService;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
@@ -35,6 +37,10 @@ public class ItemsResource {
     private static final int PER_PAGE = 20;
     @Inject
     ItemService service;
+    @Inject
+    TermService termService;
+    @Inject
+    Permalinker permalinks;
     @Inject
     ItemRepository items;
     @Inject
@@ -250,7 +256,7 @@ public class ItemsResource {
         if (n == null) {
             throw new ItemService.Refused(400, "invalid", null);
         }
-        var t = service.createTerm(n.taxonomy(), n.name(), n.parentId(), actor());
+        var t = termService.createTerm(n.taxonomy(), n.name(), n.parentId(), actor());
         return Response
             .status(201)
             .entity(new TermView(t.getId(), t.getName(), t.getSlug(), t.getParentId()))
@@ -290,7 +296,7 @@ public class ItemsResource {
                 r.getBody(),
                 r.getBodyFormat(),
                 r.getExcerpt(),
-                service.localDate(r),
+                permalinks.localDate(r),
                 r.getPermalink(),
                 byTaxonomy.getOrDefault("category", List.of()),
                 byTaxonomy.getOrDefault("post_tag", List.of()),

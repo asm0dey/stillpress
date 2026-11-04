@@ -26,7 +26,7 @@ import javax.sql.DataSource;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jooq.DSLContext;
-import site.asm0dey.stillpress.content.ItemService;
+import site.asm0dey.stillpress.content.Permalinker;
 
 /**
  * Background work backed by the {@code scheduled_tasks} table: publishing and go-live of scheduled items. The
@@ -52,7 +52,7 @@ public class Jobs {
     @Inject
     SitePublisher publisher;
     @Inject
-    ItemService itemService;
+    Permalinker permalinks;
     @Inject
     DSLContext db;
     @ConfigProperty(name = "stillpress.publish.sweep-interval", defaultValue = "1m")
@@ -174,26 +174,27 @@ public class Jobs {
      */
     void goLive(String instance) {
         var id = Long.parseLong(instance.substring(0, instance.indexOf('@')));
-        QuarkusTransaction.requiringNew().run(() -> {
-            var changed = db
-                .update(ITEM)
-                .set(ITEM.STATUS, "publish")
-                .where(
-                        ITEM.ID.eq(id),
-                        ITEM.STATUS.eq("future"),
-                        ITEM.PUBLISHED_AT.le(LocalDateTime.now(ZoneOffset.UTC))
-                )
-                .execute();
-            if (changed == 1) {
-                var r = db.selectFrom(ITEM).where(ITEM.ID.eq(id)).fetchOne();
-                if (r.getPermalink() == null) {
-                    itemService.assignPermalink(r);
+        QuarkusTransaction
+            .requiringNew()
+            .run(() -> {
+                var changed = db
+                    .update(ITEM)
+                    .set(ITEM.STATUS, "publish")
+                    .where(
+                            ITEM.ID.eq(id),
+                            ITEM.STATUS.eq("future"),
+                            ITEM.PUBLISHED_AT.le(LocalDateTime.now(ZoneOffset.UTC))
+                    )
+                    .execute();
+                if (changed == 1) {
+                    var r = db.selectFrom(ITEM).where(ITEM.ID.eq(id)).fetchOne();
+                    // first permalink, or a re-dated post's new date-derived one (with a redirect from the old)
+                    permalinks.assignPermalink(r);
                     r.update();
+                    queue.item(id);
+                    requestPublish();
                 }
-                queue.item(id);
-                requestPublish();
-            }
-        });
+            });
     }
 
     /**

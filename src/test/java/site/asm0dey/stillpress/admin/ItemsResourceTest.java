@@ -7,7 +7,9 @@ import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.nullValue;
 import static site.asm0dey.stillpress.Csrf.csrf;
 import static site.asm0dey.stillpress.db.Tables.ITEM;
+import static site.asm0dey.stillpress.db.Tables.REVISION;
 import static site.asm0dey.stillpress.db.Tables.SCHEDULED_TASKS;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
@@ -25,6 +27,7 @@ import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.RedirectRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
@@ -46,6 +49,8 @@ class ItemsResourceTest {
     DataDir dataDir;
     @Inject
     DSLContext db;
+    @Inject
+    ItemRepository items;
     String admin;
     String editor;
     String author1;
@@ -310,6 +315,110 @@ class ItemsResourceTest {
             .body("tags", equalTo(List.of((int) id)));
         assertThat(as(author1).get("/admin/api/terms?taxonomy=post_tag").jsonPath().getList("name"))
             .containsExactlyInAnyOrder("Java", "JAVA");
+    }
+
+    @Test
+    void parallelAutosavesLeaveOneAutosave() throws Exception {
+        var id = create(author1, "post").getLong("id");
+        try (var pool = Executors.newFixedThreadPool(4)) {
+            var saves = IntStream
+                .range(0, 8)
+                .mapToObj(i -> pool.submit(() -> as(author1)
+                    .body(Map.of("title", "t" + i, "body", "b", "excerpt", ""))
+                    .put("/admin/api/items/" + id + "/autosave")
+                    .statusCode()))
+                .toList();
+            for (var f : saves) {
+                assertThat(f.get(30, TimeUnit.SECONDS)).isEqualTo(204);
+            }
+        }
+        as(author1).get("/admin/api/items/" + id).then().statusCode(200);
+        assertThat(db.fetchCount(REVISION, REVISION.OBJECT_ID.eq(id), REVISION.AUTOSAVE.isTrue())).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentSavesOfOneItemGiveOne200AndOne409() throws Exception {
+        var item = create(author1, "post");
+        var id = item.getLong("id");
+        var held = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(3)) {
+            // the row stays locked until both saves are waiting on it
+            var holder = pool.submit(() -> QuarkusTransaction.requiringNew().run(() -> {
+                items.lock(id).orElseThrow();
+                held.countDown();
+                try {
+                    release.await(30, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    throw new IllegalStateException(e);
+                }
+            }));
+            held.await(10, TimeUnit.SECONDS);
+            var saves = List
+                .of("one", "two")
+                .stream()
+                .map(t -> pool.submit(() -> update(author1, item, Map.of("title", t)).statusCode()))
+                .toList();
+            Thread.sleep(1000);
+            release.countDown();
+            holder.get(30, TimeUnit.SECONDS);
+            var codes = new ArrayList<Integer>();
+            for (var f : saves) {
+                codes.add(f.get(30, TimeUnit.SECONDS));
+            }
+            assertThat(codes).containsExactlyInAnyOrder(200, 409);
+        }
+    }
+
+    @Test
+    void categoryChangeMovesCategoryPermalink() {
+        settings.put("permalink_structure", "/%category%/%postname%/");
+        var travel = term(editor, "category", "Travel");
+        var food = term(editor, "category", "Food");
+        var published = update(
+                author1,
+                create(author1, "post"),
+                Map.of("title", "Trip", "status", "publish", "categories", List.of(travel))
+        )
+            .then()
+            .statusCode(200)
+            .body("permalink", equalTo("/travel/trip/"))
+            .extract()
+            .jsonPath();
+        update(author1, published, Map.of("categories", List.of(food)))
+            .then()
+            .statusCode(200)
+            .body("permalink", equalTo("/food/trip/"));
+        assertThat(redirects.find("/travel/trip/").orElseThrow().getToPath()).isEqualTo("/food/trip/");
+    }
+
+    @Test
+    void authorChangeMovesAuthorPermalink() {
+        settings.put("permalink_structure", "/%author%/%postname%/");
+        var a1 = users.findByLogin("author1").orElseThrow().getSlug();
+        var a2 = users.findByLogin("author2").orElseThrow().getSlug();
+        var published = update(author1, create(author1, "post"), Map.of("title", "Byline", "status", "publish"))
+            .then()
+            .statusCode(200)
+            .body("permalink", equalTo("/" + a1 + "/byline/"))
+            .extract()
+            .jsonPath();
+        update(editor, published, Map.of("authorId", author2Id))
+            .then()
+            .statusCode(200)
+            .body("permalink", equalTo("/" + a2 + "/byline/"));
+        assertThat(redirects.find("/" + a1 + "/byline/").orElseThrow().getToPath()).isEqualTo("/" + a2 + "/byline/");
+    }
+
+    private static long term(String cookie, String taxonomy, String name) {
+        return as(cookie)
+            .body(Map.of("taxonomy", taxonomy, "name", name))
+            .post("/admin/api/terms")
+            .then()
+            .statusCode(201)
+            .extract()
+            .jsonPath()
+            .getLong("id");
     }
 
     private Path page(String permalink) {
