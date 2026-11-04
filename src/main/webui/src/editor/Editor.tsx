@@ -184,7 +184,8 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     return () => window.removeEventListener('beforeunload', warn);
   }, [unsaved]);
 
-  const autosave = useCallback(async () => {
+  /** {@code explicit}: a Preview click, which must hear about a refusal; the timer stays silent. */
+  const autosave = useCallback(async (explicit = false) => {
     const { title: t, blocks: b, excerpt, format } = latest.current;
     // the autosave carries no format; the preview renders it in the item's stored one
     if (!edits.current.needsAutosave || bodyFormatOf(b) !== format) return;
@@ -192,11 +193,14 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
     try {
       await api(`/items/${id}/autosave`, { method: 'PUT', body: { title: t, body: bodyOf(b, opened.current), excerpt } });
       edits.current.autosaved(mark);
-    } catch { /* retried at the next tick */ }
+    } catch (e) {
+      if (explicit) throw e;
+      /* retried at the next tick */
+    }
   }, [id]);
 
   useEffect(() => {
-    const timer = setInterval(autosave, AUTOSAVE_MS);
+    const timer = setInterval(() => autosave(), AUTOSAVE_MS);
     return () => clearInterval(timer);
   }, [autosave]);
 
@@ -214,7 +218,17 @@ function ItemEditor({ id, session }: { id: number; session: SessionUser }) {
   async function preview() {
     // opened before the autosave so the popup blocker sees the click
     const tab = window.open('about:blank', '_blank');
-    await autosave();
+    try {
+      await autosave(true);
+    } catch (e) {
+      const err = e as ApiError;
+      // the preview would show the older version; other failures open it as before
+      if (err.error === 'unsafe_html') {
+        tab?.close();
+        setMessage({ kind: 'alert', text: UNSAFE_HTML, list: err.violations });
+        return;
+      }
+    }
     if (tab) tab.location.href = `/admin/preview/${id}`;
   }
 

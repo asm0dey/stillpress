@@ -31,6 +31,10 @@ public class EmbedRenderer implements DynamicBlockRenderer {
                     + id
                     + "/hqdefault.jpg)\" aria-label=\"Play video\"></button></div></figure>";
         }
+        // anything else (javascript:, data:) would run or load from the link
+        if (!url.regionMatches(true, 0, "http://", 0, 7) && !url.regionMatches(true, 0, "https://", 0, 8)) {
+            return renderedInner;
+        }
         var u = ClassicContent.attr(url);
         return "<figure class=\"wp-block-embed\"><a href=\"" + u + "\">" + u + "</a></figure>";
     }

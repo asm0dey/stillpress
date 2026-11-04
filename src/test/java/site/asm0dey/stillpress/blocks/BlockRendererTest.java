@@ -100,4 +100,13 @@ class BlockRendererTest {
                     + "//example.org/x?a=1&amp;b=2</a></figure>"
             );
     }
+
+    @Test
+    void scriptEmbedUrlIsNotLinked() {
+        var html = renderer.render(
+                "<!-- wp:embed {\"url\":\"javascript:alert(document.cookie)\"} --><figure>x</figure><!-- /wp:embed -->",
+                ctx()
+        );
+        assertThat(html).isEqualTo("<figure>x</figure>");
+    }
 }

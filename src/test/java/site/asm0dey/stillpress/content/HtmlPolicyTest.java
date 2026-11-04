@@ -1,6 +1,7 @@
 package site.asm0dey.stillpress.content;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import module java.base;
 import org.junit.jupiter.api.Test;
 
 class HtmlPolicyTest {
@@ -66,5 +67,28 @@ class HtmlPolicyTest {
             .containsExactly("script in style attribute on <p>");
         assertThat(HtmlPolicy.violations("<p style=\"color:red\">a</p>")).isEmpty();
         assertThat(HtmlPolicy.violations(null)).isEmpty();
+    }
+
+    @Test
+    void bypassesFromReviewAreReported() {
+        for (var payload :
+                List.of(
+                        "<p>x</p><body onload=alert(document.cookie)>",
+                        "<html onmouseover=alert(1)>",
+                        "<noscript><p title=\"</noscript><img src=x onerror=alert(1)>\"></noscript>",
+                        "<!-- wp:html --><noscript><p title=\"</noscript><img src=x onerror=alert(1)>\"></noscript><!-- /wp:html -->",
+                        "<img src=x alt=\"[caption width='9' caption='<img src=y onerror=alert(1)>']z[/caption]\">",
+                        "<!-- wp:embed {\"url\":\"javascript:alert(document.cookie)\"} /-->",
+                        "<svg><a><animate attributeName=\"href\" values=\"javascript:alert(1)\"/><text y=\"20\">click</text></a></svg>",
+                        "<svg><a><set attributeName=\"href\" to=\"javascript:alert(1)\"/><text>x</text></a></svg>"
+        )) {
+            assertThat(HtmlPolicy.violations(payload)).as(payload).isNotEmpty();
+        }
+        assertThat(HtmlPolicy.violations("<p>x</p><body onload=alert(1)>")).containsExactly(
+                "onload attribute on <body>"
+        );
+        assertThat(HtmlPolicy.violations("<p>a</p><meta http-equiv=refresh content=0>")).containsExactly(
+                "<meta> element"
+        );
     }
 }
