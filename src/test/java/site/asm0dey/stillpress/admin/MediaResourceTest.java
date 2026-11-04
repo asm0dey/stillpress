@@ -171,6 +171,18 @@ class MediaResourceTest {
     }
 
     @Test
+    void metaUpdateWithoutBodyIs400() throws IOException {
+        int id = upload(author, "a.png", png(1, 1)).then().statusCode(201).extract().path("id");
+        csrf()
+            .cookie("sp_session", author)
+            .contentType("application/json")
+            .put("/admin/api/media/" + id)
+            .then()
+            .statusCode(400)
+            .body("error", equalTo("invalid"));
+    }
+
+    @Test
     void contributorIs403() throws IOException {
         upload(contributor, "a.png", png(1, 1)).then().statusCode(403);
         assertThat(db.fetchCount(MEDIA)).isZero();

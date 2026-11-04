@@ -47,6 +47,7 @@ export const SETTINGS = {
   branding: false,
   promotion: false,
   // paste, hr, textcolor and colorpicker are core since 6; tabfocus is gone
+  // a plugin added here must also be imported in load(), or TinyMCE fetches it from /admin/tinymce and gets a 404
   plugins: 'charmap link lists media fullscreen',
   toolbar1: 'blocks bold italic bullist numlist blockquote alignleft aligncenter alignright link unlink fullscreen',
   toolbar2: 'strikethrough hr forecolor pastetext removeformat charmap outdent indent undo redo',

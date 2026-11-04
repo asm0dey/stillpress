@@ -2,6 +2,7 @@ package site.asm0dey.stillpress.publish;
 
 import com.github.kagkarlsson.scheduler.Scheduler;
 import com.github.kagkarlsson.scheduler.SchedulerClient;
+import com.github.kagkarlsson.scheduler.jdbc.AutodetectJdbcCustomization;
 import com.github.kagkarlsson.scheduler.serializer.JacksonSerializer;
 import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.PUBLISH_QUEUE;
@@ -78,6 +79,8 @@ public class Jobs {
         client = SchedulerClient.Builder
             .create(dataSource, publishSite, goLive, publishSweep)
             .serializer(new JacksonSerializer())
+            // the client builder has no alwaysPersistTimestampInUTC(); this is what that option configures
+            .jdbcCustomization(new AutodetectJdbcCustomization(dataSource, true))
             .build();
     }
 
@@ -91,6 +94,7 @@ public class Jobs {
             .threads(2)
             .pollingInterval(Duration.ofSeconds(10))
             .serializer(new JacksonSerializer())
+            .alwaysPersistTimestampInUTC()
             .build();
         scheduler.start();
     }

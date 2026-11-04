@@ -1,7 +1,7 @@
 package site.asm0dey.stillpress.store;
 
-import java.sql.SQLException;
 import module java.base;
+import module java.sql;
 import org.jooq.exception.DataAccessException;
 
 /**

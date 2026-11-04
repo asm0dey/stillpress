@@ -89,8 +89,11 @@ class FromScratchBlogTest {
         assertThat(author).content().contains("Первый пост");
         var excerpt =
                 Pattern.compile("<div class=\"excerpt\">(.*?)</div>", Pattern.DOTALL).matcher(Files.readString(home));
-        assertThat(excerpt.find()).isTrue();
-        var text = excerpt.group(1).strip();
+        var text = excerpt
+            .results()
+            .map(m -> m.group(1).strip())
+            .findFirst()
+            .orElse(null);
         assertThat(text).endsWith(" […]");
         assertThat(text.substring(0, text.length() - " […]".length()).split(" "))
             .hasSize(55)

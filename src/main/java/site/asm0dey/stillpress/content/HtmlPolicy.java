@@ -147,6 +147,8 @@ public final class HtmlPolicy {
             }
             var name = m.group(1).toLowerCase(Locale.ROOT);
             // misnested formatting (<b><i>x</b></i>) was opened here; the adoption agency never pops past it
+            // assumes no theme template wraps content in a formatting element (a, b, em, ...): a stray </b> could
+            // otherwise close the theme's own element. Plan 03 themes must keep that, or this tolerance is revisited.
             var misnested = FORMATTING.contains(name) && !doc.getElementsByTag(name).isEmpty();
             if (!Set.of("p", "br", "sp-sentinel").contains(name) && !misnested) {
                 out.add("stray </" + name + "> end tag");

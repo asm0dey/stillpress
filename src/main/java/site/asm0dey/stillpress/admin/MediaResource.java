@@ -104,6 +104,9 @@ public class MediaResource {
         if (!Capabilities.canUpload(ItemsResource.actor(identity).role())) {
             throw new ItemService.Refused(403, "forbidden", null);
         }
+        if (meta == null) {
+            throw new ItemService.Refused(400, "invalid", null);
+        }
         return view(service.updateMeta(id, meta.title(), meta.alt()));
     }
 
