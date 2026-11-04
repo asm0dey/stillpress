@@ -16,6 +16,7 @@ import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;
+import site.asm0dey.stillpress.store.PublicIds;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.FragmentRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
@@ -118,10 +119,7 @@ public class ItemService {
     @Transactional
     public ItemRecord create(String type, long authorId) {
         guard.close();
-        // a concurrent create may take the same public id; the second try sees it
-        return insertNew(type, authorId)
-            .or(() -> insertNew(type, authorId))
-            .orElseThrow();
+        return PublicIds.insertUntilFree(() -> insertNew(type, authorId));
     }
 
     /**

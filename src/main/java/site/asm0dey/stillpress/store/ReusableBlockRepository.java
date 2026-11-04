@@ -54,10 +54,7 @@ public class ReusableBlockRepository {
     }
 
     public ReusableBlockRecord create(String title, String content, long authorId, LocalDateTime now) {
-        // a concurrent create may take the same public id; the second try sees it
-        return insertNew(title, content, authorId, now)
-            .or(() -> insertNew(title, content, authorId, now))
-            .orElseThrow();
+        return PublicIds.insertUntilFree(() -> insertNew(title, content, authorId, now));
     }
 
     /**

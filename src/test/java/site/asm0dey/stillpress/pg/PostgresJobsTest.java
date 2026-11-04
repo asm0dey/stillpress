@@ -36,12 +36,11 @@ class PostgresJobsTest {
     void concurrentCreatesGetDistinctPublicIds() throws Exception {
         store.reset();
         var author = users.create("writer", "writer@example.org", "Writer", Role.AUTHOR).getId();
-        var start = new CyclicBarrier(2);
-        try (var pool = Executors.newFixedThreadPool(2)) {
-            var creates = List
-                .of(1, 2)
-                .stream()
-                .map(i -> pool.submit(() -> QuarkusTransaction
+        var start = new CyclicBarrier(8);
+        try (var pool = Executors.newFixedThreadPool(8)) {
+            var creates = IntStream
+                .range(0, 8)
+                .mapToObj(i -> pool.submit(() -> QuarkusTransaction
                     .requiringNew()
                     .call(() -> {
                         start.await(10, TimeUnit.SECONDS);
@@ -55,7 +54,7 @@ class PostgresJobsTest {
             for (var c : creates) {
                 ids.add(c.get(30, TimeUnit.SECONDS));
             }
-            assertThat(ids).doesNotHaveDuplicates().hasSize(2);
+            assertThat(ids).doesNotHaveDuplicates().hasSize(8);
         }
     }
 
