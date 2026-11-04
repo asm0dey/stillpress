@@ -56,7 +56,7 @@ public class MediaService {
     ImportGuard guard;
 
     /**
-     * Moves {@code upload} into the media folder of the current month (site time zone) under a sanitized, unique name.
+     * Copies {@code upload} into the media folder of the current month (site time zone) under a sanitized, unique name.
      *
      * @throws IllegalArgumentException {@code type_not_allowed} for an extension outside the allow list
      */
@@ -84,7 +84,11 @@ public class MediaService {
                     removeOnRollback(target);
                     var size = Files.size(upload);
                     var dims = dimensions(upload, mime);
-                    Files.move(upload, target, StandardCopyOption.REPLACE_EXISTING);
+                    // write into the reserved file, never replace it: a move across file systems (the upload sits in
+                    // java.io.tmpdir) unlinks the target first, and a parallel upload can reserve the name in that gap
+                    try (var out = Files.newOutputStream(target)) {
+                        Files.copy(upload, out);
+                    }
                     var url = "/media/" + folder + "/" + name;
                     var r = media.insert(url, mime, dims[0], dims[1], size, userId, LocalDateTime.now(ZoneOffset.UTC));
                     queue.media();
