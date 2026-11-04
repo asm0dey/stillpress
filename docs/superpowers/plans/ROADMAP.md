@@ -27,6 +27,7 @@ Split into three plans (agreed 2026-11-04):
   - Likely fix: cache a per-post feed `<item>` fragment next to the archive entry, with the same invalidation, and batch the per-item queries in `ViewFactory`.
   - First log per-phase timings: lock, snapshot, summaries/terms/published_item reads, the hard-link walk over unchanged files, rendering, fragment reads/writes, activate, bookkeeping. Measure on the real blog import.
   - Then fix the dominant phase while keeping every incremental == full test green. Candidates: avoid the per-file hard-link walk, narrow the whole-site DB reads, cache more rendered output.
+  - Separate from publish time (serving bandwidth): Mode 1's `StaticSiteRoute` sends `Cache-Control` but no `ETag`/`Last-Modified` and never answers 304, so feed readers re-download unchanged feeds. Add conditional GET (nginx in Mode 2 already does it).
 - **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications.
   - Secrets stored at rest (TOTP seeds, SMTP password, Turnstile secret, ALTCHA HMAC key) are encrypted with Google Tink: a keyset, per-row AEAD, and a keyed HMAC for anything looked up by value (precedent `encryption-tink`).
 
