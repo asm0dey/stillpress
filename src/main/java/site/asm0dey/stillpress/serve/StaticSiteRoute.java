@@ -152,6 +152,30 @@ public class StaticSiteRoute {
                     "Cache-Control",
                     path.startsWith("/media/") || path.startsWith("/assets/") ? LONG_CACHE : SHORT_CACHE
             );
+            BasicFileAttributes attrs;
+            try {
+                attrs = Files.readAttributes(file, BasicFileAttributes.class);
+            } catch (IOException e) {
+                ctx.fail(e);
+                return;
+            }
+            // a republish writes changed files as new files (new inode) and hard-links unchanged ones, so fileKey
+            // tells a rewrite from a keep even when mtime and size coincide
+            var key = attrs.fileKey();
+            var mtime = attrs.lastModifiedTime();
+            // shortcut: Last-Modified has 1 s resolution; a client sending only If-Modified-Since can miss a rewrite within the same second until max-age expires
+            ctx
+                .lastModified(mtime.toInstant())
+                .etag(
+                                Long.toHexString(mtime.toMillis())
+                        + "-"
+                        + Long.toHexString(attrs.size())
+                        + (key == null ? "" : "-" + Integer.toHexString(key.hashCode()))
+                );
+            if (ctx.isFresh()) {
+                res.setStatusCode(304).end();
+                return;
+            }
         }
         // other content types come from the extension inside sendFile
         res.sendFile(file.toString());

@@ -9,8 +9,10 @@ import static org.hamcrest.Matchers.emptyString;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
+import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.REDIRECT;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
@@ -180,6 +182,55 @@ class StaticSiteRouteTest {
         var forever = "public, max-age=31536000, immutable";
         given().get("/media/2023/01/a.jpg").then().statusCode(200).header("Cache-Control", forever);
         given().get("/assets/plain.css").then().statusCode(200).header("Cache-Control", forever);
+    }
+
+    @Test
+    void feedAnswers304ToItsETag() {
+        var etag = given()
+            .get("/feed/")
+            .then()
+            .statusCode(200)
+            .header("ETag", notNullValue())
+            .extract()
+            .header("ETag");
+        given()
+            .header("If-None-Match", etag)
+            .get("/feed/")
+            .then()
+            .statusCode(304)
+            .body(emptyString())
+            .header("Cache-Control", "public, max-age=300");
+    }
+
+    @Test
+    void answers304ToIfModifiedSince() {
+        var modified = given().get("/about/").then().statusCode(200).extract().header("Last-Modified");
+        given().header("If-Modified-Since", modified).get("/about/").then().statusCode(304);
+    }
+
+    @Test
+    void otherETagGets200() {
+        given().header("If-None-Match", "\"nope\"").get("/about/").then().statusCode(200).body(containsString("<html"));
+    }
+
+    @Test
+    void notFoundHasNoValidators() {
+        given().get("/no-such-page/").then().statusCode(404).header("ETag", nullValue());
+    }
+
+    @Test
+    void republishedFileLosesItsETag() {
+        var etag = given().get("/feed/").then().extract().header("ETag");
+        var post = db.selectFrom(ITEM).where(ITEM.SOURCE_ID.eq(5994L)).fetchOne();
+        post.setTitle("Brand new conditional title");
+        post.store();
+        publisher.publishAll();
+        given()
+            .header("If-None-Match", etag)
+            .get("/feed/")
+            .then()
+            .statusCode(200)
+            .body(containsString("Brand new conditional title"));
     }
 
     @Test
