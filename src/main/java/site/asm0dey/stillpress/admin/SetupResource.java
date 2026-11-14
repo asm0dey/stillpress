@@ -100,12 +100,15 @@ public class SetupResource {
             }
             var hash = Passwords.hash(s.password());
             // scheme and authority are the client's when a trusted proxy forwarded them
-            var a = request.authority();
-            var home = request.scheme() + "://" + a.host() + (a.port() < 0 ? "" : ":" + a.port());
+            var home = Origins.of(request);
+            if (home.isEmpty()) {
+                return error(400, Map.of("error", "no_host"));
+            }
+            var origin = home.get();
             raw = QuarkusTransaction
                 .requiringNew()
                 .call(() -> {
-                    var session = create(s, hash, home);
+                    var session = create(s, hash, origin);
                     // published in the background, once this commits
                     queue.all();
                     jobs.requestPublish();
@@ -140,6 +143,10 @@ public class SetupResource {
         // an install that already holds a CLI import keeps the export's site URL, not the host the admin used
         if (settings.get("home_url").isEmpty()) {
             settings.put("home_url", home);
+        }
+        // emailed and printed links use this, never a request host
+        if (settings.get("admin_url").isEmpty()) {
+            settings.put("admin_url", home);
         }
         SiteReset.SETUP_DEFAULTS.forEach((k, v) -> {
             if (settings.get(k).isEmpty()) {

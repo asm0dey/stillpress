@@ -7,6 +7,7 @@ import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.SettingRepository;
 
 @Command(name = "user", description = "Manage users", subcommands = UserCommand.ResetPassword.class)
 public class UserCommand {
@@ -20,6 +21,8 @@ public class UserCommand {
         AuthorRepository users;
         @Inject
         SetPasswordLink link;
+        @Inject
+        SettingRepository settings;
 
         @Override
         public Integer call() {
@@ -28,7 +31,10 @@ public class UserCommand {
                 spec.commandLine().getErr().println("No such user: " + login);
                 return 1;
             }
-            spec.commandLine().getOut().println(link.issue(user.get().getId()));
+            if (settings.get("admin_url").isEmpty()) {
+                spec.commandLine().getErr().println("admin_url is not set; open the link on the admin's host");
+            }
+            spec.commandLine().getOut().println(link.issue(user.get().getId(), SetPasswordLink.MANUAL_TTL));
             return 0;
         }
     }

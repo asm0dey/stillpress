@@ -35,18 +35,22 @@ class UserCommandTest {
     }
 
     @Test
-    void printsSetPasswordLinkUnderHomeUrl() {
-        settings.put("home_url", "https://blog.example.ru/");
+    void resetLinkUsesAdminUrlOrPath() {
+        settings.put("home_url", "https://other.example.org");
+        settings.put("admin_url", "https://blog.example.ru/");
         assertThat(run("reset-password", "admin")).isZero();
         var prefix = "https://blog.example.ru/admin/set-password?token=";
         assertThat(out.toString()).startsWith(prefix);
+        assertThat(err.toString()).isEmpty();
         var token = out.toString().strip().substring(prefix.length());
         assertThat(tokens.consume(token, "set_password")).contains(adminId);
     }
 
     @Test
-    void printsPathOnlyWithoutHomeUrl() {
+    void printsPathOnlyWithoutAdminUrl() {
+        settings.put("home_url", "https://other.example.org");
         assertThat(run("reset-password", "admin")).isZero();
+        assertThat(err.toString().strip()).isEqualTo("admin_url is not set; open the link on the admin's host");
         assertThat(out.toString()).startsWith("/admin/set-password?token=");
     }
 

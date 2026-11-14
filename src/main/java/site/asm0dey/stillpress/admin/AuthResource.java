@@ -17,6 +17,7 @@ import module java.base;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.account.LoginLimiter;
 import site.asm0dey.stillpress.account.Passwords;
+import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SessionAuthMechanism;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
 import site.asm0dey.stillpress.store.AuthorRepository;
@@ -117,6 +118,12 @@ public class AuthResource {
     public SessionUser session() {
         long id = identity.getAttribute(SessionIdentityProvider.USER_ID);
         var u = users.findById(id).orElseThrow();
+        // after an upgrade the first administrator in fills the address links are built from
+        if (Role.ADMINISTRATOR.id().equals(u.getRole())) {
+            Origins
+                .of(request)
+                .ifPresent(o -> settings.compareAndSet("admin_url", null, o));
+        }
         // the user's own choice; otherwise the site language decides between the two admin languages
         var locale = u.getLocale() != null
                 ? u.getLocale()

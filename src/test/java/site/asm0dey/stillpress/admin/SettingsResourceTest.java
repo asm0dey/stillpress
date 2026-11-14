@@ -119,6 +119,17 @@ class SettingsResourceTest {
     }
 
     @Test
+    void adminUrlValidatedAndSaved() {
+        var body = current();
+        body.put("adminUrl", "https://admin.example.org/x");
+        put(admin, body).then().statusCode(400).body("error", equalTo("invalid")).body("field", equalTo("adminUrl"));
+        body.put("adminUrl", "https://admin.example.org/");
+        put(admin, body).then().statusCode(200).body("adminUrl", equalTo("https://admin.example.org"));
+        assertThat(settings.get("admin_url")).hasValue("https://admin.example.org");
+        assertThat(db.fetchCount(SCHEDULED_TASKS, SCHEDULED_TASKS.TASK_NAME.eq(Jobs.PUBLISH_SITE))).isZero();
+    }
+
+    @Test
     void rejectedSaveLeavesImportOpen() {
         var body = current();
         body.put("postsPerPage", 0);

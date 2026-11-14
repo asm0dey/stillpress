@@ -157,6 +157,26 @@ class AuthResourceTest {
     }
 
     @Test
+    void firstAdminSessionFillsAdminUrl() {
+        var editor = users.create("ed", "e@example.org", "Ed", Role.EDITOR).getId();
+        users.setPassword(editor, Passwords.hash("correct horse battery"));
+        var editorCookie = login("ed", "correct horse battery").cookie("sp_session");
+        given().cookie("sp_session", editorCookie).get("/admin/api/session").then().statusCode(200);
+        assertThat(settings.get("admin_url")).isEmpty();
+        var cookie = login("admin", "correct horse battery").cookie("sp_session");
+        given()
+            .cookie("sp_session", cookie)
+            .get("/admin/api/session")
+            .then()
+            .statusCode(200)
+            .body("login", equalTo("admin"));
+        assertThat(settings.get("admin_url")).hasValue("http://localhost:8081");
+        settings.put("admin_url", "https://kept.example.org");
+        given().cookie("sp_session", cookie).get("/admin/api/session").then().statusCode(200);
+        assertThat(settings.get("admin_url")).hasValue("https://kept.example.org");
+    }
+
+    @Test
     void sessionDescribesTheUser() {
         var cookie = login("admin", "correct horse battery").cookie("sp_session");
         given()

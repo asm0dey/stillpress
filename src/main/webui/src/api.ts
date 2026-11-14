@@ -68,7 +68,7 @@ export interface Media {
 }
 /** GET and PUT /settings */
 export interface SiteSettings {
-  title: string; description: string; language: string; homeUrl: string; timezone: string;
+  title: string; description: string; language: string; homeUrl: string; adminUrl: string; timezone: string;
   postsPerPage: number; postsPerRss: number; permalinkStructure: string; categoryBase: string; tagBase: string;
   defaultCategory: number | null; defaultCommentStatus: 'open' | 'closed';
 }

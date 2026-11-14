@@ -45,6 +45,7 @@ public class SettingsResource {
             String description,
             String language,
             String homeUrl,
+            String adminUrl,
             String timezone,
             Integer postsPerPage,
             Integer postsPerRss,
@@ -62,6 +63,7 @@ public class SettingsResource {
                 value("description", ""),
                 value("language", "en"),
                 value("home_url", ""),
+                value("admin_url", ""),
                 value("timezone", "UTC"),
                 Integer.valueOf(value("posts_per_page", "10")),
                 Integer.valueOf(value("posts_per_rss", "10")),
@@ -90,6 +92,12 @@ public class SettingsResource {
         settings.put("description", Objects.requireNonNullElse(s.description(), ""));
         settings.put("language", s.language());
         settings.put("home_url", home);
+        var adminUrl = Objects.requireNonNullElse(s.adminUrl(), "").replaceAll("(?<!/)/+$", "");
+        if (adminUrl.isEmpty()) {
+            settings.delete("admin_url");
+        } else {
+            settings.put("admin_url", adminUrl);
+        }
         settings.put("timezone", s.timezone());
         settings.put("posts_per_page", String.valueOf(s.postsPerPage()));
         settings.put("posts_per_rss", String.valueOf(s.postsPerRss()));
@@ -146,8 +154,11 @@ public class SettingsResource {
         if (s.language() == null || !SetupResource.LANGUAGE.matcher(s.language()).matches()) {
             return "language";
         }
-        if (!validHomeUrl(s.homeUrl())) {
+        if (!Origins.valid(s.homeUrl())) {
             return "homeUrl";
+        }
+        if (s.adminUrl() != null && !s.adminUrl().isEmpty() && !Origins.valid(s.adminUrl())) {
+            return "adminUrl";
         }
         if (!validZone(s.timezone())) {
             return "timezone";
@@ -179,23 +190,6 @@ public class SettingsResource {
             return "defaultCommentStatus";
         }
         return null;
-    }
-
-    private static boolean validHomeUrl(String v) {
-        if (v == null) {
-            return false;
-        }
-        try {
-            var u = new URI(v);
-            return ("http".equals(u.getScheme()) || "https".equals(u.getScheme()))
-                    && u.getHost() != null
-                    && (u.getPath() == null || u.getPath().matches("/*"))
-                    && u.getRawQuery() == null
-                    && u.getRawFragment() == null
-                    && u.getRawUserInfo() == null;
-        } catch (URISyntaxException e) {
-            return false;
-        }
     }
 
     private static boolean validZone(String v) {

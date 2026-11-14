@@ -76,8 +76,8 @@ class UsersResourceTest {
     }
 
     @Test
-    void linkUsesHomeUrlWhenSet() {
-        settings.put("home_url", "https://blog.example.org/");
+    void linkUsesAdminUrlWhenSet() {
+        settings.put("admin_url", "https://blog.example.org/");
         create("editor1", "editor")
             .then()
             .statusCode(201)

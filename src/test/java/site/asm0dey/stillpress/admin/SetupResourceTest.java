@@ -78,6 +78,23 @@ class SetupResourceTest {
     }
 
     @Test
+    void setupStoresAdminUrl() {
+        setup(token.current().orElseThrow()).then().statusCode(201);
+        assertThat(settings.get("admin_url")).hasValue("http://localhost:8081");
+    }
+
+    @Test
+    void missingHostIs400() throws Exception {
+        var raw = "POST /admin/api/setup HTTP/1.0\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}";
+        try (var socket = new Socket("localhost", 8081)) {
+            socket.getOutputStream().write(raw.getBytes(StandardCharsets.US_ASCII));
+            // Vert.x itself answers 400 before the resource runs; the resource's own no_host guards a null authority
+            var answer = new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(answer).startsWith("HTTP/1.0 400");
+        }
+    }
+
+    @Test
     void keepsAnImportedHomeUrl() {
         settings.put("home_url", "https://blog.example.ru");
         csrf()

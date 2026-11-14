@@ -96,6 +96,15 @@
  "Added: ": [
   "Добавлено: "
  ],
+ "Admin address": [
+  "Адрес админки"
+ ],
+ "Links in emails point here. Change it when the site moves to its final domain.": [
+  "Ссылки в письмах ведут сюда. Измените его, когда сайт переедет на окончательный домен."
+ ],
+ "Use a full address such as https://admin.example.org, without a path.": [
+  "Укажите полный адрес вида https://admin.example.org, без пути."
+ ],
  "Administrator": [
   "Администратор"
  ],

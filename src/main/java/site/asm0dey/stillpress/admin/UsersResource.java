@@ -113,7 +113,10 @@ public class UsersResource {
         queue.base("/author/" + created.getSlug() + "/");
         jobs.requestPublish();
         var id = created.getId();
-        return Response.status(201).entity(Map.of("id", id, "setPasswordUrl", links.issue(id))).build();
+        return Response
+            .status(201)
+            .entity(Map.of("id", id, "setPasswordUrl", links.issue(id, SetPasswordLink.MANUAL_TTL)))
+            .build();
     }
 
     /**
@@ -182,7 +185,7 @@ public class UsersResource {
             return error(404, "not_found");
         }
         guard.close();
-        return Response.ok(Map.of("url", links.issue(id))).build();
+        return Response.ok(Map.of("url", links.issue(id, SetPasswordLink.MANUAL_TTL))).build();
     }
 
     private static Role role(String id) {

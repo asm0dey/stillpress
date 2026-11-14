@@ -17,6 +17,7 @@ const messages = (): Record<string, string> => ({
   title: __('Enter a title.', 'stillpress'),
   language: __('Use a language code such as en or ru-RU.', 'stillpress'),
   homeUrl: __('Use a full address such as https://example.org, without a path.', 'stillpress'),
+  adminUrl: __('Use a full address such as https://admin.example.org, without a path.', 'stillpress'),
   timezone: __('Use a time zone such as Europe/Berlin.', 'stillpress'),
   postsPerPage: __('Use a number from 1 to 100.', 'stillpress'),
   postsPerRss: __('Use a number from 1 to 100.', 'stillpress'),
@@ -84,6 +85,8 @@ export default function Settings() {
         <Field label={__('Language', 'stillpress')} name="language" required value={form.language} onChange={text('language')} error={errors.language} />
         <Field label={__('Site address', 'stillpress')} name="homeUrl" required value={form.homeUrl} onChange={text('homeUrl')} error={errors.homeUrl}
           hint={__('Changing it republishes the whole site.', 'stillpress')} />
+        <Field label={__('Admin address', 'stillpress')} name="adminUrl" value={form.adminUrl} onChange={text('adminUrl')} error={errors.adminUrl}
+          hint={__('Links in emails point here. Change it when the site moves to its final domain.', 'stillpress')} />
         <Field label={__('Time zone', 'stillpress')} name="timezone" required value={form.timezone} onChange={text('timezone')} error={errors.timezone} />
         <Field label={__('Posts per page', 'stillpress')} name="postsPerPage" type="number" min={1} max={100} required value={form.postsPerPage}
           onChange={count('postsPerPage')} error={errors.postsPerPage} />
