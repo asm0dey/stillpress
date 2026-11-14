@@ -18,7 +18,8 @@ public final class Origins {
         if (a == null) {
             return Optional.empty();
         }
-        var host = a.host().contains(":") ? "[" + a.host() + "]" : a.host();
+        // the Host header's own brackets survive parsing; a bare IPv6 host does not have them
+        var host = a.host().contains(":") && !a.host().startsWith("[") ? "[" + a.host() + "]" : a.host();
         return Optional.of(r.scheme() + "://" + host + (a.port() < 0 ? "" : ":" + a.port()));
     }
 

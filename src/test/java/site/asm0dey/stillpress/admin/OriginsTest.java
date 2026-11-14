@@ -13,6 +13,11 @@ class OriginsTest {
     }
 
     @Test
+    void alreadyBracketedHostStaysSingleBracketed() {
+        assertThat(Origins.of(request(HostAndPort.create("[::1]", 8080)))).contains("http://[::1]:8080");
+    }
+
+    @Test
     void noAuthorityIsEmpty() {
         assertThat(Origins.of(request(null))).isEmpty();
     }

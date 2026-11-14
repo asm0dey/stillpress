@@ -177,6 +177,15 @@ class AuthResourceTest {
     }
 
     @Test
+    void ipv6HostHeaderGivesOneBracketPairInAdminUrl() {
+        var cookie = login("admin", "correct horse battery").cookie("sp_session");
+        given().cookie("sp_session", cookie).header("Host", "[::1]:8081").get("/admin/api/session").then().statusCode(
+                200
+        );
+        assertThat(settings.get("admin_url")).hasValue("http://[::1]:8081");
+    }
+
+    @Test
     void sessionDescribesTheUser() {
         var cookie = login("admin", "correct horse battery").cookie("sp_session");
         given()

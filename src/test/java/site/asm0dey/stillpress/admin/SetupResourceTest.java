@@ -84,11 +84,11 @@ class SetupResourceTest {
     }
 
     @Test
-    void missingHostIs400() throws Exception {
+    void hostlessRequestIsRejectedBeforeSetup() throws Exception {
         var raw = "POST /admin/api/setup HTTP/1.0\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}";
         try (var socket = new Socket("localhost", 8081)) {
             socket.getOutputStream().write(raw.getBytes(StandardCharsets.US_ASCII));
-            // Vert.x itself answers 400 before the resource runs; the resource's own no_host guards a null authority
+            // Vert.x itself answers 400 before the resource runs
             var answer = new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             assertThat(answer).startsWith("HTTP/1.0 400");
         }
