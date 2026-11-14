@@ -1,7 +1,9 @@
 package site.asm0dey.stillpress.account;
 
 import io.quarkus.vertx.http.runtime.filters.Filters;
-import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.http.HttpMethod;
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.http.HttpVersion;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import module java.base;
@@ -23,12 +25,19 @@ public class BodyLimitFilter {
                     && !path.equals("/admin/api/import")
                     && !path.equals("/admin/api/media")) {
                 if (req.getHeader("Transfer-Encoding") != null) {
-                    refuse(ctx.response(), 411, "Content-Length required");
+                    refuse(req, 411, "Content-Length required");
                     return;
                 }
                 var length = req.getHeader("Content-Length");
+                // HTTP/2 has no Transfer-Encoding: a body of unknown length is simply a stream with no Content-Length
+                if (length == null
+                        && req.version() == HttpVersion.HTTP_2
+                        && !Set.of(HttpMethod.GET, HttpMethod.HEAD, HttpMethod.OPTIONS).contains(req.method())) {
+                    refuse(req, 411, "Content-Length required");
+                    return;
+                }
                 if (length != null && tooLong(length)) {
-                    refuse(ctx.response(), 413, "Request body too large");
+                    refuse(req, 413, "Request body too large");
                     return;
                 }
             }
@@ -44,12 +53,13 @@ public class BodyLimitFilter {
         }
     }
 
-    private static void refuse(HttpServerResponse response, int status, String message) {
-        // the unread body stays on the connection, so it is closed rather than reused
-        response
-            .setStatusCode(status)
-            .putHeader("Content-Type", "text/plain; charset=UTF-8")
-            .putHeader("Connection", "close")
-            .end(message);
+    private static void refuse(HttpServerRequest req, int status, String message) {
+        var response = req.response().setStatusCode(status).putHeader("Content-Type", "text/plain; charset=UTF-8");
+        // the unread body stays on the HTTP/1 connection, so it is closed rather than reused; HTTP/2 forbids the header
+        // and resets just the stream
+        if (req.version() != HttpVersion.HTTP_2) {
+            response.putHeader("Connection", "close");
+        }
+        response.end(message);
     }
 }

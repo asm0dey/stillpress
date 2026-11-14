@@ -3,6 +3,13 @@ package site.asm0dey.stillpress.admin;
 import static org.assertj.core.api.Assertions.assertThat;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.vertx.core.Vertx;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.core.http.HttpClient;
+import io.vertx.core.http.HttpClientOptions;
+import io.vertx.core.http.HttpMethod;
+import io.vertx.core.http.HttpVersion;
+import jakarta.inject.Inject;
 import module java.base;
 import org.junit.jupiter.api.Test;
 
@@ -15,6 +22,8 @@ class AdminBodyLimitTest {
     private static final long HUNDRED_MB = 100L * 1024 * 1024;
     @TestHTTPResource("/")
     URL app;
+    @Inject
+    Vertx vertx;
 
     @Test
     void largeJsonBodiesAre413() throws IOException {
@@ -30,6 +39,48 @@ class AdminBodyLimitTest {
         assertThat(status("/admin/api/login", "Content-Type: application/json\r\nTransfer-Encoding: chunked")).isEqualTo(
                 411
         );
+    }
+
+    @Test
+    void h2cBodyWithoutLengthIsRefused() throws Exception {
+        var chunk = Buffer.buffer("x".repeat(50 * 1024));
+        assertThat(h2c(HttpMethod.POST, "/admin/api/login", chunk)).isEqualTo(411);
+    }
+
+    @Test
+    void h2cGetWithoutBodyIs200() throws Exception {
+        assertThat(h2c(HttpMethod.GET, "/admin/api/setup", null)).isEqualTo(200);
+    }
+
+    /**
+     * One request over HTTP/2 prior knowledge; a body is written as two chunks, so no Content-Length is known.
+     */
+    private int h2c(HttpMethod method, String path, Buffer chunk) throws Exception {
+        HttpClient client = vertx.createHttpClient(new HttpClientOptions()
+            .setProtocolVersion(HttpVersion.HTTP_2)
+            .setHttp2ClearTextUpgrade(false)
+        );
+        try {
+            return client
+                .request(method, app.getPort(), app.getHost(), path)
+                .compose(r -> {
+                    if (chunk == null) {
+                        return r.send();
+                    }
+                    r.putHeader("Content-Type", "application/json").setChunked(true);
+                    // the server answers 411 and resets the stream, so a write may fail; the response is what counts
+                    r.write(chunk);
+                    r.write(chunk);
+                    r.end();
+                    return r.response();
+                })
+                .toCompletionStage()
+                .toCompletableFuture()
+                .get(10, TimeUnit.SECONDS)
+                .statusCode();
+        } finally {
+            client.close().toCompletionStage().toCompletableFuture().get(5, TimeUnit.SECONDS);
+        }
     }
 
     @Test
