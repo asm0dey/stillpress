@@ -31,7 +31,7 @@ public class Secrets {
     ) throws GeneralSecurityException {
         this.repository = repository;
         var keys = Keys.get(dataDir.root(), keysDir);
-        this.aead = keys.aead().getPrimitive(RegistryConfiguration.get(), Aead.class);
+        this.aead = aead(keys);
         this.prf = keys.prf().getPrimitive(RegistryConfiguration.get(), PrfSet.class);
     }
 
@@ -40,15 +40,41 @@ public class Secrets {
      */
     public Optional<String> get(String name) {
         return repository.ciphertext(name).flatMap(c -> {
-            try {
-                return Optional.of(new String(aead.decrypt(Base64.getDecoder().decode(c), name.getBytes(UTF_8)), UTF_8));
-            } catch (GeneralSecurityException | IllegalArgumentException e) {
-                if (warned.add(name)) {
-                    LOG.warnf("Stored secret %s does not decrypt with the current keyset; treating it as unset", name);
-                }
-                return Optional.empty();
+            var value = decrypt(aead, name, c);
+            if (value.isEmpty() && warned.add(name)) {
+                LOG.warnf("Stored secret %s does not decrypt with the current keyset; treating it as unset", name);
             }
+            return value;
         });
+    }
+
+    /**
+     * True when nothing is stored or a stored secret decrypts under {@code keys}: false means the secrets belong to
+     * another keyset.
+     */
+    public boolean readableWith(Keys keys) {
+        return repository
+            .first()
+            .map(r -> decrypt(aead(keys), r.getName(), r.getCiphertext()).isPresent())
+            .orElse(true);
+    }
+
+    private static Aead aead(Keys keys) {
+        try {
+            return keys.aead().getPrimitive(RegistryConfiguration.get(), Aead.class);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static Optional<String> decrypt(Aead aead, String name, String ciphertext) {
+        try {
+            return Optional.of(
+                    new String(aead.decrypt(Base64.getDecoder().decode(ciphertext), name.getBytes(UTF_8)), UTF_8)
+            );
+        } catch (GeneralSecurityException | IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     public void put(String name, String value) {
