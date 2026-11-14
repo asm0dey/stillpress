@@ -61,4 +61,26 @@ class LoginLimiterTest {
         }
         assertThat(l.blockedIp("10.0.0.1")).isPresent();
     }
+
+    @Test
+    void sweepDropsStaleKeys() {
+        for (int i = 0; i < 1000; i++) {
+            l.failure("user" + i, "10.1." + (i / 250) + "." + (i % 250));
+        }
+        clock.advance(Duration.ofMinutes(16));
+        l.blockedIp("10.9.9.9");
+        assertThat(l.size()).isZero();
+    }
+
+    @Test
+    void expiredFailuresStopBlockingWithoutAPrune() {
+        for (int i = 0; i < 20; i++) {
+            l.failure("admin", "10.0.0.1");
+        }
+        assertThat(l.blockedIp("10.0.0.1")).isPresent();
+        // under one window since the last sweep, so only the touched key is trimmed
+        clock.advance(Duration.ofMinutes(15).plusSeconds(1));
+        assertThat(l.blockedIp("10.0.0.1")).isEmpty();
+        assertThat(l.blockedAccount("admin")).isEmpty();
+    }
 }

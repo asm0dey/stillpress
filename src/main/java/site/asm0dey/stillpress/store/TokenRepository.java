@@ -3,6 +3,7 @@ package site.asm0dey.stillpress.store;
 import static site.asm0dey.stillpress.db.Tables.USER_TOKEN;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import module java.base;
 import org.jooq.DSLContext;
 import site.asm0dey.stillpress.db.tables.records.UserTokenRecord;
@@ -17,13 +18,36 @@ public class TokenRepository {
     @Inject
     DSLContext db;
 
+    @Transactional
     public String create(long userId, String purpose, Duration ttl) {
         var raw = SessionRepository.randomToken(32);
+        // a new link revokes the earlier ones
+        db.deleteFrom(USER_TOKEN).where(USER_TOKEN.USER_ID.eq(userId), USER_TOKEN.PURPOSE.eq(purpose)).execute();
+        var now = SessionRepository.now();
         db
-            .insertInto(USER_TOKEN, USER_TOKEN.ID, USER_TOKEN.USER_ID, USER_TOKEN.PURPOSE, USER_TOKEN.EXPIRES_AT)
-            .values(SessionRepository.hash(raw), userId, purpose, SessionRepository.now().plus(ttl))
+            .insertInto(
+                    USER_TOKEN,
+                    USER_TOKEN.ID,
+                    USER_TOKEN.USER_ID,
+                    USER_TOKEN.PURPOSE,
+                    USER_TOKEN.EXPIRES_AT,
+                    USER_TOKEN.CREATED_AT
+            )
+            .values(SessionRepository.hash(raw), userId, purpose, now.plus(ttl), now)
             .execute();
         return raw;
+    }
+
+    /**
+     * Whether an unspent token of this purpose was created for the user at or after {@code since}.
+     */
+    public boolean issuedSince(long userId, String purpose, Instant since) {
+        return db.fetchExists(
+                USER_TOKEN,
+                USER_TOKEN.USER_ID.eq(userId),
+                USER_TOKEN.PURPOSE.eq(purpose),
+                USER_TOKEN.CREATED_AT.ge(LocalDateTime.ofInstant(since, ZoneOffset.UTC))
+        );
     }
 
     /**

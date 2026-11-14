@@ -18,10 +18,12 @@ public class LoginLimiter {
     private final Clock clock;
     private final Map<String, ArrayDeque<Instant>> byLogin = new HashMap<>();
     private final Map<String, ArrayDeque<Instant>> byIp = new HashMap<>();
+    private Instant lastSweep;
 
     @Inject
     public LoginLimiter(Clock clock) {
         this.clock = clock;
+        this.lastSweep = clock.instant();
     }
 
     @Produces
@@ -34,37 +36,34 @@ public class LoginLimiter {
      * Time until this client IP may try again, or empty when allowed now.
      */
     public synchronized Optional<Duration> blockedIp(String ip) {
-        prune();
-        return wait(byIp.get(ip), PER_IP, clock.instant());
+        var now = clock.instant();
+        sweep(now);
+        return wait(touch(byIp, ip, now), PER_IP, now);
     }
 
     /**
      * Time until this account may try again, or empty when allowed now. The key is case-insensitive.
      */
     public synchronized Optional<Duration> blockedAccount(String account) {
-        prune();
-        return wait(byLogin.get(key(account)), PER_ACCOUNT, clock.instant());
+        var now = clock.instant();
+        sweep(now);
+        return wait(touch(byLogin, key(account), now), PER_ACCOUNT, now);
     }
 
     public synchronized void failure(String account, String ip) {
-        prune();
         var now = clock.instant();
-        byLogin
-            .computeIfAbsent(key(account), _ -> new ArrayDeque<>())
-            .addLast(now);
-        byIp
-            .computeIfAbsent(ip, _ -> new ArrayDeque<>())
-            .addLast(now);
+        sweep(now);
+        record(byLogin, key(account), now);
+        record(byIp, ip, now);
     }
 
     /**
      * A failure that names no real account (an oversized login); only the IP bucket counts it.
      */
     public synchronized void ipFailure(String ip) {
-        prune();
-        byIp
-            .computeIfAbsent(ip, _ -> new ArrayDeque<>())
-            .addLast(clock.instant());
+        var now = clock.instant();
+        sweep(now);
+        record(byIp, ip, now);
     }
 
     public synchronized void success(String account) {
@@ -85,17 +84,52 @@ public class LoginLimiter {
     }
 
     /**
-     * Drops failures older than the window, and keys left empty, so memory stays bounded by recent failures.
+     * Total keys in both maps, for the sweep test.
      */
-    private void prune() {
-        var cutoff = clock.instant().minus(WINDOW);
+    synchronized int size() {
+        return byLogin.size() + byIp.size();
+    }
+
+    /**
+     * The key's failures inside the window; drops the older ones, and the key when none are left.
+     */
+    private static ArrayDeque<Instant> touch(Map<String, ArrayDeque<Instant>> map, String k, Instant now) {
+        var d = map.get(k);
+        if (d != null && trim(d, now)) {
+            map.remove(k);
+            return null;
+        }
+        return d;
+    }
+
+    /**
+     * Drops failures that left the window; true when none are left.
+     */
+    private static boolean trim(ArrayDeque<Instant> d, Instant now) {
+        var cutoff = now.minus(WINDOW);
+        while (!d.isEmpty() && !d.peekFirst().isAfter(cutoff)) {
+            d.removeFirst();
+        }
+        return d.isEmpty();
+    }
+
+    private static void record(Map<String, ArrayDeque<Instant>> map, String k, Instant now) {
+        touch(map, k, now);
+        map
+            .computeIfAbsent(k, _ -> new ArrayDeque<>())
+            .addLast(now);
+    }
+
+    /**
+     * Whole-map prune, at most once per window, so keys nobody touches again do not accumulate.
+     */
+    private void sweep(Instant now) {
+        if (now.isBefore(lastSweep.plus(WINDOW))) {
+            return;
+        }
+        lastSweep = now;
         for (var map : List.of(byLogin, byIp)) {
-            map.values().removeIf(d -> {
-                while (!d.isEmpty() && !d.peekFirst().isAfter(cutoff)) {
-                    d.removeFirst();
-                }
-                return d.isEmpty();
-            });
+            map.values().removeIf(d -> trim(d, now));
         }
     }
 

@@ -268,6 +268,22 @@ class AuthResourceTest {
     }
 
     @Test
+    void newLinkRevokesTheOldOne() {
+        var first = tokens.create(adminId, "set_password", Duration.ofHours(24));
+        var second = tokens.create(adminId, "set_password", Duration.ofHours(24));
+        setPassword(first, "a brand new password").then().statusCode(410).body("error", equalTo("invalid_token"));
+        setPassword(second, "a brand new password").then().statusCode(204);
+    }
+
+    @Test
+    void issuedSinceSeesOnlyTokensCreatedAfterTheInstant() {
+        tokens.create(adminId, "set_password", Duration.ofHours(24));
+        var now = Instant.now();
+        assertThat(tokens.issuedSince(adminId, "set_password", now.minus(Duration.ofMinutes(1)))).isTrue();
+        assertThat(tokens.issuedSince(adminId, "set_password", now.plus(Duration.ofMinutes(1)))).isFalse();
+    }
+
+    @Test
     void tokenForAnotherPurposeIsRejected() {
         var raw = tokens.create(adminId, "other", Duration.ofHours(24));
         setPassword(raw, "a brand new password").then().statusCode(410);

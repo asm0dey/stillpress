@@ -149,12 +149,13 @@ public class AuthResource {
             // checked before the token is spent, so the user can retry with a longer password
             return Response.status(400).entity(Map.of("error", "weak_password")).build();
         }
-        var hash = Passwords.hash(password);
         // one transaction: the token is spent only if the password is set and every old session is revoked
         var userId = tokens.consume(p.token(), TokenRepository.SET_PASSWORD);
         if (userId.isEmpty()) {
             return Response.status(410).entity(Map.of("error", "invalid_token")).build();
         }
+        // hashing is the slow step: a bad token is refused before paying for it
+        var hash = Passwords.hash(password);
         users.setPassword(userId.get(), hash);
         sessions.deleteAllFor(userId.get());
         return Response.noContent().build();
