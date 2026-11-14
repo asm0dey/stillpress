@@ -146,6 +146,41 @@ class UsersResourceTest {
     }
 
     @Test
+    void concurrentCreatesSameEmailDifferentCase() {
+        var emails = List.of("A@x.org", "a@x.org");
+        var codes = IntStream
+            .range(0, 2)
+            .parallel()
+            .mapToObj(i -> asAdmin()
+                .body(Map.of("login", "mail" + i, "email", emails.get(i), "displayName", "D", "role", "author"))
+                .post("/admin/api/users"))
+            .toList();
+        assertThat(codes.stream().map(Response::statusCode).sorted()).containsExactly(201, 409);
+        assertThat(codes
+            .stream()
+            .filter(r -> r.statusCode() == 409)
+            .map(r -> r.jsonPath().getString("error")))
+            .containsExactly("email_taken");
+    }
+
+    @Test
+    void profileUpdateRaceMapsTo409() {
+        // each updater passes or fails the up-front check; the unique index settles whoever is left
+        var other = user("other", Role.AUTHOR);
+        var ids = List.of(writerId, other);
+        var codes = IntStream
+            .range(0, 2)
+            .parallel()
+            .mapToObj(i -> asAdmin()
+                .body(Map.of("displayName", "P", "email", i == 0 ? "Same@x.org" : "same@x.org"))
+                .put("/admin/api/users/" + ids.get(i))
+                .statusCode())
+            .sorted()
+            .toList();
+        assertThat(codes).containsExactly(204, 409);
+    }
+
+    @Test
     void unknownRoleIs400() {
         create("editor1", "king").then().statusCode(400);
     }

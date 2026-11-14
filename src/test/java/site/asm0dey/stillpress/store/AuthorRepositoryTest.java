@@ -1,8 +1,10 @@
 package site.asm0dey.stillpress.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.jooq.DSLContext;
 import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +18,8 @@ class AuthorRepositoryTest {
     TestStore store;
     @Inject
     AuthorRepository users;
+    @Inject
+    DSLContext db;
 
     @BeforeEach
     void reset() {
@@ -40,9 +44,56 @@ class AuthorRepositoryTest {
 
     @Test
     void ambiguousEmailMatchesNobody() {
-        users.create("one", "same@example.org", "One", Role.AUTHOR);
-        users.create("two", "Same@example.org", "Two", Role.AUTHOR);
+        // duplicates left over from before the unique key keep a NULL email_lower
+        legacy("one", "same@example.org");
+        legacy("two", "Same@example.org");
         assertThat(users.findByLoginOrEmail("same@example.org")).isEmpty();
+    }
+
+    @Test
+    void backfillSkipsExistingDuplicates() throws Exception {
+        legacy("one", "Dup@example.org");
+        legacy("two", "dup@example.org");
+        legacy("three", "Solo@example.org");
+        legacy("four", null);
+        // the migration is the single source of the backfill statement
+        var sql = Files
+            .readAllLines(Path.of("src/main/resources/db/migration/common/V8__email_lower.sql"))
+            .stream()
+            .filter(l -> l.startsWith("UPDATE author"))
+            .findFirst()
+            .orElseThrow();
+        db.execute(sql);
+        assertThat(db
+            .select(AUTHOR.LOGIN, AUTHOR.EMAIL_LOWER)
+            .from(AUTHOR)
+            .orderBy(AUTHOR.LOGIN)
+            .fetchMap(AUTHOR.LOGIN, AUTHOR.EMAIL_LOWER)
+        )
+            .containsEntry("one", null)
+            .containsEntry("two", null)
+            .containsEntry("three", "solo@example.org")
+            .containsEntry("four", null);
+    }
+
+    @Test
+    void emailLowerTracksCreateAndProfileChange() {
+        var a = users.create("five", "Mixed@Example.org", "Five", Role.AUTHOR);
+        assertThat(users.findById(a.getId()).orElseThrow().getEmailLower()).isEqualTo("mixed@example.org");
+        users.setProfile(a.getId(), "Five", "Other@Example.org");
+        assertThat(users.findByLoginOrEmail("OTHER@example.org"))
+            .map(r -> r.getId())
+            .contains(a.getId());
+    }
+
+    private void legacy(String login, String email) {
+        db
+            .insertInto(AUTHOR)
+            .set(AUTHOR.LOGIN, login)
+            .set(AUTHOR.SLUG, login)
+            .set(AUTHOR.EMAIL, email)
+            .set(AUTHOR.ROLE, "author")
+            .execute();
     }
 
     @Test

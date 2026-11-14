@@ -52,7 +52,7 @@ export default function Users() {
     } catch (e) {
       const err = asApiError(e);
       if (err.error === 'email_taken') setEditErrors({ email: __('Another user has this email.', 'stillpress') });
-      else if (err.field === 'email') setEditErrors({ email: __('Use an email address of at most 100 characters.', 'stillpress') });
+      else if (err.field === 'email') setEditErrors({ email: __('Enter an email address like name@example.com, at most 100 characters.', 'stillpress') });
       else if (err.field === 'displayName') setEditErrors({ displayName: __('Enter a name of at most 250 characters.', 'stillpress') });
       else setMessage(err.error === 'csrf' ? err.message! : __('Could not save the profile.', 'stillpress'));
     }
@@ -89,7 +89,7 @@ export default function Users() {
       if (err.error === 'login_taken') setAddErrors({ login: __('That login is already taken.', 'stillpress') });
       else if (err.error === 'email_taken') setAddErrors({ email: __('Another user has this email.', 'stillpress') });
       else if (err.field === 'login') setAddErrors({ login: __('Use up to 60 letters, digits, spaces and the characters _ . - @', 'stillpress') });
-      else if (err.field === 'email') setAddErrors({ email: __('Use an email address of at most 100 characters.', 'stillpress') });
+      else if (err.field === 'email') setAddErrors({ email: __('Enter an email address like name@example.com, at most 100 characters.', 'stillpress') });
       else if (err.field === 'displayName') setAddErrors({ displayName: __('Enter a name of at most 250 characters.', 'stillpress') });
       else setMessage(err.error === 'csrf' ? err.message! : __('Check the fields and try again.', 'stillpress'));
     }

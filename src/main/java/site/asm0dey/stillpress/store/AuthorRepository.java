@@ -1,13 +1,13 @@
 package site.asm0dey.stillpress.store;
 
 import static org.jooq.impl.DSL.escape;
-import static org.jooq.impl.DSL.lower;
 import static org.jooq.impl.DSL.when;
 import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.exception.DataAccessException;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.importer.Nicename;
@@ -43,7 +43,7 @@ public class AuthorRepository {
         // the login match (at most one: login is unique) sorts first, so the limit never cuts it off
         var rows = db
             .selectFrom(AUTHOR)
-            .where(AUTHOR.LOGIN.eq(s).or(lower(AUTHOR.EMAIL).eq(s.toLowerCase(Locale.ROOT))))
+            .where(AUTHOR.LOGIN.eq(s).or(AUTHOR.EMAIL_LOWER.eq(lowerEmail(s))))
             .orderBy(when(AUTHOR.LOGIN.eq(s), 0).otherwise(1))
             .limit(3)
             .fetch();
@@ -57,6 +57,7 @@ public class AuthorRepository {
         var r = db.newRecord(AUTHOR);
         r.setLogin(login);
         r.setEmail(email);
+        r.setEmailLower(lowerEmail(email));
         r.setDisplayName(displayName);
         r.setRole(role.id());
         r.setSlug(uniqueSlug(login));
@@ -68,11 +69,32 @@ public class AuthorRepository {
      * Whether a user other than {@code exceptId} has {@code email}, case-insensitively.
      */
     public boolean emailTaken(String email, long exceptId) {
-        return db.fetchExists(AUTHOR, lower(AUTHOR.EMAIL).eq(email.toLowerCase(Locale.ROOT)), AUTHOR.ID.ne(exceptId));
+        return db.fetchExists(AUTHOR, AUTHOR.EMAIL_LOWER.eq(lowerEmail(email)), AUTHOR.ID.ne(exceptId));
+    }
+
+    /**
+     * The value of {@code author.email_lower}: null for a missing or empty email, which is never a duplicate.
+     */
+    public static String lowerEmail(String email) {
+        return email == null || email.isEmpty() ? null : email.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Whether {@code e} is the unique index on {@code email_lower} refusing a second user with the same email.
+     */
+    public static boolean isEmailConflict(DataAccessException e) {
+        return "23505".equals(e.sqlState())
+                && String.valueOf(e.getMessage()).toLowerCase(Locale.ROOT).contains("uq_author_email_lower");
     }
 
     public void setProfile(long id, String displayName, String email) {
-        db.update(AUTHOR).set(AUTHOR.DISPLAY_NAME, displayName).set(AUTHOR.EMAIL, email).where(AUTHOR.ID.eq(id)).execute();
+        db
+            .update(AUTHOR)
+            .set(AUTHOR.DISPLAY_NAME, displayName)
+            .set(AUTHOR.EMAIL, email)
+            .set(AUTHOR.EMAIL_LOWER, lowerEmail(email))
+            .where(AUTHOR.ID.eq(id))
+            .execute();
     }
 
     public void setLocale(long id, String locale) {

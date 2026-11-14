@@ -106,8 +106,10 @@ public class UsersResource {
             if (!"23505".equals(e.sqlState())) {
                 throw e;
             }
-            // a concurrent create took the login; thrown, so the transaction rolls back
-            throw new WebApplicationException(error(409, "login_taken"));
+            // a concurrent create took the login or the email; thrown, so the transaction rolls back
+            throw new WebApplicationException(
+                    error(409, AuthorRepository.isEmailConflict(e) ? "email_taken" : "login_taken")
+            );
         }
         // a full publish renders every author's archive, the new user's empty one too
         queue.base("/author/" + created.getSlug() + "/");
@@ -148,7 +150,15 @@ public class UsersResource {
             return error(409, "email_taken");
         }
         guard.close();
-        users.setProfile(id, name, email);
+        try {
+            users.setProfile(id, name, email);
+        } catch (DataAccessException e) {
+            if (!AuthorRepository.isEmailConflict(e)) {
+                throw e;
+            }
+            // a concurrent change took the email; thrown, so the transaction rolls back
+            throw new WebApplicationException(error(409, "email_taken"));
+        }
         if (!name.equals(u.getDisplayName())) {
             var written = items.publishedIdsBy(id);
             fragments.delete(written);

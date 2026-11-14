@@ -127,6 +127,22 @@ class WordPressImporterTest {
     }
 
     @Test
+    void duplicateAuthorEmailsImport() throws Exception {
+        var wxr =
+                new String(sample().readAllBytes(), StandardCharsets.UTF_8)
+            .replace("papa@example.ru", "MAMA@example.ru");
+        importer.importWxr(new ByteArrayInputStream(wxr.getBytes(StandardCharsets.UTF_8)));
+        assertThat(db
+            .select(AUTHOR.LOGIN, AUTHOR.EMAIL_LOWER)
+            .from(AUTHOR)
+            .fetchMap(AUTHOR.LOGIN, AUTHOR.EMAIL_LOWER))
+            .containsEntry("mama", "mama@example.ru")
+            .containsEntry("papa", null);
+        assertThat(users.findById(users.findByLogin("papa").orElseThrow().getId()).orElseThrow().getEmail())
+            .isEqualTo("MAMA@example.ru");
+    }
+
+    @Test
     void secondImportRefused() throws Exception {
         importer.importWxr(sample());
         assertThatThrownBy(() -> importer.importWxr(sample())).isInstanceOf(AlreadyImportedException.class);

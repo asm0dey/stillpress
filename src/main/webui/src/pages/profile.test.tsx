@@ -41,7 +41,7 @@ test('saving sends the name and email', async () => {
 
 for (const [name, reply, field, text] of [
   ['a taken email', { status: 409, body: { error: 'email_taken' } }, 'Email', 'Another user has this email.'],
-  ['a too long email', { status: 400, body: { field: 'email' } }, 'Email', 'Use an email address of at most 100 characters.'],
+  ['a too long email', { status: 400, body: { field: 'email' } }, 'Email', 'Enter an email address like name@example.com, at most 100 characters.'],
   ['a too long name', { status: 400, body: { field: 'displayName' } }, 'Display name', 'Enter a name of at most 250 characters.'],
 ] as const) {
   test(`${name} marks its field`, async () => {

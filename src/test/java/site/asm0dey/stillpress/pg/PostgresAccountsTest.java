@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
+import org.jooq.exception.DataAccessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
@@ -69,6 +70,34 @@ class PostgresAccountsTest {
         assertThat(tokens.consume(token, "set_password")).isEmpty();
         var expired = tokens.create(mama.getId(), "set_password", Duration.ofSeconds(-1));
         assertThat(tokens.consume(expired, "set_password")).isEmpty();
+    }
+
+    @Test
+    void concurrentCreatesSameEmailDifferentCaseHaveOneWinner() throws Exception {
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var start = new CountDownLatch(1);
+            var emails = List.of("A@x.org", "a@x.org");
+            var results = new ArrayList<Future<Boolean>>();
+            for (int i = 0; i < 2; i++) {
+                var n = i;
+                results.add(pool.submit(() -> {
+                    start.await();
+                    try {
+                        users.create("mail" + n, emails.get(n), "M", Role.AUTHOR);
+                        return true;
+                    } catch (DataAccessException e) {
+                        assertThat(AuthorRepository.isEmailConflict(e)).as(e.getMessage()).isTrue();
+                        return false;
+                    }
+                }));
+            }
+            start.countDown();
+            var outcomes = new ArrayList<Boolean>();
+            for (var f : results) {
+                outcomes.add(f.get(30, TimeUnit.SECONDS));
+            }
+            assertThat(outcomes).containsExactlyInAnyOrder(true, false);
+        }
     }
 
     @Test

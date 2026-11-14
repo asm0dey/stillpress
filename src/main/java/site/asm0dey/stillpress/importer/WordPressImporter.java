@@ -161,6 +161,10 @@ public class WordPressImporter {
             }
             if (r.getEmail() == null) {
                 r.setEmail(a.email());
+                // a later export author whose email differs only in case keeps the email but not the unique key
+                if (!authors.emailTaken(a.email(), r.getId() == null ? -1 : r.getId())) {
+                    r.setEmailLower(AuthorRepository.lowerEmail(a.email()));
+                }
             }
             r.setSourceId(a.id());
             r.store();

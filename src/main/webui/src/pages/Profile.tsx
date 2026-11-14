@@ -34,7 +34,7 @@ export default function Profile() {
     } catch (e) {
       const err = asApiError(e);
       if (err.error === 'email_taken') setErrors({ email: __('Another user has this email.', 'stillpress') });
-      else if (err.field === 'email') setErrors({ email: __('Use an email address of at most 100 characters.', 'stillpress') });
+      else if (err.field === 'email') setErrors({ email: __('Enter an email address like name@example.com, at most 100 characters.', 'stillpress') });
       else if (err.field === 'displayName') setErrors({ displayName: __('Enter a name of at most 250 characters.', 'stillpress') });
       else setMessage(err.error === 'csrf' ? err.message! : __('Could not save the profile.', 'stillpress'));
     }

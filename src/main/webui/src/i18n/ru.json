@@ -1000,8 +1000,8 @@
  "Use a time zone such as Europe/Berlin.": [
   "Укажите часовой пояс вида Europe/Moscow."
  ],
- "Use an email address of at most 100 characters.": [
-  "Укажите адрес email не длиннее 100 символов."
+ "Enter an email address like name@example.com, at most 100 characters.": [
+  "Укажите адрес email вида name@example.com, не длиннее 100 символов."
  ],
  "Use one word or slug, different from the category base.": [
   "Используйте одно слово или ярлык, отличный от префикса рубрик."
