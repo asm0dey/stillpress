@@ -71,6 +71,13 @@ class SitePublisherTest {
     }
 
     @Test
+    void feedBytesUnchangedByFragments() throws IOException {
+        var rel = publisher.publishAll().release();
+        var golden = Path.of("src/test/resources/golden/home-feed.xml");
+        assertThat(rel.resolve("feed/index.html")).content(StandardCharsets.UTF_8).isEqualTo(Files.readString(golden));
+    }
+
+    @Test
     void commentAnchorsAndFeedGuidsUseTheWxrCommentId() {
         var rel = publisher.publishAll().release();
         var dbId = db.fetchValue(COMMENT.ID, COMMENT.SOURCE_ID.eq(902L));
