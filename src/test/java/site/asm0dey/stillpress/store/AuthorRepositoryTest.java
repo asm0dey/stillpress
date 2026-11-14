@@ -1,10 +1,12 @@
 package site.asm0dey.stillpress.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.jooq.DSLContext;
+import org.jooq.exception.DataAccessException;
 import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -94,6 +96,29 @@ class AuthorRepositoryTest {
             .set(AUTHOR.EMAIL, email)
             .set(AUTHOR.ROLE, "author")
             .execute();
+    }
+
+    @Test
+    void createWithEmailDifferingOnlyInCaseIsAnEmailConflict() {
+        users.create("six", "Case@example.org", "Six", Role.AUTHOR);
+        assertThatThrownBy(() -> users.create("seven", "case@example.org", "Seven", Role.AUTHOR))
+            .isInstanceOfSatisfying(DataAccessException.class, e -> assertThat(AuthorRepository.isEmailConflict(e))
+                .as(e.getMessage())
+                .isTrue());
+    }
+
+    @Test
+    void setProfileOntoAnExistingEmailIsAnEmailConflictButALoginClashIsNot() {
+        users.create("eight", "taken@example.org", "Eight", Role.AUTHOR);
+        var nine = users.create("nine", "free@example.org", "Nine", Role.AUTHOR);
+        assertThatThrownBy(() -> users.setProfile(nine.getId(), "Nine", "TAKEN@example.org"))
+            .isInstanceOfSatisfying(DataAccessException.class, e -> assertThat(AuthorRepository.isEmailConflict(e))
+                .as(e.getMessage())
+                .isTrue());
+        assertThatThrownBy(() -> users.create("eight", "other@example.org", "Dup", Role.AUTHOR))
+            .isInstanceOfSatisfying(DataAccessException.class, e -> assertThat(AuthorRepository.isEmailConflict(e))
+                .as(e.getMessage())
+                .isFalse());
     }
 
     @Test
