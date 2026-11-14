@@ -1104,5 +1104,71 @@
  ],
  "— Parent category —": [
   "— Родительская рубрика —"
+ ],
+ "Security": [
+  "Безопасность"
+ ],
+ "Enter the SMTP server, or leave it empty to turn mail off.": [
+  "Укажите SMTP-сервер или оставьте поле пустым, чтобы отключить почту."
+ ],
+ "Use a port from 1 to 65535.": [
+  "Укажите порт от 1 до 65535."
+ ],
+ "Choose how to secure the connection.": [
+  "Выберите способ защиты соединения."
+ ],
+ "Use an email address such as blog@example.org.": [
+  "Укажите адрес эл. почты, например blog@example.org."
+ ],
+ "Your profile has no email to send the test to.": [
+  "В вашем профиле нет адреса эл. почты, на который можно отправить тестовое письмо."
+ ],
+ "Save an SMTP server first.": [
+  "Сначала сохраните SMTP-сервер."
+ ],
+ "Could not load the email settings.": [
+  "Не удалось загрузить настройки почты."
+ ],
+ "Could not save the email settings.": [
+  "Не удалось сохранить настройки почты."
+ ],
+ "The test email was sent. Check your inbox.": [
+  "Тестовое письмо отправлено. Проверьте почту."
+ ],
+ "The test email could not be sent: %s": [
+  "Не удалось отправить тестовое письмо: %s"
+ ],
+ "Could not send the test email.": [
+  "Не удалось отправить тестовое письмо."
+ ],
+ "The last email could not be sent: %s": [
+  "Последнее письмо не удалось отправить: %s"
+ ],
+ "SMTP host": [
+  "SMTP-сервер"
+ ],
+ "Leave empty to send no email.": [
+  "Оставьте пустым, чтобы не отправлять письма."
+ ],
+ "Port": [
+  "Порт"
+ ],
+ "Connection security": [
+  "Защита соединения"
+ ],
+ "STARTTLS": [
+  "STARTTLS"
+ ],
+ "TLS": [
+  "TLS"
+ ],
+ "Username": [
+  "Имя пользователя"
+ ],
+ "From address": [
+  "Адрес отправителя"
+ ],
+ "Send test email": [
+  "Отправить тестовое письмо"
  ]
 }

@@ -55,6 +55,7 @@ export default function Shell({ children }: { children: ReactNode }) {
           {may('/redirects') && <Link to="/redirects">{__('Redirects', 'stillpress')}</Link>}
           {may('/users') && <Link to="/users">{__('Users', 'stillpress')}</Link>}
           {may('/settings') && <Link to="/settings">{__('Settings', 'stillpress')}</Link>}
+          {may('/security') && <Link to="/security">{__('Security', 'stillpress')}</Link>}
           {may('/import') && importAllowed && <Link to="/import">{__('Import', 'stillpress')}</Link>}
           {role && <Link to="/profile">{__('Profile', 'stillpress')}</Link>}
         </nav>

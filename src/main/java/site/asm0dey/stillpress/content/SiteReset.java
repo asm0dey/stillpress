@@ -10,6 +10,7 @@ import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.importer.ImportGuard;
+import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.importer.ImportRunningException;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishLock;
@@ -46,6 +47,8 @@ public class SiteReset {
     DataDir dataDir;
     @Inject
     SettingRepository settings;
+    @Inject
+    SiteMail mail;
 
     /**
      * Keeps one administrator (password kept, {@code source_id} cleared so the next import merges by login), the
@@ -126,6 +129,8 @@ public class SiteReset {
             if (importRunning) {
                 return Outcome.IMPORT_RUNNING;
             }
+            // the SMTP settings are gone with the rest
+            mail.reload();
             try {
                 files();
                 return Outcome.DONE;

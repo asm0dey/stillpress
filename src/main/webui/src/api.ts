@@ -7,7 +7,7 @@ const ADMINISTRATOR: Role[] = ['administrator'];
 const EDITORS: Role[] = ['administrator', 'editor'];
 /** Screens only some roles may use, by first path segment, as Capabilities decides on the server. */
 const SCREEN_ROLES: Record<string, Role[]> = {
-  users: ADMINISTRATOR, settings: ADMINISTRATOR, import: ADMINISTRATOR, redirects: ADMINISTRATOR,
+  users: ADMINISTRATOR, settings: ADMINISTRATOR, security: ADMINISTRATOR, import: ADMINISTRATOR, redirects: ADMINISTRATOR,
   pages: EDITORS, categories: EDITORS, tags: EDITORS,
 };
 
@@ -71,6 +71,11 @@ export interface SiteSettings {
   title: string; description: string; language: string; homeUrl: string; adminUrl: string; timezone: string;
   postsPerPage: number; postsPerRss: number; permalinkStructure: string; categoryBase: string; tagBase: string;
   defaultCategory: number | null; defaultCommentStatus: 'open' | 'closed';
+}
+/** GET and PUT /mail; PUT also takes password: null keeps the stored one, '' deletes it */
+export interface MailSettings {
+  host: string; port: number; security: 'none' | 'starttls' | 'tls'; username: string; from: string; passwordSet: boolean;
+  lastError: string | null;
 }
 /** GET /terms */
 export interface TermView { id: number; name: string; slug: string; parentId: number | null; description?: string | null; count?: number }

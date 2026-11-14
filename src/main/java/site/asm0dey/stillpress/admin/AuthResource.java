@@ -124,11 +124,17 @@ public class AuthResource {
                 .of(request)
                 .ifPresent(o -> settings.compareAndSet("admin_url", null, o));
         }
-        // the user's own choice; otherwise the site language decides between the two admin languages
-        var locale = u.getLocale() != null
-                ? u.getLocale()
-                : settings.get("language").filter(l -> l.startsWith("ru")).map(l -> "ru").orElse("en");
+        var locale = adminLocale(u.getLocale(), settings.get("language"));
         return new SessionUser(u.getId(), u.getLogin(), u.getDisplayName(), u.getEmail(), u.getRole(), locale);
+    }
+
+    /**
+     * The user's own choice; otherwise the site language decides between the two admin languages.
+     */
+    public static String adminLocale(String userLocale, Optional<String> siteLanguage) {
+        return userLocale != null
+                ? userLocale
+                : siteLanguage.filter(l -> l.startsWith("ru")).map(l -> "ru").orElse("en");
     }
 
     /**

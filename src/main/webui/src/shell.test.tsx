@@ -27,7 +27,7 @@ test('an administrator gets every screen', async () => {
   const view = page();
   await view.findByRole('link', { name: 'Import' });
   expect(links(view)).toEqual(['Stillpress', 'Posts', 'Pages', 'Reusable blocks', 'Categories', 'Tags', 'Redirects', 'Users',
-    'Settings', 'Import', 'Profile']);
+    'Settings', 'Security', 'Import', 'Profile']);
   expect(view.getByText('content')).toBeTruthy();
 });
 

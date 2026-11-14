@@ -20,6 +20,7 @@ const Redirects = lazy(() => admin().then((m) => ({ default: m.Redirects })));
 const Items = lazy(() => admin().then((m) => ({ default: m.Items })));
 const Blocks = lazy(() => admin().then((m) => ({ default: m.Blocks })));
 const Profile = lazy(() => admin().then((m) => ({ default: m.Profile })));
+const Security = lazy(() => admin().then((m) => ({ default: m.Security })));
 
 // Gutenberg is large: only the editor route downloads it, with WordPress's translation of its strings
 const Editor = lazy(() => loadWordPressLocale().then(() => import('./editor/Editor.tsx')));
@@ -80,6 +81,7 @@ void api<SessionUser>('/session').then((s) => s.locale, () => browserLocale()).t
           <Route path="/users" element={<Users />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/security" element={<Security />} />
           <Route path="/import" element={<Import />} />
           <Route path="/categories" element={<Terms taxonomy="category" />} />
           <Route path="/tags" element={<Terms taxonomy="post_tag" />} />
