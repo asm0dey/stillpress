@@ -29,10 +29,10 @@ public class CommentRepository {
     }
 
     /**
-     * Whether any of the items has an approved comment.
+     * Whether any of the items has a comment row, whatever its status.
      */
-    public boolean anyApproved(Collection<Long> itemIds) {
-        return db.fetchExists(COMMENT, COMMENT.ITEM_ID.in(itemIds), COMMENT.STATUS.eq("approved"));
+    public boolean anyComment(Collection<Long> itemIds) {
+        return db.fetchExists(COMMENT, COMMENT.ITEM_ID.in(itemIds));
     }
 
     /**

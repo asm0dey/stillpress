@@ -329,6 +329,26 @@ class IncrementalPublishTest {
     }
 
     @Test
+    void commentsFeedRenderedWhenItemHasOnlyUnapprovedComments() throws Exception {
+        var live = dataDir.current().toRealPath();
+        var sourceId = samplePost(false);
+        db
+            .insertInto(COMMENT, COMMENT.ITEM_ID, COMMENT.CONTENT, COMMENT.CREATED_AT, COMMENT.STATUS)
+            .select(
+                    db
+                        .select(ITEM.ID, DSL.val("held"), DSL.val(LocalDateTime.of(2999, 1, 1, 0, 0)), DSL.val("hold"))
+                        .from(ITEM)
+                        .where(ITEM.SOURCE_ID.eq(sourceId))
+            )
+            .execute();
+        edit(sourceId, r -> r.setTitle("New title"));
+        var inc = publisher.publish(queue.snapshot().orElseThrow());
+        var rel = "comments/feed/index.html";
+        assertThat(Files.isSameFile(inc.release().resolve(rel), live.resolve(rel))).isEqualTo(false);
+        assertThat(tree(inc.release())).isEqualTo(tree(publisher.publishAll().release()));
+    }
+
+    @Test
     void incrementalEqualsFullAfterCommentedPostTitleEdit() throws Exception {
         edit(samplePost(true), r -> r.setTitle("New title"));
         var inc = tree(publisher.publish(queue.snapshot().orElseThrow()).release());

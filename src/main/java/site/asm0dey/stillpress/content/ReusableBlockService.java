@@ -70,7 +70,7 @@ public class ReusableBlockService {
         r.update();
         revisions.saved(OBJECT_TYPE, ref, r.getTitle(), r.getContent(), "blocks", null, a.userId());
         revisions.deleteAutosave(OBJECT_TYPE, ref, a.userId());
-        // archives show excerpts only, so cached fragments stay; the item pages themselves are rendered again
+        // the publish run drops the queued items' fragments (SitePublisher.run: fragments.delete(batch.items()))
         var published = blocks
             .itemsUsing(withContainers(ref))
             .stream()

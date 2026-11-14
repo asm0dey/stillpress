@@ -128,6 +128,7 @@ The open items from the 02b ledger, grouped by owner. Each was reviewed and acce
 - Embeds plugin: YouTube facade settings plus the further oEmbed providers the imported content actually uses (§7, §11, §12).
 - Header/footer snippets (§7).
 - Comments plugin: threaded display of imported comments, native submission with CAPTCHA and honeypot, moderation queue, WordPress-style hold and auto-approve rules, notifications, close after N days, approval republishes the page and comment feed (§6.2.3, §7).
+  - Comment approval, unapproval, spam, trash and delete must not rely on the comments-feed carry-over (`SitePublisher`: carried when the batch's items have no comment rows); force-render the comments feed for those changes (e.g. a batch flag).
 - Client-side static search index generated at publish (§11).
 - Image pipeline: keep originals, responsive sizes, WebP/AVIF with fallback, as a publish step (§7, §12).
 - REST import with an application password, covering settings, menus, widgets, global styles, templates, navigation and custom CSS (§6.2 item 4, §10; assignment is a judgement call).

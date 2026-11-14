@@ -46,6 +46,8 @@ The changes: the prune runs after the publish has finished, `link untouched` is 
 | incremental 2 | 22 | 75 | 14.3 | 0 | 6 | 9 | 32 | 1 | 8 | 12 | 0 | 0 | 0 | 0 | 32 |
 | incremental 3 | 22 | 54 | 10.3 | 0 | 5 | 7 | 17 | 1 | 7 | 10 | 0 | 0 | 0 | 0 | 28 |
 
+The benchmark's edited post has no comments, so its comments feed is carried over (0 ms); editing a post with comments re-renders it, about 10 ms more (roughly 12–18 % of full).
+
 - **Target (< 10 % of full): not met.** The best run is 10.3 %, the first 15.7 %. Over the whole follow-up, a one-post publish went from 191–221 ms to 54–82 ms, and a full publish from 992 to 523 ms.
 - **Largest phase left:** `link`, 17–32 ms. That's the ~885 hard-link calls themselves. Linking in parallel was measured in Task 7 and was slower (31–45 ms).
 - **Next candidates (hardening backlog):**
