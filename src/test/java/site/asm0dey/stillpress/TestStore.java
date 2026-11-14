@@ -5,6 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.importer.ImportReport;
 import site.asm0dey.stillpress.importer.WordPressImporter;
@@ -16,6 +17,11 @@ import site.asm0dey.stillpress.publish.PublishLock;
  */
 @ApplicationScoped
 public class TestStore {
+    /**
+     * Password every test user gets; hashing it per test costs ~100 ms of Argon2, so it is hashed once per JVM.
+     */
+    public static final String PASSWORD = "correct horse battery";
+    public static final String PASSWORD_HASH = Passwords.hash(PASSWORD);
     @Inject
     DSLContext db;
     @Inject

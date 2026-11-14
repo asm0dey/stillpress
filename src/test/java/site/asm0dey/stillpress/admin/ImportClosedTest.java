@@ -19,7 +19,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
@@ -57,7 +56,7 @@ class ImportClosedTest {
         settings.put("timezone", "UTC");
         settings.put("home_url", "http://localhost:8081");
         adminId = users.create("admin", "admin@example.org", "admin", Role.ADMINISTRATOR).getId();
-        users.setPassword(adminId, Passwords.hash("correct horse battery"));
+        users.setPassword(adminId, TestStore.PASSWORD_HASH);
         admin = sessions.create(adminId);
     }
 

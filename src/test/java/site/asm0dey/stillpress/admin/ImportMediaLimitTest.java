@@ -10,7 +10,6 @@ import jakarta.inject.Inject;
 import module java.base;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.importer.FakeMediaFetcher;
 import site.asm0dey.stillpress.store.AuthorRepository;
@@ -39,7 +38,7 @@ class ImportMediaLimitTest {
     void configuredLimitCapsAdminImportDownloads() throws Exception {
         store.reset();
         var id = users.create("admin", "admin@example.org", "admin", Role.ADMINISTRATOR).getId();
-        users.setPassword(id, Passwords.hash("correct horse battery"));
+        users.setPassword(id, TestStore.PASSWORD_HASH);
         var req = csrf().cookie("sp_session", sessions.create(id));
         try (var in = TestStore.sample()) {
             req

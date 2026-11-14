@@ -12,7 +12,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.content.PermalinkStructure;
@@ -151,7 +150,7 @@ class WordPressImporterTest {
     @Test
     void existingAdministratorIsMergedByLogin() throws Exception {
         var admin = users.create("mama", "m@example.org", null, Role.ADMINISTRATOR);
-        users.setPassword(admin.getId(), Passwords.hash("correct horse battery"));
+        users.setPassword(admin.getId(), TestStore.PASSWORD_HASH);
         store.importSample();
         var mama = users.findByLoginOrEmail("mama").orElseThrow();
         assertThat(mama.getId()).isEqualTo(admin.getId());

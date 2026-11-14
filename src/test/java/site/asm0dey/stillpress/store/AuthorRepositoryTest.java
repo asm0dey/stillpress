@@ -11,7 +11,6 @@ import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 
 @QuarkusTest
@@ -126,7 +125,7 @@ class AuthorRepositoryTest {
         var a = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
         assertThat(users.countAdministrators()).isEqualTo(1);
         assertThat(users.anyAdministratorWithPassword()).isFalse();
-        users.setPassword(a.getId(), Passwords.hash("long enough password"));
+        users.setPassword(a.getId(), TestStore.PASSWORD_HASH);
         assertThat(users.anyAdministratorWithPassword()).isTrue();
         users.setRole(a.getId(), Role.EDITOR);
         assertThat(users.countAdministrators()).isZero();

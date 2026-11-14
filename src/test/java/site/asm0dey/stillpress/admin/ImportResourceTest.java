@@ -17,7 +17,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.importer.FakeMediaFetcher;
@@ -217,7 +216,7 @@ class ImportResourceTest {
 
     private long user(String login, Role role) {
         var id = users.create(login, login + "@example.org", login, role).getId();
-        users.setPassword(id, Passwords.hash("correct horse battery"));
+        users.setPassword(id, TestStore.PASSWORD_HASH);
         return id;
     }
 

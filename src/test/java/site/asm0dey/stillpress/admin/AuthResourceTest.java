@@ -15,7 +15,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Limiters;
-import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
@@ -38,7 +37,7 @@ class AuthResourceTest {
         store.reset();
         Limiters.reset();
         adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
-        users.setPassword(adminId, Passwords.hash("correct horse battery"));
+        users.setPassword(adminId, TestStore.PASSWORD_HASH);
     }
 
     @Test
@@ -159,7 +158,7 @@ class AuthResourceTest {
     @Test
     void firstAdminSessionFillsAdminUrl() {
         var editor = users.create("ed", "e@example.org", "Ed", Role.EDITOR).getId();
-        users.setPassword(editor, Passwords.hash("correct horse battery"));
+        users.setPassword(editor, TestStore.PASSWORD_HASH);
         var editorCookie = login("ed", "correct horse battery").cookie("sp_session");
         given().cookie("sp_session", editorCookie).get("/admin/api/session").then().statusCode(200);
         assertThat(settings.get("admin_url")).isEmpty();

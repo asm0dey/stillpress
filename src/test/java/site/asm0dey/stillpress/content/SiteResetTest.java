@@ -11,7 +11,6 @@ import org.jooq.impl.DSL;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.Secrets;
 import site.asm0dey.stillpress.config.DataDir;
@@ -67,7 +66,7 @@ class SiteResetTest {
     @BeforeEach
     void clean() {
         store.reset();
-        hash = Passwords.hash("correct horse battery");
+        hash = TestStore.PASSWORD_HASH;
         adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
         users.setPassword(adminId, hash);
     }
