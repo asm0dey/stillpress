@@ -198,9 +198,7 @@ public class SitePublisher {
             .toList();
         out.phases.add("snapshot", t);
         if (out.live != null) {
-            t = System.nanoTime();
             linkUntouched(out);
-            out.phases.add("link untouched", t);
         }
         // shortcut: media files are not counted, so done can pass total; count them if the bar ever matters
         var total = rendered.size() * 2 + 1 + (out.live == null ? 2 + ASSETS.size() : 0);
@@ -297,15 +295,23 @@ public class SitePublisher {
             skip.add(dir + FEED_SEGMENT + "/index.html");
         }
         bases.forEach(b -> baseDirs.add(b.replaceFirst("^/+", "")));
+        var t = System.nanoTime();
+        var carried = new ArrayList<Map.Entry<String, Path>>();
         try (var walk = Files.walk(out.live)) {
             for (var src : walk.filter(Files::isRegularFile).toList()) {
                 var rel = out.live.relativize(src).toString().replace('\\', '/');
                 var page = PAGE.matcher(rel);
                 if (!skip.contains(rel) && !(page.matches() && baseDirs.contains(page.group(1)))) {
-                    out.hardLink(rel, src);
+                    carried.add(Map.entry(rel, src));
                 }
             }
         }
+        out.phases.add("walk", t);
+        t = System.nanoTime();
+        for (var e : carried) {
+            out.hardLink(e.getKey(), e.getValue());
+        }
+        out.phases.add("link", t);
     }
 
     /**
@@ -629,6 +635,10 @@ public class SitePublisher {
         int perRss = 10;
         String origin = "";
         private final Map<Path, String> written = new HashMap<>();
+        /**
+         * Directories already created in this release, so each is made once rather than once per file.
+         */
+        private final Set<Path> dirs = new HashSet<>();
 
         Out(Path root, Path live, PublishQueue.Batch batch, PublishStatus status) {
             this.root = root;
@@ -650,7 +660,7 @@ public class SitePublisher {
          */
         void hardLink(String relative, Path source) throws IOException {
             var target = root.resolve(relative);
-            Files.createDirectories(target.getParent());
+            mkdirs(target.getParent());
             try {
                 Files.createLink(target, source);
             } catch (IOException | UnsupportedOperationException e) {
@@ -686,9 +696,15 @@ public class SitePublisher {
             }
         }
 
+        private void mkdirs(Path dir) throws IOException {
+            if (dirs.add(dir)) {
+                Files.createDirectories(dir);
+            }
+        }
+
         private void write(Path target, byte[] bytes) throws IOException {
             claim(target);
-            Files.createDirectories(target.getParent());
+            mkdirs(target.getParent());
             // never write through a link: the same inode is a file of the live release
             Files.deleteIfExists(target);
             Files.write(target, bytes);
