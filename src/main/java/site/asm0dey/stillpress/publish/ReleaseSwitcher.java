@@ -67,27 +67,27 @@ public class ReleaseSwitcher {
     }
 
     /**
-     * Atomically points {@code current} at {@code release}, then prunes all but the newest {@value #KEEP} releases.
+     * Atomically points {@code current} at {@code release}.
      */
     public synchronized void activate(Path release) {
         try {
-            var live = release.toRealPath();
             var current = dataDir.current();
             var tmp = current.resolveSibling("current.tmp");
             Files.deleteIfExists(tmp);
             Files.createSymbolicLink(tmp, current.getParent().relativize(release.toAbsolutePath()));
             Files.move(tmp, current, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            prune(live);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     /**
-     * Housekeeping after the swap: a failure here must never undo or break it, so each release is tried on its own.
+     * Deletes all but the newest {@value #KEEP} releases, never the live one. Housekeeping: a failure here must never
+     * break a publish, so each release is tried on its own.
      */
-    private void prune(Path live) {
+    public synchronized void prune() {
         try (var list = Files.list(dataDir.releases())) {
+            var live = dataDir.current().toRealPath();
             var all = list.filter(Files::isDirectory).sorted().toList();
             for (var old : all.subList(0, Math.max(0, all.size() - KEEP))) {
                 try {

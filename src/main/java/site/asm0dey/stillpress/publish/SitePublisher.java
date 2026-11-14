@@ -77,6 +77,9 @@ public class SitePublisher {
             var r = run(batch);
             status.finished(r.files());
             LOG.infof("Published %d files in %d ms into %s", r.files(), r.took().toMillis(), r.release());
+            var t = System.nanoTime();
+            switcher.prune();
+            LOG.infof("Pruned old releases in %d ms", (System.nanoTime() - t) / 1_000_000);
             return r;
         } catch (RuntimeException e) {
             status.failed(Objects.requireNonNullElse(e.getMessage(), e.toString()));

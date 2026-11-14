@@ -30,7 +30,7 @@ class ReleaseSwitcherTest {
     }
 
     @Test
-    void keepsThreeNewest() throws Exception {
+    void activateDoesNotPruneAndPruneKeepsNewestThreeAndLive() throws Exception {
         var dir = new DataDir(tmp.toString());
         var s = switcher(dir);
         Path last = null;
@@ -38,6 +38,10 @@ class ReleaseSwitcherTest {
             last = s.newRelease();
             s.activate(last);
         }
+        try (var list = Files.list(dir.releases())) {
+            assertThat(list.toList()).hasSize(5);
+        }
+        s.prune();
         try (var list = Files.list(dir.releases())) {
             assertThat(list.toList()).hasSize(3).contains(last);
         }
@@ -63,6 +67,7 @@ class ReleaseSwitcherTest {
             s.newRelease();
         }
         s.activate(oldest);
+        s.prune();
         assertThat(oldest).exists();
         assertThat(dir.current().toRealPath()).isEqualTo(oldest.toRealPath());
     }
@@ -82,6 +87,7 @@ class ReleaseSwitcherTest {
                 // a read-only release cannot be emptied, so pruning it fails
                 Files.setPosixFilePermissions(last, PosixFilePermissions.fromString("r-xr-xr-x"));
                 s.activate(last);
+                s.prune();
             }
             assertThat(dir.current().toRealPath()).isEqualTo(last.toRealPath());
             assertThat(dir.current().resolve("index.html")).hasContent("r4");
