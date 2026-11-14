@@ -93,14 +93,18 @@ public class SitePublisher {
         Out out;
         try {
             out = new Out(release, incremental ? live : null, batch, status);
+            var t = System.nanoTime();
             if (incremental) {
                 // a fragment stored by a run that read the item just before it was saved is dropped here
                 fragments.delete(batch.items());
             } else {
                 fragments.clear();
             }
+            out.phases.add("fragments", t);
             render(out);
+            t = System.nanoTime();
             switcher.activate(release);
+            out.phases.add("activate", t);
         } catch (IOException e) {
             discardUnlessLive(release);
             throw new UncheckedIOException(e);
@@ -108,7 +112,10 @@ public class SitePublisher {
             discardUnlessLive(release);
             throw e;
         }
+        var t = System.nanoTime();
         record(out);
+        out.phases.add("record", t);
+        LOG.infof("Publish phases (%s): %s", incremental ? "incremental" : "full", out.phases);
         return new PublishResult(release, out.files, Duration.between(start, Instant.now()));
     }
 
@@ -156,6 +163,7 @@ public class SitePublisher {
     }
 
     private void render(Out out) throws IOException {
+        var t = System.nanoTime();
         var site = views.site();
         out.perPage = positive("posts_per_page");
         out.perRss = positive("posts_per_rss");
@@ -185,8 +193,11 @@ public class SitePublisher {
             .stream()
             .map(s -> new PublishedItemRepository.Row(s.id(), s.permalink(), bases.getOrDefault(s.id(), List.of())))
             .toList();
+        out.phases.add("snapshot", t);
         if (out.live != null) {
+            t = System.nanoTime();
             linkUntouched(out);
+            out.phases.add("link untouched", t);
         }
         // shortcut: media files are not counted, so done can pass total; count them if the bar ever matters
         var total = rendered.size() * 2 + 1 + (out.live == null ? 2 + ASSETS.size() : 0);
@@ -197,6 +208,7 @@ public class SitePublisher {
         }
         status.running(total);
         // the only thing held for the whole run: ids, dates and links; bodies are loaded a page at a time
+        t = System.nanoTime();
         for (var chunk : chunks(rendered)) {
             for (var v : views(chunk)) {
                 out.origin = "item:" + v.id();
@@ -216,17 +228,25 @@ public class SitePublisher {
                 );
             }
         }
+        out.phases.add("items", t);
         for (var l : listings) {
             if (out.wantsBase(l.base())) {
                 out.origin = l.origin();
+                t = System.nanoTime();
                 paged(out, site, l.base(), l.heading(), l.posts());
+                out.phases.add("listing pages", t);
                 if (l.feed()) {
+                    t = System.nanoTime();
                     feed(out, site, l.base(), l.posts());
+                    out.phases.add("feeds", t);
                 }
             }
         }
         out.origin = "comments feed";
+        t = System.nanoTime();
         commentsFeed(out, site);
+        out.phases.add("comments feed", t);
+        t = System.nanoTime();
         out.origin = "static";
         if (out.live == null) {
             out.file("404.html", render("plain/404", "site", site).getBytes(StandardCharsets.UTF_8));
@@ -240,6 +260,7 @@ public class SitePublisher {
         if (out.live == null || out.batch.media()) {
             linkMedia(out);
         }
+        out.phases.add("static+media", t);
     }
 
     /**
@@ -550,7 +571,28 @@ public class SitePublisher {
         return t.render();
     }
 
+    /**
+     * Nanoseconds per named phase, summed over repeats, in first-seen order.
+     */
+    private static final class Phases {
+        private final Map<String, Long> nanos = new LinkedHashMap<>();
+
+        void add(String name, long startNanos) {
+            nanos.merge(name, System.nanoTime() - startNanos, Long::sum);
+        }
+
+        @Override
+        public String toString() {
+            return nanos
+                .entrySet()
+                .stream()
+                .map(e -> e.getKey() + " " + e.getValue() / 1_000_000 + " ms")
+                .collect(Collectors.joining(", "));
+        }
+    }
+
     private static final class Out {
+        final Phases phases = new Phases();
         final Path root;
         /**
          * The release untouched files are linked from; null in a full publish.
