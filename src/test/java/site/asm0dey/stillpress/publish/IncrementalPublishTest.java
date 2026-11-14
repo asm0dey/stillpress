@@ -334,11 +334,10 @@ class IncrementalPublishTest {
         var sourceId = samplePost(false);
         db
             .insertInto(COMMENT, COMMENT.ITEM_ID, COMMENT.CONTENT, COMMENT.CREATED_AT, COMMENT.STATUS)
-            .select(
-                    db
-                        .select(ITEM.ID, DSL.val("held"), DSL.val(LocalDateTime.of(2999, 1, 1, 0, 0)), DSL.val("hold"))
-                        .from(ITEM)
-                        .where(ITEM.SOURCE_ID.eq(sourceId))
+            .select(db
+                .select(ITEM.ID, DSL.val("held"), DSL.val(LocalDateTime.of(2999, 1, 1, 0, 0)), DSL.val("hold"))
+                .from(ITEM)
+                .where(ITEM.SOURCE_ID.eq(sourceId))
             )
             .execute();
         edit(sourceId, r -> r.setTitle("New title"));

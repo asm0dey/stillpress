@@ -46,6 +46,13 @@ class TemplatesTest {
         return t.render();
     }
 
+    private List<String> xmlItems(ItemView... views) {
+        return Arrays
+            .stream(views)
+            .map(v -> render("feed/rss2-item.xml", "item", v))
+            .toList();
+    }
+
     @Test
     void singleRendersTitleOnceEscapedAndLang() {
         var html = render("plain/single", "site", site(), "item", item("Q&A", "<p>x</p>", List.of()));
@@ -74,7 +81,7 @@ class TemplatesTest {
                 "site",
                 site(),
                 "items",
-                List.of(i),
+                xmlItems(i),
                 "selfUrl",
                 "https://blog.example.ru/feed/",
                 "lastBuildDate",
@@ -114,7 +121,7 @@ class TemplatesTest {
     void emptyExcerptFallsBackToTrimmedContentInFeed() {
         var words = String.join(" ", Collections.nCopies(60, "w"));
         var i = item("T", "<p>" + words + " <b>x</b></p>", List.of());
-        var xml = render("feed/rss2.xml", "site", site(), "items", List.of(i), "selfUrl", "u", "lastBuildDate", "x");
+        var xml = render("feed/rss2.xml", "site", site(), "items", xmlItems(i), "selfUrl", "u", "lastBuildDate", "x");
         var expected = String.join(" ", Collections.nCopies(55, "w")) + " [&hellip;]";
         assertThat(xml).contains("<description><![CDATA[" + expected + "]]></description>");
         var withExcerpt = new ItemView(
@@ -138,7 +145,7 @@ class TemplatesTest {
                         "site",
                         site(),
                         "items",
-                        List.of(withExcerpt),
+                        xmlItems(withExcerpt),
                         "selfUrl",
                         "u",
                         "lastBuildDate",

@@ -201,7 +201,9 @@ public class SitePublisher {
             linkUntouched(out);
         }
         // shortcut: media files are not counted, so done can pass total; count them if the bar ever matters
-        var total = rendered.size() * 2 + (out.commentsFeedCarried ? 0 : 1) + (out.live == null ? 2 + ASSETS.size() : 0);
+        var total = rendered.size() * 2
+                + (out.commentsFeedCarried ? 0 : 1)
+                + (out.live == null ? 2 + ASSETS.size() : 0);
         for (var l : listings) {
             if (out.wantsBase(l.base())) {
                 total += Math.max(1, (l.posts().size() + out.perPage - 1) / out.perPage) + (l.feed() ? 1 : 0);
@@ -289,9 +291,8 @@ public class SitePublisher {
         }
         out.dirtyBases = bases;
         var skip = new HashSet<String>();
-        out.commentsFeedCarried =
-            !comments.anyComment(out.batch.items())
-            && Files.exists(out.live.resolve("comments/" + FEED_SEGMENT + "/index.html"));
+        out.commentsFeedCarried = !comments.anyComment(out.batch.items())
+                && Files.exists(out.live.resolve("comments/" + FEED_SEGMENT + "/index.html"));
         if (!out.commentsFeedCarried) {
             skip.add("comments/" + FEED_SEGMENT + "/index.html");
         }
