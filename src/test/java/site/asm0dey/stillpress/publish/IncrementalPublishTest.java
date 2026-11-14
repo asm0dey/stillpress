@@ -163,6 +163,40 @@ class IncrementalPublishTest {
         assertThat(trees.getFirst().keySet()).noneMatch(k -> k.startsWith("category/travel/"));
     }
 
+    @Test
+    void incrementalEqualsFullAfterTermRename() throws Exception {
+        var travel = db.selectFrom(TERM).where(TERM.SLUG.eq("travel")).fetchOne();
+        var trees = lock.holding(() -> {
+            terms.updateTerm(
+                    travel.getId(),
+                    new TermService.Change("Trips", travel.getSlug(), null, null),
+                    new ItemService.Actor(0, Role.ADMINISTRATOR)
+            );
+            var batch = queue.snapshot().orElseThrow();
+            var inc = tree(publisher.publish(batch).release());
+            queue.done(batch);
+            return List.of(inc, tree(publisher.publishAll().release()));
+        });
+        assertThat(trees.getFirst()).isEqualTo(trees.getLast());
+        assertThat(dataDir.current().resolve("feed/index.html")).content().contains("<category>Trips</category>");
+    }
+
+    @Test
+    void feedItemsAreCached() {
+        var cached = fragments.find(FragmentRepository.FEED, List.of(itemId(5994)));
+        assertThat(cached).hasSize(1);
+        assertThat(cached.get(itemId(5994))).startsWith("<item>");
+    }
+
+    @Test
+    void incrementalWithEmptyFragmentCacheEqualsFull() throws Exception {
+        fragments.clear();
+        edit(5994, r -> r.setTitle("New title"));
+        var inc = tree(publisher.publish(queue.snapshot().orElseThrow()).release());
+        var full = tree(publisher.publishAll().release());
+        assertThat(inc).isEqualTo(full);
+    }
+
     /**
      * Each change goes through the service (or endpoint) that makes it, which queues what it changed; nothing in the
      * test deletes fragments or queues rows for it.

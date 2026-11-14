@@ -1,4 +1,5 @@
 {@site.asm0dey.stillpress.publish.views.SiteView site}
+{@java.util.List<java.lang.String> items}
 {@java.lang.String selfUrl}
 {@java.lang.String lastBuildDate}
 <?xml version="1.0" encoding="UTF-8"?>
@@ -11,17 +12,7 @@
 <lastBuildDate>{lastBuildDate}</lastBuildDate>
 <language>{site.language}</language>
 {#for item in items}
-<item>
-<title>{item.title}</title>
-<link>{item.absoluteUrl}</link>
-<dc:creator>{item.authorName}</dc:creator>
-<pubDate>{item.pubDate}</pubDate>
-{#for t in item.categories}<category>{t.name}</category>{/for}
-{#for t in item.tags}<category>{t.name}</category>{/for}
-<guid isPermaLink="false">{item.guid}</guid>
-<description><![CDATA[{item.feedExcerptCdata.raw}]]></description>
-<content:encoded><![CDATA[{item.contentCdata.raw}]]></content:encoded>
-</item>
+{item.raw}
 {/for}
 </channel>
 </rss>

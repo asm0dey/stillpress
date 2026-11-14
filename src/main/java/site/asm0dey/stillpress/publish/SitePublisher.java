@@ -460,18 +460,25 @@ public class SitePublisher {
     }
 
     /**
-     * Archive entries of one page from {@code item_fragment}; the missing ones are rendered and stored.
+     * Archive entries of one page from {@code item_fragment}.
      */
     private List<String> entries(List<ItemRepository.Summary> slice) {
-        var html = new HashMap<>(fragments.find(slice.stream().map(ItemRepository.Summary::id).toList()));
+        return fragments(FragmentRepository.ENTRY, slice, v -> render("plain/entry", "entry", EntryView.of(v)));
+    }
+
+    /**
+     * One kind of cached fragment for each item of the slice, in slice order; the missing ones are rendered and stored.
+     */
+    private List<String> fragments(String kind, List<ItemRepository.Summary> slice, Function<ItemView, String> renderer) {
+        var html = new HashMap<>(fragments.find(kind, slice.stream().map(ItemRepository.Summary::id).toList()));
         var fresh = new HashMap<Long, String>();
         for (var v : views(slice
             .stream()
             .filter(s -> !html.containsKey(s.id()))
             .toList())) {
-            fresh.put(v.id(), render("plain/entry", "entry", EntryView.of(v)));
+            fresh.put(v.id(), renderer.apply(v));
         }
-        fragments.put(fresh);
+        fragments.put(kind, fresh);
         html.putAll(fresh);
         return slice.stream().map(s -> html.get(s.id())).toList();
     }
@@ -484,13 +491,13 @@ public class SitePublisher {
      * The newest dated posts; undated ones have no place in a feed.
      */
     private void feed(Out out, SiteView site, String base, List<ItemRepository.Summary> posts) throws IOException {
-        var newest = views(posts
+        var newest = posts
             .stream()
             .filter(p -> p.publishedAt() != null)
             .limit(out.perRss)
-            .toList());
+            .toList();
         var path = base + FEED_SEGMENT + "/";
-        var last = newest.isEmpty() ? Instant.EPOCH : newest.getFirst().publishedAt();
+        var last = newest.isEmpty() ? Instant.EPOCH : newest.getFirst().publishedAt().toInstant(ZoneOffset.UTC);
         out.page(
                 path,
                 render(
@@ -498,7 +505,7 @@ public class SitePublisher {
                         "site",
                         site,
                         "items",
-                        newest,
+                        fragments(FragmentRepository.FEED, newest, v -> render("feed/rss2-item.xml", "item", v)),
                         "selfUrl",
                         site.homeUrl() + Permalinks.encode(path),
                         "lastBuildDate",
