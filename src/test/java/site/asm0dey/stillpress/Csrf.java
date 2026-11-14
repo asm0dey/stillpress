@@ -4,19 +4,22 @@ import io.restassured.RestAssured;
 import io.restassured.specification.RequestSpecification;
 
 /**
- * Test helper: a request carrying the CSRF token the way the admin UI sends it, as the {@code csrf-token} cookie and
- * the same value in {@code X-CSRF-TOKEN}.
+ * Test helper: a request carrying the CSRF token the way the admin UI sends it. A GET issues the raw token in the
+ * {@code X-CSRF-TOKEN} response header and its signature in the {@code csrf-token} cookie; a write sends both back.
  */
 public final class Csrf {
-    /**
-     * 16 bytes, base64url without padding: the size quarkus-rest-csrf accepts
-     */
-    public static final String TOKEN = "c3RpbGxwcmVzcy1jc3JmLQ";
-
     private Csrf() {
     }
 
+    public record Token(String cookie, String header) {}
+
+    public static Token issue() {
+        var r = RestAssured.given().get("/admin/api/setup").then().statusCode(200).extract();
+        return new Token(r.cookie("csrf-token"), r.header("X-CSRF-TOKEN"));
+    }
+
     public static RequestSpecification csrf() {
-        return RestAssured.given().cookie("csrf-token", TOKEN).header("X-CSRF-TOKEN", TOKEN);
+        var token = issue();
+        return RestAssured.given().cookie("csrf-token", token.cookie()).header("X-CSRF-TOKEN", token.header());
     }
 }

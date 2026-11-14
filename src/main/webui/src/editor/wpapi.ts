@@ -1,6 +1,6 @@
 import apiFetch, { type APIFetchOptions } from '@wordpress/api-fetch';
 import { __, sprintf } from '@wordpress/i18n';
-import { type SessionUser, csrfToken } from '../api.ts';
+import { type SessionUser, adminFetch } from '../api.ts';
 
 /** The admin API's reusable block (GET /blocks/{id}, or the list with ?content=true). */
 interface AdminBlock { id: number; title: string; content?: string | null; canEdit: boolean }
@@ -38,12 +38,8 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 
 function admin(path: string, method = 'GET', body?: unknown) {
   const headers: Record<string, string> = {};
-  const token = csrfToken();
-  if (method !== 'GET' && token) headers['X-CSRF-TOKEN'] = token;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  return fetch('/admin/api' + path, {
-    method, headers, credentials: 'same-origin', body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  return adminFetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
 }
 
 /** Our response, reshaped by fn when it is a success; errors (a 404 for one) pass through as they are. */

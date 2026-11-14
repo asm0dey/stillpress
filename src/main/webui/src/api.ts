@@ -98,29 +98,54 @@ export interface ImportStatus {
   contentLeft: boolean;
 }
 
-/** The csrf-token cookie (set by any API GET), which every non-GET echoes in X-CSRF-TOKEN. */
+const CSRF_KEY = 'stillpress-csrf-token';
+
+/**
+ * The raw CSRF token from the latest X-CSRF-TOKEN response header; the csrf-token cookie holds only its signature.
+ * Kept in localStorage so tabs share it: a tab without one makes the server issue a new token, stranding the rest.
+ */
 export function csrfToken(): string | undefined {
-  return document.cookie.match(/(?:^|; )csrf-token=([^;]*)/)?.[1];
+  return localStorage.getItem(CSRF_KEY) ?? undefined;
 }
 
 /**
- * Calls the admin JSON API. Every request echoes the csrf-token cookie (set by any API GET) in X-CSRF-TOKEN; a
- * FormData body goes as multipart (the browser sets its Content-Type), anything else as JSON. Non-2xx throws an
- * ApiError; T is the JSON response type (void for 204).
+ * fetch for /admin/api: sends the CSRF token (a write without one fetches it with GET /setup first) and keeps the one
+ * the answer carries. A GET refused for a stale token (cookies signed by an earlier keyset) retries without it.
+ */
+export async function adminFetch(
+  path: string,
+  init: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> } = {},
+): Promise<Response> {
+  const method = init.method ?? 'GET';
+  if (method !== 'GET' && !csrfToken()) await adminFetch('/setup');
+  const token = csrfToken();
+  const headers = { ...init.headers };
+  if (token) headers['X-CSRF-TOKEN'] = token;
+  const res = await fetch('/admin/api' + path, { ...init, method, headers, credentials: 'same-origin' });
+  if (method === 'GET' && res.status === 400 && token) {
+    localStorage.removeItem(CSRF_KEY);
+    return adminFetch(path, init);
+  }
+  const next = res.headers.get('X-CSRF-TOKEN');
+  if (next) localStorage.setItem(CSRF_KEY, next);
+  return res;
+}
+
+/**
+ * Calls the admin JSON API through adminFetch, so every request carries the CSRF token; a FormData body goes as
+ * multipart (the browser sets its Content-Type), anything else as JSON. Non-2xx throws an ApiError; T is the JSON
+ * response type (void for 204).
  */
 export async function api<T = void>(
   path: string,
   { method = 'GET', body }: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {};
-  const token = csrfToken();
-  if (token) headers['X-CSRF-TOKEN'] = token;
   const form = body instanceof FormData;
   if (body !== undefined && !form) headers['Content-Type'] = 'application/json';
-  const res = await fetch('/admin/api' + path, {
+  const res = await adminFetch(path, {
     method,
     headers,
-    credentials: 'same-origin',
     body: body === undefined || form ? (body as FormData | undefined) : JSON.stringify(body),
   });
   const data = await res.json().catch(() => null);

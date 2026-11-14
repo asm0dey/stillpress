@@ -10,8 +10,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const call = (options: Record<string, unknown>) => apiFetch(options) as Promise<any>;
 
 beforeAll(() => {
-  document.cookie = 'a=b';
-  document.cookie = 'csrf-token=tok';
+  localStorage.setItem('stillpress-csrf-token', 'tok');
 });
 
 beforeEach(() => {

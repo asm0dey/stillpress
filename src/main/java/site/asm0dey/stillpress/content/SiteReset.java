@@ -65,6 +65,8 @@ public class SiteReset {
             db.deleteFrom(AUTHOR).where(AUTHOR.ID.ne(keepAdministratorId)).execute();
             db.update(AUTHOR).setNull(AUTHOR.SOURCE_ID).execute();
             db.deleteFrom(SETTING).where(SETTING.KEY.notIn(KEPT)).execute();
+            // the SMTP and CAPTCHA secrets go with the settings that use them
+            db.deleteFrom(SECRET).execute();
             var insert = db.insertInto(SETTING, SETTING.KEY, SETTING.VALUE);
             for (var e : SETUP_DEFAULTS.entrySet()) {
                 insert = insert.values(e.getKey(), e.getValue());
@@ -92,6 +94,7 @@ public class SiteReset {
             db.deleteFrom(SESSION).execute();
             db.deleteFrom(AUTHOR).execute();
             db.deleteFrom(SETTING).where(SETTING.KEY.notIn(LOCK_ROW, ImportGuard.STATE)).execute();
+            db.deleteFrom(SECRET).execute();
         });
     }
 

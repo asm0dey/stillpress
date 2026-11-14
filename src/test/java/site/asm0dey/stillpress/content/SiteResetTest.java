@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.account.Secrets;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.db.DefaultSchema;
 import site.asm0dey.stillpress.importer.ImportGuard;
@@ -48,6 +49,8 @@ class SiteResetTest {
     SettingRepository settings;
     @Inject
     TokenRepository tokens;
+    @Inject
+    Secrets secrets;
     @Inject
     ReusableBlockRepository blocks;
     @Inject
@@ -104,6 +107,7 @@ class SiteResetTest {
         lock.holding(() -> publisher.publishAll());
         lock.holding(() -> publisher.publishAll());
         queue.item(item);
+        secrets.put("smtp_password", "x");
         Files.writeString(Files.createDirectories(dataDir.root().resolve("import")).resolve("left.xml"), "x");
     }
 

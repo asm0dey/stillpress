@@ -55,6 +55,7 @@ public class TestStore {
         db.deleteFrom(REUSABLE_BLOCK).execute();
         db.deleteFrom(AUTHOR).execute();
         db.deleteFrom(REDIRECT).execute();
+        db.deleteFrom(SECRET).execute();
         // the row every publish locks (created by V4) stays: reset holds the lock on it right now
         db.deleteFrom(SETTING).where(SETTING.KEY.ne("publish_lock")).execute();
         try (var walk = Files.walk(dataDir.media())) {

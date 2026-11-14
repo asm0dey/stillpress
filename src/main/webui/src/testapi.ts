@@ -14,6 +14,8 @@ export interface Call { method: string; path: string; body: unknown }
  */
 export function fakeApi(routes: Record<string, Route>): Call[] {
   const calls: Call[] = [];
+  // a token is held, as after the UI's first GET, so writes go straight out
+  localStorage.setItem('stillpress-csrf-token', 'test-token');
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     const path = url.replace(/^\/admin\/api/, '');

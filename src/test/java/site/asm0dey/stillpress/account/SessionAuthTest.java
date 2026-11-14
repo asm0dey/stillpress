@@ -88,18 +88,46 @@ class SessionAuthTest {
 
     @Test
     void stateChangingCallWithoutValidCsrfTokenIs400() {
+        var token = Csrf.issue();
         given().post("/admin/api/logout").then().statusCode(400);
-        given().header("X-CSRF-TOKEN", Csrf.TOKEN).post("/admin/api/logout").then().statusCode(400);
+        given().header("X-CSRF-TOKEN", token.header()).post("/admin/api/logout").then().statusCode(400);
         given()
-            .cookie("csrf-token", Csrf.TOKEN)
+            .cookie("csrf-token", token.cookie())
             .contentType(JSON)
             .body("{}")
             .post("/admin/api/login")
             .then()
             .statusCode(400);
         given()
-            .cookie("csrf-token", Csrf.TOKEN)
+            .cookie("csrf-token", token.cookie())
             .header("X-CSRF-TOKEN", "d3JvbmctdG9rZW4tLS0tLQ")
+            .post("/admin/api/logout")
+            .then()
+            .statusCode(400);
+        // the signed cookie echoed as the header, which is what an unsigned double-submit would accept
+        given()
+            .cookie("csrf-token", token.cookie())
+            .header("X-CSRF-TOKEN", token.cookie())
+            .post("/admin/api/logout")
+            .then()
+            .statusCode(400);
+    }
+
+    @Test
+    void plantedUnsignedCookieIsRejected() {
+        // a value a sibling subdomain could plant, sized like a signature so only the HMAC check can refuse it
+        var bytes = new byte[32];
+        new SecureRandom().nextBytes(bytes);
+        var planted = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        given()
+            .cookie("csrf-token", planted)
+            .header("X-CSRF-TOKEN", planted)
+            .post("/admin/api/logout")
+            .then()
+            .statusCode(400);
+        given()
+            .cookie("csrf-token", "planted")
+            .header("X-CSRF-TOKEN", "planted")
             .post("/admin/api/logout")
             .then()
             .statusCode(400);
@@ -108,7 +136,8 @@ class SessionAuthTest {
     @Test
     void csrfGuardSeesThePathTheRouterSees() throws IOException {
         // a raw socket, because HTTP clients normalise these paths before sending them
-        var token = "Cookie: csrf-token=" + Csrf.TOKEN + "\r\nX-CSRF-TOKEN: " + Csrf.TOKEN + "\r\n";
+        var issued = Csrf.issue();
+        var token = "Cookie: csrf-token=" + issued.cookie() + "\r\nX-CSRF-TOKEN: " + issued.header() + "\r\n";
         for (var path : List.of("/admin//api/logout", "/admin/%61pi/logout", "/admin/x/../api/logout")) {
             assertThat(rawPostStatus(path, "")).as(path + " without a token").isEqualTo(400);
             // the same path with a token reaches logout, so the 400 above is the CSRF guard, not path rejection
@@ -136,12 +165,15 @@ class SessionAuthTest {
 
     @Test
     void csrfTokenFromAnAnonymousGetPassesTheGuard() {
-        var cookie = given().get("/admin/api/setup").then().statusCode(200).extract().detailedCookie("csrf-token");
-        // the admin UI reads it from JavaScript to send it back in the header
-        assertThat(cookie.isHttpOnly()).isFalse();
+        var response = given().get("/admin/api/setup").then().statusCode(200).extract();
+        var cookie = response.detailedCookie("csrf-token");
+        // the admin UI takes the raw token from the header; the cookie holds only its signature
+        assertThat(cookie.isHttpOnly()).isTrue();
+        assertThat(Base64.getUrlDecoder().decode(cookie.getValue())).hasSize(32);
+        assertThat(response.header("X-CSRF-TOKEN")).isNotEqualTo(cookie.getValue());
         given()
             .cookie("csrf-token", cookie.getValue())
-            .header("X-CSRF-TOKEN", cookie.getValue())
+            .header("X-CSRF-TOKEN", response.header("X-CSRF-TOKEN"))
             .post("/admin/api/logout")
             .then()
             .statusCode(204);
