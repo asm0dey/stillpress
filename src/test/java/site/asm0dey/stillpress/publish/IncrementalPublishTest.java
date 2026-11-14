@@ -4,6 +4,7 @@ import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
 import static site.asm0dey.stillpress.Csrf.csrf;
 import static site.asm0dey.stillpress.db.Tables.AUTHOR;
+import static site.asm0dey.stillpress.db.Tables.COMMENT;
 import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.ITEM_TERM;
 import static site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK;
@@ -12,6 +13,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -313,6 +315,43 @@ class IncrementalPublishTest {
         // comments feed; nothing else is rendered
         assertThat(inc.files()).isEqualTo(2 + 2 + 2 + 2 + 2 + 2 + 3 + 1);
         assertThat(inc.files()).isLessThan(full.files());
+    }
+
+    @Test
+    void commentsFeedCarriedOverForUncommentedEdit() throws Exception {
+        var live = dataDir.current().toRealPath();
+        var sourceId = samplePost(false);
+        edit(sourceId, r -> r.setTitle("New title"));
+        var inc = publisher.publish(queue.snapshot().orElseThrow());
+        var rel = "comments/feed/index.html";
+        assertThat(Files.isSameFile(inc.release().resolve(rel), live.resolve(rel))).isEqualTo(true);
+        assertThat(tree(inc.release())).isEqualTo(tree(publisher.publishAll().release()));
+    }
+
+    @Test
+    void incrementalEqualsFullAfterCommentedPostTitleEdit() throws Exception {
+        edit(samplePost(true), r -> r.setTitle("New title"));
+        var inc = tree(publisher.publish(queue.snapshot().orElseThrow()).release());
+        var full = tree(publisher.publishAll().release());
+        assertThat(inc).isEqualTo(full);
+    }
+
+    /**
+     * A published sample post with (or without) an approved comment, by source id.
+     */
+    private long samplePost(boolean commented) {
+        var approved = db.selectOne().from(COMMENT).where(COMMENT.ITEM_ID.eq(ITEM.ID), COMMENT.STATUS.eq("approved"));
+        return db
+            .select(ITEM.SOURCE_ID)
+            .from(ITEM)
+            .where(
+                    ITEM.TYPE.eq("post"),
+                    ITEM.STATUS.eq("publish"),
+                    commented ? DSL.exists(approved) : DSL.notExists(approved)
+            )
+            .orderBy(ITEM.ID)
+            .limit(1)
+            .fetchOne(ITEM.SOURCE_ID);
     }
 
     @Test

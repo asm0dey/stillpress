@@ -245,7 +245,9 @@ public class SitePublisher {
         }
         out.origin = "comments feed";
         t = System.nanoTime();
-        commentsFeed(out, site);
+        if (!out.commentsFeedCarried) {
+            commentsFeed(out, site);
+        }
         out.phases.add("comments feed", t);
         t = System.nanoTime();
         out.origin = "static";
@@ -287,7 +289,10 @@ public class SitePublisher {
         }
         out.dirtyBases = bases;
         var skip = new HashSet<String>();
-        skip.add("comments/" + FEED_SEGMENT + "/index.html");
+        out.commentsFeedCarried = !comments.anyApproved(out.batch.items());
+        if (!out.commentsFeedCarried) {
+            skip.add("comments/" + FEED_SEGMENT + "/index.html");
+        }
         var baseDirs = new HashSet<String>();
         for (var p : Stream.concat(bases.stream(), paths.stream()).toList()) {
             var dir = p.replaceFirst("^/+", "");
@@ -625,6 +630,10 @@ public class SitePublisher {
          */
         List<PublishedItemRepository.Row> rows = List.of();
         int files;
+        /**
+         * The comments feed is hard-linked from the live release: the batch has no approved comment to change it.
+         */
+        boolean commentsFeedCarried;
         /**
          * Posts per archive page, read once per publish.
          */

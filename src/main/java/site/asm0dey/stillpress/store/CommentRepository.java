@@ -29,6 +29,13 @@ public class CommentRepository {
     }
 
     /**
+     * Whether any of the items has an approved comment.
+     */
+    public boolean anyApproved(Collection<Long> itemIds) {
+        return db.fetchExists(COMMENT, COMMENT.ITEM_ID.in(itemIds), COMMENT.STATUS.eq("approved"));
+    }
+
+    /**
      * Newest approved comments on published, non-password-protected posts and pages.
      */
     public List<CommentRecord> newestPublic(int limit) {
