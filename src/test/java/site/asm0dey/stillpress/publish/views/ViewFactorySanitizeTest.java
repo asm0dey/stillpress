@@ -1,57 +1,70 @@
 package site.asm0dey.stillpress.publish.views;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static site.asm0dey.stillpress.db.Tables.COMMENT;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import module java.base;
-import org.jooq.DSLContext;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.store.ItemRepository;
+import site.asm0dey.stillpress.blocks.BlockRenderer;
+import site.asm0dey.stillpress.db.tables.pojos.Comment;
+import site.asm0dey.stillpress.db.tables.pojos.Item;
+import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.CommentRepository;
+import site.asm0dey.stillpress.store.ReusableBlockRepository;
+import site.asm0dey.stillpress.store.SettingRepository;
+import site.asm0dey.stillpress.store.TermRepository;
 
-@QuarkusTest
 class ViewFactorySanitizeTest {
-    @Inject
-    TestStore store;
-    @Inject
-    ViewFactory views;
-    @Inject
-    ItemRepository items;
-    @Inject
-    DSLContext db;
-
     @Test
-    void untrustedCommentHtmlAndAuthorUrlAreNeutralised() throws Exception {
-        store.reset();
-        store.importSample();
-        var item = items.findPublished().getFirst();
-        db
-            .insertInto(
-                    COMMENT,
-                    COMMENT.ITEM_ID,
-                    COMMENT.AUTHOR_NAME,
-                    COMMENT.AUTHOR_URL,
-                    COMMENT.CONTENT,
-                    COMMENT.CREATED_AT,
-                    COMMENT.STATUS
-            )
-            .values(
-                    item.id(),
-                    "Eve",
-                    "javascript:alert(1)",
-                    "<script>alert(1)</script><a href=\"javascript:x\">k</a>ok",
-                    LocalDateTime.now(),
-                    "approved"
-            )
-            .execute();
-        var v = views.item(item);
-        var c = v
-            .comments()
-            .stream()
-            .filter(x -> x.authorName().equals("Eve"))
-            .findFirst()
-            .orElseThrow();
+    void untrustedCommentHtmlAndAuthorUrlAreNeutralised() {
+        var comments = mock(CommentRepository.class);
+        var views = new ViewFactory(
+                mock(BlockRenderer.class),
+                mock(TermRepository.class),
+                comments,
+                mock(AuthorRepository.class),
+                mock(SettingRepository.class),
+                mock(ReusableBlockRepository.class)
+        );
+        var item = new Item(
+                1L,
+                null,
+                "post",
+                "publish",
+                false,
+                "T",
+                "t",
+                "/t/",
+                null,
+                "blocks",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "g",
+                "open",
+                0,
+                null,
+                null
+        );
+        when(comments.approvedFor(1L))
+            .thenReturn(List.of(
+                    new Comment(
+                            5L,
+                            null,
+                            1L,
+                            null,
+                            "Eve",
+                            null,
+                            "javascript:alert(1)",
+                            "<script>alert(1)</script><a href=\"javascript:x\">k</a>ok",
+                            LocalDateTime.now(),
+                            "approved"
+                    )
+            ));
+        var c = views.item(item).comments().getFirst();
+        assertThat(c.authorName()).isEqualTo("Eve");
         assertThat(c.authorUrl()).isNull();
         assertThat(c.contentHtml()).doesNotContain("<script").doesNotContain("javascript:").contains("ok");
     }

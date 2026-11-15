@@ -1,15 +1,25 @@
 package site.asm0dey.stillpress.blocks;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import jakarta.enterprise.inject.Instance;
 import module java.base;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-@QuarkusTest
 class BlockRendererTest {
-    @Inject
     BlockRenderer renderer;
+
+    // the real renderers, wired by hand as ArC does: the reusable one needs the renderer, which iterates the instance lazily
+    @BeforeEach
+    @SuppressWarnings("unchecked")
+    void setUp() {
+        Instance<DynamicBlockRenderer> dynamic = mock(Instance.class);
+        renderer = new BlockRenderer(dynamic);
+        var all = List.of(new EmbedRenderer(), new ReusableBlockRenderer(renderer));
+        when(dynamic.iterator()).thenAnswer(i -> all.iterator());
+    }
 
     private static RenderContext ctx() {
         return new RenderContext(id -> Optional.empty(), 0);
