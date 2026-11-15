@@ -43,7 +43,7 @@ class TwoStepLoginTest {
         adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
         users.setPassword(adminId, TestStore.PASSWORD_HASH);
         secret = totp.start(adminId, "admin").secret();
-        assertThat(totp.confirm(adminId, TwoFactorResourceTest.code(secret, clock.instant()))).isTrue();
+        assertThat(totp.confirm(adminId, TwoFactorResourceQuarkusTest.code(secret, clock.instant()))).isTrue();
         // confirming spent the current step
         clock.advance(Duration.ofSeconds(30));
     }
@@ -76,7 +76,7 @@ class TwoStepLoginTest {
             )
             .extract();
         assertThat(first.cookies()).doesNotContainKey("sp_session");
-        var session = totpStep(first.cookie("sp_2fa"), TwoFactorResourceTest.code(secret, clock.instant()))
+        var session = totpStep(first.cookie("sp_2fa"), TwoFactorResourceQuarkusTest.code(secret, clock.instant()))
             .then()
             .statusCode(204)
             .cookie("sp_2fa", detailedCookie().maxAge(0))
@@ -104,7 +104,7 @@ class TwoStepLoginTest {
     void expiredSecondStepIs401() throws Exception {
         var half = passwordStep();
         db.update(USER_TOKEN).set(USER_TOKEN.EXPIRES_AT, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1)).execute();
-        totpStep(half, TwoFactorResourceTest.code(secret, clock.instant()))
+        totpStep(half, TwoFactorResourceQuarkusTest.code(secret, clock.instant()))
             .then()
             .statusCode(401)
             .body("error", equalTo("second_step_expired"));
@@ -115,7 +115,7 @@ class TwoStepLoginTest {
     void wrongCodeKeepsTheTokenForARetry() throws Exception {
         var half = passwordStep();
         totpStep(half, "000000x").then().statusCode(401).body("error", equalTo("invalid_code"));
-        totpStep(half, TwoFactorResourceTest.code(secret, clock.instant())).then().statusCode(204);
+        totpStep(half, TwoFactorResourceQuarkusTest.code(secret, clock.instant())).then().statusCode(204);
     }
 
     @Test
@@ -124,7 +124,7 @@ class TwoStepLoginTest {
         for (int i = 0; i < 5; i++) {
             totpStep(half, "abcdef").then().statusCode(401).body("error", equalTo("invalid_code"));
         }
-        totpStep(half, TwoFactorResourceTest.code(secret, clock.instant()))
+        totpStep(half, TwoFactorResourceQuarkusTest.code(secret, clock.instant()))
             .then()
             .statusCode(429)
             .body("error", equalTo("rate_limited"));

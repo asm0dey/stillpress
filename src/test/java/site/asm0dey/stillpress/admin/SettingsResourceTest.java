@@ -1,264 +1,309 @@
 package site.asm0dey.stillpress.admin;
 
-import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static site.asm0dey.stillpress.Csrf.csrf;
-import static site.asm0dey.stillpress.db.Tables.SCHEDULED_TASKS;
-import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.response.Response;
-import io.restassured.specification.RequestSpecification;
-import jakarta.inject.Inject;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import module java.base;
-import org.jooq.DSLContext;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.config.DataDir;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import site.asm0dey.stillpress.content.Permalinker;
+import site.asm0dey.stillpress.db.tables.pojos.Term;
+import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
-import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.publish.PublishQueue;
 import site.asm0dey.stillpress.store.RedirectRepository;
-import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
+import site.asm0dey.stillpress.store.TermRepository;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class SettingsResourceTest {
-    @Inject
-    TestStore store;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    SessionRepository sessions;
-    @Inject
+    @Mock
     SettingRepository settings;
-    @Inject
+    @Mock
+    TermRepository terms;
+    @Mock
+    Permalinker permalinks;
+    @Mock
     RedirectRepository redirects;
-    @Inject
-    DataDir dataDir;
-    @Inject
-    DSLContext db;
-    String admin;
-    String editor;
+    @Mock
+    PublishQueue queue;
+    @Mock
+    Jobs jobs;
+    @Mock
+    ImportGuard guard;
+    // what the settings table holds: the stubs below read and write it the way the repository does
+    final Map<String, String> stored = new HashMap<>();
+    SettingsResource resource;
 
     @BeforeEach
-    void reset() {
-        store.reset();
-        settings.put("timezone", "Europe/Moscow");
-        settings.put("title", "Blog");
-        settings.put("language", "en-GB");
-        settings.put("home_url", "http://localhost:8081");
-        admin = cookie("admin", Role.ADMINISTRATOR);
-        editor = cookie("editor", Role.EDITOR);
+    void setUp() {
+        lenient()
+            .when(settings.get(anyString()))
+            .thenAnswer(i -> Optional.ofNullable(stored.get(i.<String>getArgument(0))));
+        lenient()
+            .doAnswer(i -> stored.put(i.getArgument(0), i.getArgument(1)))
+            .when(settings)
+            .put(anyString(), anyString());
+        lenient()
+            .doAnswer(i -> stored.remove(i.<String>getArgument(0)))
+            .when(settings)
+            .delete(anyString());
+        stored.putAll(Map.of(
+                "title",
+                "Blog",
+                "language",
+                "en-GB",
+                "home_url",
+                "http://localhost:8081",
+                "timezone",
+                "Europe/Moscow"
+        ));
+        resource = new SettingsResource(settings, terms, permalinks, redirects, queue, jobs, guard);
     }
 
-    @AfterEach
-    void settle() {
-        TestStore.await(() -> db.fetchCount(SCHEDULED_TASKS, SCHEDULED_TASKS.TASK_NAME.eq(Jobs.PUBLISH_SITE)) == 0, 30);
+    /**
+     * What the form sends back unchanged.
+     */
+    private SettingsResource.Settings current() {
+        return resource.get();
+    }
+
+    private static SettingsResource.Settings with(SettingsResource.Settings s, String field, Object value) {
+        return new SettingsResource.Settings(
+                "title".equals(field) ? (String) value : s.title(),
+                "description".equals(field) ? (String) value : s.description(),
+                "language".equals(field) ? (String) value : s.language(),
+                "homeUrl".equals(field) ? (String) value : s.homeUrl(),
+                "adminUrl".equals(field) ? (String) value : s.adminUrl(),
+                "timezone".equals(field) ? (String) value : s.timezone(),
+                "postsPerPage".equals(field) ? (Integer) value : s.postsPerPage(),
+                "postsPerRss".equals(field) ? (Integer) value : s.postsPerRss(),
+                "permalinkStructure".equals(field) ? (String) value : s.permalinkStructure(),
+                "categoryBase".equals(field) ? (String) value : s.categoryBase(),
+                "tagBase".equals(field) ? (String) value : s.tagBase(),
+                "defaultCategory".equals(field) ? (Long) value : s.defaultCategory(),
+                "defaultCommentStatus".equals(field) ? (String) value : s.defaultCommentStatus()
+        );
+    }
+
+    private static Term term(long id, String taxonomy, String slug) {
+        return new Term(id, null, taxonomy, slug, slug, null, "");
     }
 
     @Test
     void getReturnsDefaultsOnAFreshStore() {
-        as(admin)
-            .get("/admin/api/settings")
-            .then()
-            .statusCode(200)
-            .body("postsPerPage", equalTo(10))
-            .body("postsPerRss", equalTo(10))
-            .body("permalinkStructure", equalTo("/%year%/%monthnum%/%day%/%postname%/"))
-            .body("categoryBase", equalTo("category"))
-            .body("tagBase", equalTo("tag"))
-            .body("defaultCommentStatus", equalTo("open"))
-            .body("timezone", equalTo("Europe/Moscow"));
+        stored.clear();
+        assertThat(resource.get())
+            .isEqualTo(
+                    new SettingsResource.Settings(
+                            "",
+                            "",
+                            "en",
+                            "",
+                            "",
+                            "UTC",
+                            10,
+                            10,
+                            "/%year%/%monthnum%/%day%/%postname%/",
+                            "category",
+                            "tag",
+                            null,
+                            "open"
+                    )
+            );
     }
 
     @Test
-    void titleChangeRepublishesTheWholeSite() {
-        var body = current();
-        body.put("title", "New name");
-        put(admin, body).then().statusCode(200).body("title", equalTo("New name"));
-        var index = dataDir.current().resolve("index.html");
-        TestStore.await(() -> contains(index, "New name"), 30);
-        assertThat(index).content().contains("New name");
+    void getReturnsWhatIsStored() {
+        stored.put("posts_per_page", "25");
+        stored.put("default_category", "5");
+        stored.put("admin_url", "https://admin.example.org");
+        var s = resource.get();
+        assertThat(s.postsPerPage()).isEqualTo(25);
+        assertThat(s.defaultCategory()).isEqualTo(5L);
+        assertThat(s.adminUrl()).isEqualTo("https://admin.example.org");
+        assertThat(s.timezone()).isEqualTo("Europe/Moscow");
     }
 
     @Test
-    void permalinkStructureChangeKeepsExistingPermalinks() {
-        var a = publish("A");
-        var day = LocalDate.now(ZoneId.of("Europe/Moscow")).format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-        assertThat(a.getString("permalink")).isEqualTo("/" + day + "/a/");
-        var body = current();
-        body.put("permalinkStructure", "/%postname%/");
-        put(admin, body).then().statusCode(200);
-        var b = publish("B");
-        assertThat(b.getString("permalink")).isEqualTo("/b/");
-        assertThat(ItemsResourceQuarkusTest.get(admin, a.getLong("id")).getString("permalink")).isEqualTo(
-                "/" + day + "/a/"
-        );
-    }
-
-    @Test
-    void invalidFieldsAre400() {
+    void invalidFieldsAre400OnTheFieldAndNothingIsWrittenOrClosed() {
         var cases = new LinkedHashMap<String, Object>();
-        cases.put("postsPerPage", 0);
-        cases.put("postsPerRss", 101);
-        cases.put("timezone", "Mars/Base");
-        cases.put("permalinkStructure", "/%year%/");
+        cases.put("title", " ");
         cases.put("language", "Russian");
         cases.put("homeUrl", "https://blog.example.org/sub");
+        cases.put("adminUrl", "https://admin.example.org/x");
+        cases.put("timezone", "Mars/Base");
+        cases.put("postsPerPage", 0);
+        cases.put("postsPerRss", 101);
+        cases.put("permalinkStructure", "/%year%/");
         cases.put("categoryBase", "Two Words");
         cases.put("tagBase", "category");
-        cases.put("defaultCategory", 424242);
+        cases.put("defaultCategory", 424242L);
         cases.put("defaultCommentStatus", "maybe");
         cases.forEach((field, value) -> {
-            var body = current();
-            body.put(field, value);
-            put(admin, body).then().statusCode(400).body("error", equalTo("invalid")).body("field", equalTo(field));
+            try (var r = resource.put(with(current(), field, value))) {
+                assertThat(r.getStatus()).as(field).isEqualTo(400);
+                assertThat(r.getEntity()).as(field).isEqualTo(Map.of("error", "invalid", "field", field));
+            }
         });
-        assertThat(settings.get("posts_per_page")).isNotPresent();
+        verifyNoInteractions(guard, queue, jobs, redirects);
+        verify(settings, never()).put(anyString(), anyString());
     }
 
     @Test
-    void adminUrlValidatedAndSaved() {
-        var body = current();
-        body.put("adminUrl", "https://admin.example.org/x");
-        put(admin, body).then().statusCode(400).body("error", equalTo("invalid")).body("field", equalTo("adminUrl"));
-        body.put("adminUrl", "https://admin.example.org/");
-        put(admin, body).then().statusCode(200).body("adminUrl", equalTo("https://admin.example.org"));
-        assertThat(settings.get("admin_url")).hasValue("https://admin.example.org");
-        assertThat(db.fetchCount(SCHEDULED_TASKS, SCHEDULED_TASKS.TASK_NAME.eq(Jobs.PUBLISH_SITE))).isZero();
-    }
-
-    @Test
-    void rejectedSaveLeavesImportOpen() {
-        var body = current();
-        body.put("postsPerPage", 0);
-        put(admin, body).then().statusCode(400);
-        as(admin).get("/admin/api/site").then().body("importAllowed", org.hamcrest.Matchers.is(true));
-        assertThat(settings.get("import_state")).isNotPresent();
-    }
-
-    @Test
-    void missingCommentStatusIs400NotAnError() {
-        var body = current();
-        body.remove("defaultCommentStatus");
-        put(admin, body).then().statusCode(400).body("field", equalTo("defaultCommentStatus"));
-    }
-
-    @Test
-    void structureNeedsSlashesAtBothEnds() {
-        var body = current();
-        body.put("permalinkStructure", "%postname%/");
-        put(admin, body).then().statusCode(400).body("field", equalTo("permalinkStructure"));
-        body.put("permalinkStructure", "/%post_id%");
-        put(admin, body).then().statusCode(400).body("field", equalTo("permalinkStructure"));
-    }
-
-    @Test
-    void siteShowsZoneAndStructureToAnyUser() {
-        settings.put("permalink_structure", "/%postname%/");
-        as(editor)
-            .get("/admin/api/site")
-            .then()
-            .statusCode(200)
-            .body("timezone", equalTo("Europe/Moscow"))
-            .body("permalinkStructure", equalTo("/%postname%/"));
-    }
-
-    @Test
-    void editorIs403() {
-        as(editor).get("/admin/api/settings").then().statusCode(403);
-        put(editor, current()).then().statusCode(403);
-    }
-
-    @Test
-    void baseChangeRedirectsEveryTermArchive() {
-        var parent = term("Travel", null);
-        term("Europe", parent);
-        var body = current();
-        body.put("categoryBase", "topics");
-        put(admin, body).then().statusCode(200);
-        assertThat(redirects.find("/category/travel/").orElseThrow().to()).isEqualTo("/topics/travel/");
-        assertThat(redirects.find("/category/travel/europe/").orElseThrow().to()).isEqualTo("/topics/travel/europe/");
-        assertThat(redirects.find("/category/").orElseThrow().to()).isEqualTo("/topics/");
-        var index = dataDir.current().resolve("topics/travel/index.html");
-        TestStore.await(() -> Files.exists(index), 30);
-        assertThat(index).exists();
-    }
-
-    @Test
-    void settingsWriteClosesImport() {
-        put(admin, current()).then().statusCode(200);
-        assertThat(settings.get("import_state")).hasValue("closed");
-    }
-
-    @Test
-    void defaultCategoryAndCommentStatusAreStored() {
-        var id = term("News", null);
-        var body = current();
-        body.put("defaultCategory", id);
-        body.put("defaultCommentStatus", "closed");
-        put(admin, body).then().statusCode(200).body("defaultCategory", equalTo((int) id));
-        assertThat(settings.get("default_category")).hasValue(String.valueOf(id));
-        assertThat(settings.get("default_comment_status")).hasValue("closed");
-    }
-
-    private long term(String name, Long parent) {
-        var body = new HashMap<String, Object>(Map.of("taxonomy", "category", "name", name));
-        if (parent != null) {
-            body.put("parentId", parent);
+    void aMissingBodyOrCommentStatusIs400NotAnError() {
+        try (var r = resource.put(null)) {
+            assertThat(r.getEntity()).isEqualTo(Map.of("error", "invalid", "field", "title"));
         }
-        return as(admin)
-            .body(body)
-            .post("/admin/api/terms")
-            .then()
-            .statusCode(201)
-            .extract()
-            .jsonPath()
-            .getLong("id");
+        try (var r = resource.put(with(current(), "defaultCommentStatus", null))) {
+            assertThat(r.getStatus()).isEqualTo(400);
+            assertThat(r.getEntity()).isEqualTo(Map.of("error", "invalid", "field", "defaultCommentStatus"));
+        }
     }
 
-    private io.restassured.path.json.JsonPath publish(String title) {
-        var item = ItemsResourceQuarkusTest.create(admin, "post");
-        return ItemsResourceQuarkusTest
-            .update(admin, item, Map.of("title", title, "status", "publish"))
-            .then()
-            .statusCode(200)
-            .extract()
-            .jsonPath();
+    @Test
+    void permalinkStructureNeedsSlashesAtBothEndsAndAPostToken() {
+        for (var bad : List.of("%postname%/", "/%post_id%", "/archive/")) {
+            try (var r = resource.put(with(current(), "permalinkStructure", bad))) {
+                assertThat(r.getEntity()).as(bad).isEqualTo(Map.of("error", "invalid", "field", "permalinkStructure"));
+            }
+        }
     }
 
-    private Map<String, Object> current() {
-        return new HashMap<>(as(admin)
-            .get("/admin/api/settings")
-            .then()
-            .statusCode(200)
-            .extract()
-            .jsonPath()
-            .getMap("$")
+    @Test
+    void aDefaultCategoryMustBeACategoryTerm() {
+        when(terms.findById(7)).thenReturn(Optional.of(term(7, "post_tag", "kids")));
+        try (var r = resource.put(with(current(), "defaultCategory", 7L))) {
+            assertThat(r.getEntity()).isEqualTo(Map.of("error", "invalid", "field", "defaultCategory"));
+        }
+    }
+
+    @Test
+    void aSaveClosesImportAndStoresEveryFieldThenAnswersTheStoredSettings() {
+        when(terms.findById(5)).thenReturn(Optional.of(term(5, "category", "news")));
+        var body = with(
+                with(with(current(), "defaultCategory", 5L), "defaultCommentStatus", "closed"),
+                "adminUrl",
+                "https://admin.example.org/"
         );
-    }
-
-    private static Response put(String cookie, Map<String, Object> body) {
-        return as(cookie).body(body).put("/admin/api/settings");
-    }
-
-    private static boolean contains(Path page, String text) {
-        try {
-            return Files.exists(page) && Files.readString(page).contains(text);
-        } catch (IOException e) {
-            return false;
+        try (var r = resource.put(body)) {
+            assertThat(r.getStatus()).isEqualTo(200);
+            assertThat(r.getEntity())
+                .isEqualTo(
+                        with(
+                                with(with(current(), "defaultCategory", 5L), "defaultCommentStatus", "closed"),
+                                "adminUrl",
+                                "https://admin.example.org"
+                        )
+                );
         }
+        verify(guard).close();
+        assertThat(stored)
+            .containsEntry("default_category", "5")
+            .containsEntry("default_comment_status", "closed")
+            .containsEntry("admin_url", "https://admin.example.org");
     }
 
-    private String cookie(String login, Role role) {
-        var id = users.create(login, login + "@example.org", login, role).id();
-        users.setPassword(id, TestStore.PASSWORD_HASH);
-        return sessions.create(id);
+    @Test
+    void anEmptyAdminUrlAndANullDefaultCategoryDeleteTheirSettings() {
+        stored.put("admin_url", "https://admin.example.org");
+        stored.put("default_category", "5");
+        try (var r = resource.put(with(with(current(), "adminUrl", ""), "defaultCategory", null))) {
+            assertThat(r.getStatus()).isEqualTo(200);
+        }
+        assertThat(stored).doesNotContainKeys("admin_url", "default_category");
     }
 
-    private static RequestSpecification as(String cookie) {
-        return csrf().contentType(JSON).cookie("sp_session", cookie);
+    @Test
+    void trailingSlashesOfTheHomeUrlAreDropped() {
+        try (var r = resource.put(with(current(), "homeUrl", "http://localhost:8081/"))) {
+            assertThat(r.getStatus()).isEqualTo(200);
+        }
+        assertThat(stored).containsEntry("home_url", "http://localhost:8081");
+        verifyNoInteractions(queue, jobs);
+    }
+
+    @Test
+    void changingWhatEveryPageShowsRepublishesTheWholeSite() {
+        for (var change :
+                List.of(
+                        with(current(), "title", "New name"),
+                        with(current(), "description", "About"),
+                        with(current(), "language", "ru"),
+                        with(current(), "homeUrl", "https://blog.example.org"),
+                        with(current(), "postsPerPage", 20),
+                        with(current(), "postsPerRss", 20)
+        )) {
+            stored.clear();
+            stored.putAll(Map.of(
+                    "title",
+                    "Blog",
+                    "language",
+                    "en-GB",
+                    "home_url",
+                    "http://localhost:8081",
+                    "timezone",
+                    "Europe/Moscow"
+            ));
+            try (var r = resource.put(change)) {
+                assertThat(r.getStatus()).isEqualTo(200);
+            }
+        }
+        verify(queue, org.mockito.Mockito.times(6)).all();
+        verify(jobs, org.mockito.Mockito.times(6)).requestPublish();
+    }
+
+    @Test
+    void aChangeOfOnlyTheAdminUrlTimezoneOrCommentStatusRepublishesNothing() {
+        try (var r = resource.put(
+                with(
+                        with(with(current(), "adminUrl", "https://admin.example.org"), "timezone", "UTC"),
+                        "defaultCommentStatus",
+                        "closed"
+                )
+        )) {
+            assertThat(r.getStatus()).isEqualTo(200);
+        }
+        verifyNoInteractions(queue, jobs);
+        verify(redirects).putAll(Map.of());
+    }
+
+    @Test
+    void aNewCategoryBaseRedirectsTheBaseAndEveryTermArchiveThenRepublishes() {
+        when(terms.byTaxonomy("category")).thenReturn(List.of(
+                term(1, "category", "travel"),
+                term(2, "category", "europe")
+        ));
+        when(permalinks.termPath(1)).thenReturn("travel");
+        when(permalinks.termPath(2)).thenReturn("travel/europe");
+        try (var r = resource.put(with(current(), "categoryBase", "topics"))) {
+            assertThat(r.getStatus()).isEqualTo(200);
+        }
+        var moves = new LinkedHashMap<String, String>();
+        moves.put("/category/", "/topics/");
+        moves.put("/category/travel/", "/topics/travel/");
+        moves.put("/category/travel/europe/", "/topics/travel/europe/");
+        verify(redirects).putAll(moves);
+        var order = inOrder(queue, jobs);
+        order.verify(queue).all();
+        order.verify(jobs).requestPublish();
+    }
+
+    @Test
+    void aNewTagBaseRedirectsTheTagArchivesBySlug() {
+        when(terms.byTaxonomy("post_tag")).thenReturn(List.of(term(3, "post_tag", "kids")));
+        try (var r = resource.put(with(current(), "tagBase", "labels"))) {
+            assertThat(r.getStatus()).isEqualTo(200);
+        }
+        verify(redirects).putAll(Map.of("/tag/", "/labels/", "/tag/kids/", "/labels/kids/"));
+        verify(queue).all();
     }
 }

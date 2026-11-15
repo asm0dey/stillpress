@@ -121,6 +121,16 @@ class AuthorRepositoryTest {
     }
 
     @Test
+    void duplicateEmailDifferentCaseThrowsTaken() {
+        users.create("first", "A@x.org", "First", Role.AUTHOR);
+        // the unit-tested resources map exactly this exception to 409 email_taken
+        assertThatThrownBy(() -> users.create("second", "a@x.org", "Second", Role.AUTHOR))
+            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e.email).as(e.getMessage()).isTrue());
+        assertThat(users.emailTaken("a@X.ORG", -1)).isTrue();
+        assertThat(users.findByLogin("second")).isEmpty();
+    }
+
+    @Test
     void administratorsWithPassword() {
         var a = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
         assertThat(users.countAdministrators()).isEqualTo(1);

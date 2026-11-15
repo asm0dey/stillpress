@@ -168,7 +168,7 @@ class MandatoryTwoFactorTest {
             .toString();
         as(session)
             .contentType(JSON)
-            .body(Map.of("code", TwoFactorResourceTest.code(secret, clock.instant())))
+            .body(Map.of("code", TwoFactorResourceQuarkusTest.code(secret, clock.instant())))
             .post("/admin/api/2fa/totp/confirm")
             .then()
             .statusCode(204);

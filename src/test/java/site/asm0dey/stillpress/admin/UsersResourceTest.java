@@ -1,503 +1,448 @@
 package site.asm0dey.stillpress.admin;
 
-import static site.asm0dey.stillpress.Csrf.csrf;
-import static site.asm0dey.stillpress.db.Tables.USER_TOKEN;
-import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.contains;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasKey;
-import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.startsWith;
-import com.icegreen.greenmail.junit5.GreenMailExtension;
-import com.icegreen.greenmail.util.ServerSetupTest;
-import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.response.Response;
-import io.restassured.specification.RequestSpecification;
-import jakarta.inject.Inject;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static site.asm0dey.stillpress.Fixtures.author;
+import static site.asm0dey.stillpress.TestIdentities.user;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
-import org.jooq.DSLContext;
-import site.asm0dey.stillpress.TestStore;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.account.SetPasswordLink;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
+import site.asm0dey.stillpress.importer.ImportGuard;
+import site.asm0dey.stillpress.mail.Mail;
+import site.asm0dey.stillpress.mail.MailTexts;
 import site.asm0dey.stillpress.mail.SiteMail;
+import site.asm0dey.stillpress.publish.Jobs;
+import site.asm0dey.stillpress.publish.PublishQueue;
 import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.FragmentRepository;
+import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
+import site.asm0dey.stillpress.store.TakenFixtures;
+import site.asm0dey.stillpress.store.TokenRepository;
 import site.asm0dey.stillpress.store.TwoFactorRepository;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class UsersResourceTest {
-    // one server per class on GreenMail's fixed test port; test classes run one after another, so they never share it
-    @RegisterExtension
-    static final GreenMailExtension SMTP = new GreenMailExtension(ServerSetupTest.SMTP);
-    @Inject
-    SiteMail mail;
-    @Inject
-    DSLContext db;
-    @Inject
-    TestStore store;
-    @Inject
+    @Mock
     AuthorRepository users;
-    @Inject
-    SessionRepository sessions;
-    @Inject
+    @Mock
+    SetPasswordLink links;
+    @Mock
+    ImportGuard guard;
+    @Mock
+    ItemRepository items;
+    @Mock
+    FragmentRepository fragments;
+    @Mock
+    PublishQueue queue;
+    @Mock
+    Jobs jobs;
+    @Mock
+    SiteMail mail;
+    @Mock
     SettingRepository settings;
-    @Inject
-    DataDir dataDir;
-    @Inject
+    @Mock
     TwoFactorRepository factors;
-    long adminId;
-    long writerId;
-    String adminCookie;
-    String writerCookie;
+    @Mock
+    SessionRepository sessions;
+
+    private UsersResource as(long id, Role role) {
+        return new UsersResource(
+                users,
+                links,
+                guard,
+                items,
+                fragments,
+                queue,
+                jobs,
+                user(id, "caller", role),
+                mail,
+                settings,
+                factors,
+                sessions
+        );
+    }
+
+    UsersResource admin;
 
     @BeforeEach
-    void reset() {
-        store.reset();
-        adminId = user("admin", Role.ADMINISTRATOR);
-        writerId = user("writer", Role.AUTHOR);
-        adminCookie = sessions.create(adminId);
-        writerCookie = sessions.create(writerId);
-        mail.reload();
+    void setUp() {
+        admin = as(1, Role.ADMINISTRATOR);
     }
 
-    @Test
-    void adminClearsAUsersFactors() {
-        enroll(writerId);
-        assertThat(factors.factorCount(writerId)).isEqualTo(2);
-        as(adminCookie).delete("/admin/api/users/" + writerId + "/two-factor").then().statusCode(204);
-        assertThat(factors.hasFactor(writerId)).isFalse();
-        csrf().cookie("sp_session", writerCookie).get("/admin/api/session").then().statusCode(401);
-        as(adminCookie).get("/admin/api/users").then().body("find { it.login == 'writer' }.twoFactor", equalTo(false));
-        as(adminCookie).delete("/admin/api/users/999999/two-factor").then().statusCode(404);
-        as(sessions.create(writerId)).delete("/admin/api/users/" + adminId + "/two-factor").then().statusCode(403);
+    private static UsersResource.NewUser newUser(String login, String email, String name, String role) {
+        return new UsersResource.NewUser(login, email, name, role);
     }
 
-    @Test
-    void listShowsTwoFactor() {
-        as(adminCookie).get("/admin/api/users").then().body("find { it.login == 'writer' }.twoFactor", equalTo(false));
-        factors.putTotp(writerId, "seed");
-        // an unconfirmed authenticator is no factor
-        as(adminCookie).get("/admin/api/users").then().body("find { it.login == 'writer' }.twoFactor", equalTo(false));
-        factors.confirmTotp(writerId, "seed", 1);
-        as(adminCookie)
-            .get("/admin/api/users")
-            .then()
-            .body("find { it.login == 'writer' }.twoFactor", equalTo(true))
-            .body("find { it.login == 'admin' }.twoFactor", equalTo(false));
-    }
-
-    private void enroll(long id) {
-        factors.putTotp(id, "seed");
-        factors.confirmTotp(id, "seed", 1);
-        factors.addPasskey(
-                id,
-                "key",
-                new io.quarkus.security.webauthn.WebAuthnCredentialRecord.RequiredPersistedData(
-                        "u" + id,
-                        "cred-" + id,
-                        UUID.fromString("00000000-0000-0000-0000-000000000001"),
-                        new byte[] {1, 2, 3, 4},
-                        -7,
-                        0
-                )
-        );
-    }
-
-    @Test
-    void createMailsInviteWhenMailConfigured() throws Exception {
-        settings.put("admin_url", "https://blog.example.org");
-        smtp(ServerSetupTest.SMTP.getPort());
-        var id = create("editor1", "editor")
-            .then()
-            .statusCode(201)
-            .body("mailed", equalTo(true))
-            .body("$", not(hasKey("setPasswordUrl")))
-            .extract()
-            .<Integer>path("id");
-        assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
-        var received = SMTP.getReceivedMessages();
-        assertThat(received[0].getAllRecipients()).extracting(Object::toString).containsExactly("editor1@example.org");
-        var body = received[0].getContent().toString();
-        assertThat(body).contains("https://blog.example.org/admin/set-password?token=");
-        var expires = db
-            .select(USER_TOKEN.EXPIRES_AT)
-            .from(USER_TOKEN)
-            .where(USER_TOKEN.USER_ID.eq((long) id))
-            .fetchSingle(USER_TOKEN.EXPIRES_AT);
-        var week = LocalDateTime.now(ZoneOffset.UTC).plusDays(7);
-        assertThat(expires).isBetween(week.minusMinutes(1), week.plusMinutes(1));
-        setPassword(token(body), "editor password 1").then().statusCode(204);
-    }
-
-    @Test
-    void createWithoutMailReturnsLink() {
-        create("editor1", "editor")
-            .then()
-            .statusCode(201)
-            .body("mailed", equalTo(false))
-            .body("setPasswordUrl", startsWith("/admin/set-password?token="));
-        assertThat(SMTP.getReceivedMessages()).isEmpty();
-    }
-
-    @Test
-    void inviteMailFailureKeepsTheUser() throws IOException {
-        try (var closed = new ServerSocket(0)) {
-            smtp(closed.getLocalPort());
+    private static void assertAnswer(Response r, int status, Map<String, String> body) {
+        try (r) {
+            assertThat(r.getStatus()).isEqualTo(status);
+            assertThat(r.getEntity()).isEqualTo(body);
         }
-        create("editor1", "editor").then().statusCode(201).body("mailed", equalTo(true));
-        assertThat(users.findByLogin("editor1")).isPresent();
-        TestStore.await(() -> settings.get(SiteMail.LAST_ERROR).isPresent(), 10);
-        assertThat(settings.get(SiteMail.LAST_ERROR)).isNotEmpty();
+    }
+
+    private static void assertNoContent(Response r) {
+        try (r) {
+            assertThat(r.getStatus()).isEqualTo(204);
+        }
+    }
+
+    private static Author writer() {
+        return author(5, "writer", Role.AUTHOR, "hash");
     }
 
     @Test
-    void inviteRevokesEarlierInviteButNotACopiedLink() throws Exception {
-        var pending = users.create("pending", "pending@example.org", "P", Role.AUTHOR).id();
-        var copied = asAdmin()
-            .post("/admin/api/users/" + pending + "/password-link")
-            .then()
-            .statusCode(200)
-            .extract()
-            .<String>path("url");
-        smtp(ServerSetupTest.SMTP.getPort());
-        asAdmin().post("/admin/api/users/" + pending + "/invite").then().statusCode(204);
-        asAdmin().post("/admin/api/users/" + pending + "/invite").then().statusCode(204);
-        assertThat(SMTP.waitForIncomingEmail(5000, 2)).isTrue();
-        var first = token(SMTP.getReceivedMessages()[0].getContent().toString());
-        var second = token(SMTP.getReceivedMessages()[1].getContent().toString());
-        setPassword(first, "pending password 1").then().statusCode(410);
-        setPassword(second, "pending password 1").then().statusCode(204);
-        // spending the invite kills the copied link too
-        setPassword(copied.substring(copied.indexOf("token=") + 6), "pending password 1").then().statusCode(410);
+    void listIsSortedByLoginWithRolePasswordAndTwoFactor() {
+        when(users.allWithTwoFactor())
+            .thenReturn(List.of(
+                    new AuthorRepository.WithTwoFactor(writer(), true),
+                    new AuthorRepository.WithTwoFactor(author(1, "admin", Role.ADMINISTRATOR, null), false)
+            ));
+        assertThat(admin.list())
+            .containsExactly(
+                    new UsersResource.UserView(1, "admin", "admin", "admin@example.org", "administrator", false, false),
+                    new UsersResource.UserView(5, "writer", "writer", "writer@example.org", "author", true, true)
+            );
     }
 
     @Test
-    void inviteNeedsMailAnEmailAndTheUser() {
-        var noEmail = users.create("noemail", null, "N", Role.AUTHOR).id();
-        asAdmin()
-            .post("/admin/api/users/" + writerId + "/invite")
-            .then()
-            .statusCode(409)
-            .body("error", equalTo("mail_not_configured"));
-        smtp(ServerSetupTest.SMTP.getPort());
-        asAdmin().post("/admin/api/users/" + noEmail + "/invite").then().statusCode(400).body(
-                "error",
-                equalTo("no_email")
-        );
-        asAdmin().post("/admin/api/users/999999/invite").then().statusCode(404);
-        as(writerCookie).post("/admin/api/users/" + writerId + "/invite").then().statusCode(403);
-        assertThat(SMTP.getReceivedMessages()).isEmpty();
-    }
-
-    private void smtp(int port) {
-        settings.put("smtp_host", "localhost");
-        settings.put("smtp_port", String.valueOf(port));
-        settings.put("smtp_security", "none");
-        settings.put("smtp_from", "blog@example.org");
-        mail.reload();
-    }
-
-    /**
-     * The token of the first set-password link in a mail body.
-     */
-    private static String token(String body) {
-        assertThat(body).containsPattern("token=\\S+");
-        return body.replaceFirst("(?s).*?token=(\\S+).*", "$1");
+    void clearTwoFactorRemovesEveryFactorAndSignsTheUserOutEverywhere() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        assertNoContent(admin.clearTwoFactor(5));
+        verify(factors).clear(5);
+        verify(sessions).deleteAllFor(5);
     }
 
     @Test
-    void administratorListsUsers() {
-        asAdmin()
-            .get("/admin/api/users")
-            .then()
-            .statusCode(200)
-            .body("login", contains("admin", "writer"))
-            .body("role", contains("administrator", "author"))
-            .body("hasPassword", contains(true, true));
+    void clearTwoFactorOfAnUnknownUserIs404() {
+        when(users.findById(999999)).thenReturn(Optional.empty());
+        assertAnswer(admin.clearTwoFactor(999999), 404, Map.of("error", "not_found"));
+        verifyNoInteractions(factors, sessions);
     }
 
     @Test
-    void nonAdministratorIs403() {
-        as(writerCookie).get("/admin/api/users").then().statusCode(403);
-        as(writerCookie).body(Map.of("role", "editor")).put("/admin/api/users/" + writerId + "/role").then().statusCode(
-                403
-        );
+    void createWithoutMailAnswers201WithAManualSetPasswordLinkAndRepublishesTheAuthorArchive() {
+        var created = author(9, "editor1", Role.EDITOR, null);
+        when(users.findByLogin("editor1")).thenReturn(Optional.empty());
+        when(users.emailTaken("editor1@example.org", -1)).thenReturn(false);
+        when(users.create("editor1", "editor1@example.org", "E", Role.EDITOR)).thenReturn(created);
+        when(mail.configured()).thenReturn(false);
+        when(links.issue(9, TokenRepository.SET_PASSWORD, SetPasswordLink.MANUAL_TTL))
+            .thenReturn("/admin/set-password?token=t");
+        try (var r = admin.create(newUser("editor1", "editor1@example.org", "E", "editor"))) {
+            assertThat(r.getStatus()).isEqualTo(201);
+            assertThat(r.getEntity()).isEqualTo(Map.of(
+                    "id",
+                    9L,
+                    "mailed",
+                    false,
+                    "setPasswordUrl",
+                    "/admin/set-password?token=t"
+            ));
+        }
+        verify(guard).close();
+        verify(queue).base("/author/editor1/");
+        verify(jobs).requestPublish();
     }
 
     @Test
-    void createReturnsWorkingSetPasswordLink() {
-        var url = create("editor1", "editor").then().statusCode(201).extract().<String>path("setPasswordUrl");
-        assertThat(url).startsWith("/admin/set-password?token=");
-        var token = url.substring(url.indexOf("token=") + 6);
-        setPassword(token, "editor password 1").then().statusCode(204);
-        login("editor1", "editor password 1").then().statusCode(204);
-    }
-
-    @Test
-    void linkUsesAdminUrlWhenSet() {
-        settings.put("admin_url", "https://blog.example.org/");
-        create("editor1", "editor")
-            .then()
-            .statusCode(201)
-            .body("setPasswordUrl", startsWith("https://blog.example.org/admin/set-password?token="));
-    }
-
-    @Test
-    void duplicateLoginIs409() {
-        create("writer", "author").then().statusCode(409).body("error", equalTo("login_taken"));
-    }
-
-    @Test
-    void login61CharactersIs400NotA500() {
-        create("x".repeat(61), "author").then().statusCode(400).body("field", equalTo("login"));
-        create("bad/login", "author").then().statusCode(400).body("field", equalTo("login"));
-        assertThat(settings.get("import_state")).isNotPresent();
-    }
-
-    @Test
-    void createTrimsAndValidatesEmailAndDisplayName() {
-        asAdmin()
-            .body(Map.of("login", "e1", "email", "x".repeat(95) + "@e.org", "displayName", "E", "role", "editor"))
-            .post("/admin/api/users")
-            .then()
-            .statusCode(400)
-            .body("field", equalTo("email"));
-        asAdmin()
-            .body(Map.of("login", "e1", "email", "e1@example.org", "displayName", "x".repeat(251), "role", "editor"))
-            .post("/admin/api/users")
-            .then()
-            .statusCode(400)
-            .body("field", equalTo("displayName"));
-        var id = asAdmin()
-            .body(Map.of("login", " e1 ", "email", " e1@example.org ", "displayName", " E ", "role", "editor"))
-            .post("/admin/api/users")
-            .then()
-            .statusCode(201)
-            .extract()
-            .<Integer>path("id");
-        var u = users.findById(id).orElseThrow();
-        assertThat(List.of(u.login(), u.email(), u.displayName())).containsExactly("e1", "e1@example.org", "E");
-    }
-
-    @Test
-    void duplicateEmailIs409() {
-        asAdmin()
-            .body(Map.of("login", "other", "email", "WRITER@example.org", "displayName", "O", "role", "author"))
-            .post("/admin/api/users")
-            .then()
-            .statusCode(409)
-            .body("error", equalTo("email_taken"));
-        assertThat(settings.get("import_state")).isNotPresent();
-    }
-
-    @Test
-    void concurrentSameLoginGivesOne201AndOtherwise409() {
-        var codes = IntStream
-            .range(0, 8)
-            .parallel()
-            .mapToObj(i -> asAdmin()
-                .body(Map.of("login", "dup", "email", "dup" + i + "@example.org", "displayName", "D", "role", "author"))
-                .post("/admin/api/users")
-                .statusCode())
-            .toList();
-        assertThat(codes).containsOnlyOnce(201).containsOnly(201, 409);
-    }
-
-    @Test
-    void concurrentCreatesSameEmailDifferentCase() {
-        var emails = List.of("A@x.org", "a@x.org");
-        var codes = IntStream
-            .range(0, 2)
-            .parallel()
-            .mapToObj(i -> asAdmin()
-                .body(Map.of("login", "mail" + i, "email", emails.get(i), "displayName", "D", "role", "author"))
-                .post("/admin/api/users"))
-            .toList();
-        assertThat(codes.stream().map(Response::statusCode).sorted()).containsExactly(201, 409);
-        assertThat(codes
-            .stream()
-            .filter(r -> r.statusCode() == 409)
-            .map(r -> r.jsonPath().getString("error")))
-            .containsExactly("email_taken");
-    }
-
-    @Test
-    void profileUpdateRaceMapsTo409() {
-        // each updater passes or fails the up-front check; the unique index settles whoever is left
-        var other = user("other", Role.AUTHOR);
-        var ids = List.of(writerId, other);
-        var codes = IntStream
-            .range(0, 2)
-            .parallel()
-            .mapToObj(i -> asAdmin()
-                .body(Map.of("displayName", "P", "email", i == 0 ? "Same@x.org" : "same@x.org"))
-                .put("/admin/api/users/" + ids.get(i))
-                .statusCode())
-            .sorted()
-            .toList();
-        assertThat(codes).containsExactly(204, 409);
-    }
-
-    @Test
-    void unknownRoleIs400() {
-        create("editor1", "king").then().statusCode(400);
-    }
-
-    @Test
-    void lastAdministratorCannotBeDemoted() {
-        asAdmin()
-            .body(Map.of("role", "editor"))
-            .put("/admin/api/users/" + adminId + "/role")
-            .then()
-            .statusCode(409)
-            .body("error", equalTo("last_administrator"));
-        assertThat(users.findById(adminId).orElseThrow().role()).isEqualTo("administrator");
-    }
-
-    @Test
-    void refusedDemotionLeavesImportOpen() {
-        asAdmin().body(Map.of("role", "editor")).put("/admin/api/users/" + adminId + "/role").then().statusCode(409);
-        asAdmin().get("/admin/api/site").then().statusCode(200).body("importAllowed", equalTo(true));
-    }
-
-    @Test
-    void administratorWithoutPasswordDoesNotCountAsAnotherOne() {
-        var other = users.create("pending", "p@example.org", "P", Role.ADMINISTRATOR).id();
-        asAdmin().body(Map.of("role", "editor")).put("/admin/api/users/" + adminId + "/role").then().statusCode(409);
-        // demoting the passwordless one is fine
-        asAdmin().body(Map.of("role", "editor")).put("/admin/api/users/" + other + "/role").then().statusCode(204);
-    }
-
-    @Test
-    void demotionAllowedWhenAnotherAdministratorExists() {
-        asAdmin().body(Map.of("role", "administrator")).put("/admin/api/users/" + writerId + "/role").then().statusCode(
-                204
-        );
-        asAdmin().body(Map.of("role", "editor")).put("/admin/api/users/" + adminId + "/role").then().statusCode(204);
-        assertThat(users.findById(adminId).orElseThrow().role()).isEqualTo("editor");
-    }
-
-    @Test
-    void changingRoleOfUnknownUserIs404AndUnknownRoleIs400() {
-        asAdmin().body(Map.of("role", "editor")).put("/admin/api/users/999999/role").then().statusCode(404);
-        asAdmin().body(Map.of("role", "king")).put("/admin/api/users/" + writerId + "/role").then().statusCode(400);
-    }
-
-    @Test
-    void passwordLinkIsIssuedForAnExistingUser() {
-        var url = asAdmin()
-            .post("/admin/api/users/" + writerId + "/password-link")
-            .then()
-            .statusCode(200)
-            .extract()
-            .<String>path("url");
-        setPassword(url.substring(url.indexOf("token=") + 6), "another password 1").then().statusCode(204);
-        asAdmin().post("/admin/api/users/999999/password-link").then().statusCode(404);
-    }
-
-    @Test
-    void userEditsOwnDisplayNameAndArchiveHeadingChanges() {
-        settings.put("title", "Blog");
-        as(writerCookie)
-            .body(Map.of("displayName", "  Wendy Writer ", "email", "wendy@example.org"))
-            .put("/admin/api/users/" + writerId)
-            .then()
-            .statusCode(204);
-        var u = users.findById(writerId).orElseThrow();
-        assertThat(u.displayName()).isEqualTo("Wendy Writer");
-        assertThat(u.email()).isEqualTo("wendy@example.org");
-        assertThat(u.slug()).isEqualTo("writer");
-        var archive = dataDir.current().resolve("author/writer/index.html");
-        TestStore.await(() -> {
-            try {
-                return Files.exists(archive) && Files.readString(archive).contains("Wendy Writer");
-            } catch (IOException e) {
-                return false;
+    void createWithMailAnswers201MailedAndSendsTheInviteAfterCommit() {
+        var created = author(9, "editor1", Role.EDITOR, null);
+        when(users.findByLogin("editor1")).thenReturn(Optional.empty());
+        when(users.create("editor1", "editor1@example.org", "E", Role.EDITOR)).thenReturn(created);
+        when(mail.configured()).thenReturn(true);
+        when(settings.get("title")).thenReturn(Optional.of("Blog"));
+        when(links.issue(9, TokenRepository.INVITE, SetPasswordLink.INVITE_TTL)).thenReturn("https://blog/set?token=t");
+        var texts = mock(MailTexts.class);
+        when(texts.inviteSubject("Blog")).thenReturn("You are invited to Blog");
+        when(texts.inviteBody("editor1", "Blog", "https://blog/set?token=t", 7)).thenReturn("body");
+        try (var statics = mockStatic(SiteMail.class)) {
+            statics.when(() -> SiteMail.texts("en")).thenReturn(texts);
+            try (var r = admin.create(newUser("editor1", "editor1@example.org", "E", "editor"))) {
+                assertThat(r.getStatus()).isEqualTo(201);
+                assertThat(r.getEntity()).isEqualTo(Map.of("id", 9L, "mailed", true));
             }
-        }, 30);
-        assertThat(archive).content().contains("Wendy Writer");
+        }
+        verify(mail).sendAfterCommit(new Mail("editor1@example.org", "You are invited to Blog", "body"));
     }
 
     @Test
-    void authorEditingSomeoneElseIs403() {
-        as(writerCookie)
-            .body(Map.of("displayName", "Hacked", "email", "admin@example.org"))
-            .put("/admin/api/users/" + adminId)
-            .then()
-            .statusCode(403);
-        assertThat(users.findById(adminId).orElseThrow().displayName()).isEqualTo("admin");
+    void createTrimsLoginEmailAndDisplayName() {
+        when(users.findByLogin("e1")).thenReturn(Optional.empty());
+        when(users.create("e1", "e1@example.org", "E", Role.EDITOR)).thenReturn(author(9, "e1", Role.EDITOR, null));
+        when(links.issue(9, TokenRepository.SET_PASSWORD, SetPasswordLink.MANUAL_TTL)).thenReturn("link");
+        admin.create(newUser(" e1 ", " e1@example.org ", " E ", "editor")).close();
+        verify(users).create("e1", "e1@example.org", "E", Role.EDITOR);
     }
 
     @Test
-    void administratorEditsAnyoneAndEmailMustBeFree() {
-        asAdmin()
-            .body(Map.of("displayName", "W", "email", "w2@example.org"))
-            .put("/admin/api/users/" + writerId)
-            .then()
-            .statusCode(204);
-        as(writerCookie)
-            .body(Map.of("displayName", "W", "email", "ADMIN@example.org"))
-            .put("/admin/api/users/" + writerId)
-            .then()
-            .statusCode(409)
-            .body("error", equalTo("email_taken"));
-        asAdmin()
-            .body(Map.of("displayName", "W", "email", "x@example.org"))
-            .put("/admin/api/users/999999")
-            .then()
-            .statusCode(404);
+    void createWithABadFieldIs400OnItAndChangesNothing() {
+        var cases = new LinkedHashMap<String, UsersResource.NewUser>();
+        cases.put("login", newUser("x".repeat(61), "a@example.org", "A", "author"));
+        cases.put("login ", newUser("bad/login", "a@example.org", "A", "author"));
+        cases.put("login  ", null);
+        cases.put("email", newUser("a", "x".repeat(95) + "@e.org", "A", "author"));
+        cases.put("displayName", newUser("a", "a@example.org", "x".repeat(251), "author"));
+        cases.forEach((label, body) -> {
+            try (var r = admin.create(body)) {
+                assertThat(r.getStatus()).as(label).isEqualTo(400);
+                assertThat(r.getEntity()).as(label).isEqualTo(Map.of("error", "invalid", "field", label.strip()));
+            }
+        });
+        verifyNoInteractions(guard, queue, jobs);
+        verify(users, never()).create(any(), any(), any(), any());
     }
 
     @Test
-    void invalidProfileFieldsAre400AndLeaveImportOpen() {
-        asAdmin()
-            .body(Map.of("displayName", "x".repeat(251), "email", "w@example.org"))
-            .put("/admin/api/users/" + writerId)
-            .then()
-            .statusCode(400)
-            .body("field", equalTo("displayName"));
-        asAdmin()
-            .body(Map.of("displayName", "W", "email", "x".repeat(95) + "@e.org"))
-            .put("/admin/api/users/" + writerId)
-            .then()
-            .statusCode(400)
-            .body("field", equalTo("email"));
-        assertThat(settings.get("import_state")).isNotPresent();
+    void createWithAnUnknownRoleIs400InvalidRole() {
+        assertAnswer(admin.create(newUser("a", "a@example.org", "A", "king")), 400, Map.of("error", "invalid_role"));
+        verify(users, never()).create(any(), any(), any(), any());
     }
 
-    private long user(String login, Role role) {
-        var id = users.create(login, login + "@example.org", login, role).id();
-        users.setPassword(id, TestStore.PASSWORD_HASH);
-        return id;
+    @Test
+    void createWithATakenLoginOrEmailIs409AndLeavesImportOpen() {
+        when(users.findByLogin("writer")).thenReturn(Optional.of(writer()));
+        assertAnswer(
+                admin.create(newUser("writer", "w@example.org", "W", "author")),
+                409,
+                Map.of("error", "login_taken")
+        );
+        when(users.findByLogin("other")).thenReturn(Optional.empty());
+        when(users.emailTaken("WRITER@example.org", -1)).thenReturn(true);
+        assertAnswer(
+                admin.create(newUser("other", "WRITER@example.org", "O", "author")),
+                409,
+                Map.of("error", "email_taken")
+        );
+        verifyNoInteractions(guard);
     }
 
-    private RequestSpecification as(String cookie) {
-        return csrf().contentType(JSON).cookie("sp_session", cookie);
+    @Test
+    void aUniqueIndexRefusalFromAConcurrentCreateIs409ThrownSoTheTransactionRollsBack() {
+        when(users.findByLogin("dup")).thenReturn(Optional.empty());
+        when(users.create("dup", "dup@example.org", "D", Role.AUTHOR)).thenThrow(TakenFixtures.login());
+        assertThatThrownBy(() -> admin.create(newUser("dup", "dup@example.org", "D", "author")))
+            .isInstanceOfSatisfying(WebApplicationException.class, e -> {
+                assertThat(e.getResponse().getStatus()).isEqualTo(409);
+                assertThat(e.getResponse().getEntity()).isEqualTo(Map.of("error", "login_taken"));
+            });
+        when(users.create("mail", "a@x.org", "D", Role.AUTHOR)).thenThrow(TakenFixtures.email());
+        assertThatThrownBy(() -> admin.create(newUser("mail", "a@x.org", "D", "author")))
+            .isInstanceOfSatisfying(WebApplicationException.class, e -> assertThat(e.getResponse().getEntity())
+                .isEqualTo(Map.of("error", "email_taken")));
+        verifyNoInteractions(queue, jobs);
     }
 
-    private RequestSpecification asAdmin() {
-        return as(adminCookie);
+    @Test
+    void inviteOfAnUnknownUserIs404() {
+        when(users.findById(999999)).thenReturn(Optional.empty());
+        assertAnswer(admin.sendInvite(999999), 404, Map.of("error", "not_found"));
     }
 
-    private Response create(String login, String role) {
-        return asAdmin()
-            .body(Map.of("login", login, "email", login + "@example.org", "displayName", "E", "role", role))
-            .post("/admin/api/users");
+    @Test
+    void inviteWithoutMailConfiguredIs409() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        when(mail.configured()).thenReturn(false);
+        assertAnswer(admin.sendInvite(5), 409, Map.of("error", "mail_not_configured"));
     }
 
-    private static Response setPassword(String token, String password) {
-        return csrf()
-            .contentType(JSON)
-            .body(Map.of("token", token, "password", password))
-            .post("/admin/api/set-password");
+    @Test
+    void inviteOfAUserWithoutAnEmailIs400NoEmail() {
+        when(users.findById(6))
+            .thenReturn(Optional.of(new Author(6L, "noemail", "N", null, "noemail", null, "author", null, null, null)));
+        when(mail.configured()).thenReturn(true);
+        assertAnswer(admin.sendInvite(6), 400, Map.of("error", "no_email"));
+        verify(mail, never()).sendAfterCommit(any());
+        verifyNoInteractions(guard);
     }
 
-    private static Response login(String login, String password) {
-        return csrf().contentType(JSON).body(Map.of("login", login, "password", password)).post("/admin/api/login");
+    @Test
+    void inviteMailsTheUserTheirOwnLinkAndAnswers204() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        when(mail.configured()).thenReturn(true);
+        when(links.issue(5, TokenRepository.INVITE, SetPasswordLink.INVITE_TTL)).thenReturn("link");
+        var texts = mock(MailTexts.class);
+        when(texts.inviteSubject("Stillpress")).thenReturn("subject");
+        when(texts.inviteBody("writer", "Stillpress", "link", 7)).thenReturn("body");
+        try (var statics = mockStatic(SiteMail.class)) {
+            statics.when(() -> SiteMail.texts("en")).thenReturn(texts);
+            assertNoContent(admin.sendInvite(5));
+        }
+        verify(guard).close();
+        verify(mail).sendAfterCommit(new Mail("writer@example.org", "subject", "body"));
+    }
+
+    @Test
+    void aMailGreetsByDisplayNameOrByLoginWhenTheImportedAuthorHasNone() {
+        assertThat(UsersResource.displayName(
+                new Author(1L, "login", "Name", null, "s", null, "author", null, null, null)
+        ))
+            .isEqualTo("Name");
+        assertThat(UsersResource.displayName(new Author(1L, "login", " ", null, "s", null, "author", null, null, null)))
+            .isEqualTo("login");
+        assertThat(UsersResource.displayName(new Author(1L, "login", null, null, "s", null, "author", null, null, null))
+        )
+            .isEqualTo("login");
+    }
+
+    @Test
+    void anAuthorEditingSomeoneElseIs403AndNothingIsLookedUp() {
+        var self = as(5, Role.AUTHOR);
+        assertAnswer(
+                self.update(1, new UsersResource.Profile("Hacked", "admin@example.org")),
+                403,
+                Map.of("error", "forbidden")
+        );
+        verifyNoInteractions(users, guard);
+    }
+
+    @Test
+    void updateOfAnUnknownUserIs404() {
+        when(users.findById(999999)).thenReturn(Optional.empty());
+        assertAnswer(
+                admin.update(999999, new UsersResource.Profile("W", "x@example.org")),
+                404,
+                Map.of("error", "not_found")
+        );
+    }
+
+    @Test
+    void updateWithABadFieldIs400AndLeavesImportOpen() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        assertAnswer(
+                admin.update(5, new UsersResource.Profile("x".repeat(251), "w@example.org")),
+                400,
+                Map.of("error", "invalid", "field", "displayName")
+        );
+        assertAnswer(
+                admin.update(5, new UsersResource.Profile("W", "x".repeat(95) + "@e.org")),
+                400,
+                Map.of("error", "invalid", "field", "email")
+        );
+        assertAnswer(admin.update(5, null), 400, Map.of("error", "invalid", "field", "displayName"));
+        verifyNoInteractions(guard);
+        verify(users, never()).setProfile(anyLong(), any(), any());
+    }
+
+    @Test
+    void updateToAnEmailAnotherUserHasIs409() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        when(users.emailTaken("ADMIN@example.org", 5)).thenReturn(true);
+        assertAnswer(
+                as(5, Role.AUTHOR).update(5, new UsersResource.Profile("W", "ADMIN@example.org")),
+                409,
+                Map.of("error", "email_taken")
+        );
+        verifyNoInteractions(guard);
+    }
+
+    @Test
+    void aConcurrentChangeTakingTheEmailIs409ThrownSoTheTransactionRollsBack() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        org.mockito.Mockito.doThrow(TakenFixtures.email()).when(users).setProfile(5, "P", "same@x.org");
+        assertThatThrownBy(() -> admin.update(5, new UsersResource.Profile("P", "same@x.org")))
+            .isInstanceOfSatisfying(WebApplicationException.class, e -> {
+                assertThat(e.getResponse().getStatus()).isEqualTo(409);
+                assertThat(e.getResponse().getEntity()).isEqualTo(Map.of("error", "email_taken"));
+            });
+        verifyNoInteractions(queue, jobs);
+    }
+
+    @Test
+    void aNewDisplayNameIsSavedTrimmedAndRepublishesTheArchiveAndTheUsersPublishedItems() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        when(items.publishedIdsBy(5)).thenReturn(List.of(11L, 12L));
+        assertNoContent(as(5, Role.AUTHOR)
+            .update(5, new UsersResource.Profile("  Wendy Writer ", " wendy@example.org "))
+        );
+        verify(guard).close();
+        verify(users).setProfile(5, "Wendy Writer", "wendy@example.org");
+        verify(fragments).delete(List.of(11L, 12L));
+        verify(queue).items(List.of(11L, 12L));
+        verify(queue).base("/author/writer/");
+        verify(jobs).requestPublish();
+    }
+
+    @Test
+    void anUnchangedDisplayNameRepublishesNothing() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        assertNoContent(admin.update(5, new UsersResource.Profile("writer", "new@example.org")));
+        verify(users).setProfile(5, "writer", "new@example.org");
+        verifyNoInteractions(queue, jobs, fragments);
+    }
+
+    @Test
+    void anAdministratorEditsAnyone() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        assertNoContent(admin.update(5, new UsersResource.Profile("writer", "w2@example.org")));
+        verify(users).setProfile(5, "writer", "w2@example.org");
+    }
+
+    @Test
+    void aRoleChangeIs204AndClosesImport() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        when(users.setRoleKeepingAdministrator(5, Role.EDITOR)).thenReturn(true);
+        assertNoContent(admin.setRole(5, new UsersResource.RoleChange("editor")));
+        verify(guard).close();
+    }
+
+    @Test
+    void anUnknownOrMissingRoleIs400InvalidRole() {
+        assertAnswer(admin.setRole(5, new UsersResource.RoleChange("king")), 400, Map.of("error", "invalid_role"));
+        assertAnswer(admin.setRole(5, new UsersResource.RoleChange(null)), 400, Map.of("error", "invalid_role"));
+        assertAnswer(admin.setRole(5, null), 400, Map.of("error", "invalid_role"));
+        verifyNoInteractions(users);
+    }
+
+    @Test
+    void aRoleChangeOfAnUnknownUserIs404() {
+        when(users.findById(999999)).thenReturn(Optional.empty());
+        assertAnswer(admin.setRole(999999, new UsersResource.RoleChange("editor")), 404, Map.of("error", "not_found"));
+        verify(users, never()).setRoleKeepingAdministrator(anyLong(), any());
+    }
+
+    @Test
+    void demotingTheLastAdministratorIs409AndLeavesImportOpen() {
+        when(users.findById(1)).thenReturn(Optional.of(author(1, "admin", Role.ADMINISTRATOR, "hash")));
+        when(users.setRoleKeepingAdministrator(1, Role.EDITOR)).thenReturn(false);
+        assertAnswer(
+                admin.setRole(1, new UsersResource.RoleChange("editor")),
+                409,
+                Map.of("error", "last_administrator")
+        );
+        verifyNoInteractions(guard);
+    }
+
+    @Test
+    void passwordLinkIsIssuedForAnExistingUserAndClosesImport() {
+        when(users.findById(5)).thenReturn(Optional.of(writer()));
+        when(links.issue(5, TokenRepository.SET_PASSWORD, SetPasswordLink.MANUAL_TTL))
+            .thenReturn("/admin/set-password?token=t");
+        assertAnswer(admin.passwordLink(5), 200, Map.of("url", "/admin/set-password?token=t"));
+        verify(guard).close();
+    }
+
+    @Test
+    void passwordLinkForAnUnknownUserIs404() {
+        when(users.findById(999999)).thenReturn(Optional.empty());
+        assertAnswer(admin.passwordLink(999999), 404, Map.of("error", "not_found"));
+        verifyNoInteractions(links, guard);
     }
 }

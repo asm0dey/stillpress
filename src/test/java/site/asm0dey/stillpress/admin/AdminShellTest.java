@@ -78,7 +78,7 @@ class AdminShellTest {
     void siteRouteStillServesRoot() {
         store.reset();
         token.regenerate();
-        SetupResourceTest.setup(token.current().orElseThrow()).then().statusCode(201);
+        SetupResourceQuarkusTest.setup(token.current().orElseThrow()).then().statusCode(201);
         // the site is published in the background
         TestStore.await(() -> given().get("/").statusCode() == 200, 20);
         given().get("/").then().statusCode(200).contentType(startsWith("text/html")).body(containsString("My Site"));

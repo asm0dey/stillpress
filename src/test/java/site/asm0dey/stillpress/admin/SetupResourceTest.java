@@ -1,300 +1,215 @@
 package site.asm0dey.stillpress.admin;
 
-import static site.asm0dey.stillpress.Csrf.csrf;
-import static io.restassured.RestAssured.given;
-import static io.restassured.http.ContentType.JSON;
-import static io.restassured.matcher.RestAssuredMatchers.detailedCookie;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
-import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.response.Response;
-import jakarta.inject.Inject;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static site.asm0dey.stillpress.Fixtures.author;
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.net.SocketAddress;
+import jakarta.ws.rs.core.Response;
 import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.account.Passwords;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import site.asm0dey.stillpress.account.Captcha;
 import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.importer.ImportGuard;
+import site.asm0dey.stillpress.publish.Jobs;
+import site.asm0dey.stillpress.publish.PublishQueue;
 import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 
-@QuarkusTest
+/**
+ * Everything the wizard decides before its transaction opens. The committed path (settings, user, session, publish)
+ * is in {@link SetupResourceQuarkusTest}.
+ */
+@ExtendWith(MockitoExtension.class)
 class SetupResourceTest {
-    @Inject
-    TestStore store;
-    @Inject
+    @Mock
     SetupToken token;
-    @Inject
+    @Mock
+    Captcha captcha;
+    @Mock
     AuthorRepository users;
-    @Inject
+    @Mock
+    SessionRepository sessions;
+    @Mock
     SettingRepository settings;
-    @Inject
-    DataDir dataDir;
+    @Mock
+    PublishQueue queue;
+    @Mock
+    Jobs jobs;
+    @Mock
+    ImportGuard guard;
+    SetupResource resource;
 
     @BeforeEach
-    void reset() {
-        store.reset();
-        token.regenerate();
+    void setUp() {
+        resource = new SetupResource(token, captcha, users, sessions, settings, queue, jobs, guard);
+        resource.request = mock(HttpServerRequest.class);
+        var peer = mock(SocketAddress.class);
+        lenient().when(peer.hostAddress()).thenReturn("198.51.100.7");
+        lenient().when(resource.request.remoteAddress()).thenReturn(peer);
     }
 
-    @Test
-    void requiredUntilAdministratorExists() {
-        given().get("/admin/api/setup").then().body("required", is(true));
-        setup(token.current().orElseThrow()).then().statusCode(201).cookie("sp_session");
-        given().get("/admin/api/setup").then().body("required", is(false));
-        assertThat(token.current()).isEmpty();
-    }
-
-    @Test
-    void sessionCookieLogsTheAdministratorIn() {
-        var cookie = setup(token.current().orElseThrow()).then().statusCode(201).extract().cookie("sp_session");
-        given()
-            .cookie("sp_session", cookie)
-            .get("/admin/api/site")
-            .then()
-            .statusCode(200)
-            .body("title", equalTo("My Site"))
-            .body("language", equalTo("en-GB"))
-            .body("homeUrl", equalTo("http://localhost:8081"))
-            .body("items", is(0))
-            .body("comments", is(0));
-        given().get("/admin/api/site").then().statusCode(401);
-    }
-
-    @Test
-    void homeUrlAndSecureCookieFollowTheForwardedRequest() {
-        csrf()
-            .header("X-Forwarded-Proto", "https")
-            .header("X-Forwarded-Host", "blog.example.org")
-            .contentType(JSON)
-            .body(body(token.current().orElseThrow(), "admin0"))
-            .post("/admin/api/setup")
-            .then()
-            .statusCode(201)
-            .cookie("sp_session", detailedCookie().secured(true).httpOnly(true));
-        assertThat(settings.get("home_url")).hasValue("https://blog.example.org");
-    }
-
-    @Test
-    void setupStoresAdminUrl() {
-        setup(token.current().orElseThrow()).then().statusCode(201);
-        assertThat(settings.get("admin_url")).hasValue("http://localhost:8081");
-    }
-
-    @Test
-    void hostlessRequestIsRejectedBeforeSetup() throws Exception {
-        var raw = "POST /admin/api/setup HTTP/1.0\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}";
-        try (var socket = new Socket("localhost", 8081)) {
-            socket.getOutputStream().write(raw.getBytes(StandardCharsets.US_ASCII));
-            // Vert.x itself answers 400 before the resource runs
-            var answer = new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            assertThat(answer).startsWith("HTTP/1.0 400");
-        }
-    }
-
-    @Test
-    void keepsAnImportedHomeUrl() {
-        settings.put("home_url", "https://blog.example.ru");
-        csrf()
-            .header("X-Forwarded-Host", "tunnel.example.net")
-            .contentType(JSON)
-            .body(body(token.current().orElseThrow(), "admin0"))
-            .post("/admin/api/setup")
-            .then()
-            .statusCode(201);
-        assertThat(settings.get("home_url")).hasValue("https://blog.example.ru");
-    }
-
-    @Test
-    void writesSettingsAndKeepsExistingDefaults() {
-        settings.put("posts_per_page", "25");
-        setup(token.current().orElseThrow()).then().statusCode(201);
-        assertThat(settings.get("posts_per_page")).hasValue("25");
-        assertThat(settings.get("posts_per_rss")).hasValue("10");
-        assertThat(settings.get("category_base")).hasValue("category");
-        assertThat(settings.get("tag_base")).hasValue("tag");
-    }
-
-    @Test
-    void upgradesAnExistingRowWithThatLogin() {
-        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).id();
-        setup(token.current().orElseThrow()).then().statusCode(201);
-        var u = users.findById(id).orElseThrow();
-        assertThat(u.role()).isEqualTo(Role.ADMINISTRATOR.id());
-        assertThat(Passwords.verify("correct horse battery", u.passwordHash())).isTrue();
-        assertThat(users.all()).hasSize(1);
-    }
-
-    @Test
-    void upgradeKeepsTypedEmailAndDisplayName() {
-        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).id();
-        setup(token.current().orElseThrow()).then().statusCode(201);
-        var u = users.findById(id).orElseThrow();
-        assertThat(List.of(u.email(), u.displayName())).containsExactly("admin0@example.org", "Admin");
-    }
-
-    @Test
-    void upgradeToAnEmailAnotherUserHasIs409() {
-        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).id();
-        users.create("other", "ADMIN0@example.org", "Other", Role.AUTHOR);
-        setup(token.current().orElseThrow()).then().statusCode(409).body("error", equalTo("email_taken"));
-        assertThat(users.findById(id).orElseThrow().role()).isEqualTo(Role.AUTHOR.id());
-        assertThat(token.current()).isPresent();
-    }
-
-    @Test
-    void userFieldsFollowTheUsersScreensRules() {
-        var t = token.current().orElseThrow();
-        var body = body(t, "ad#min");
-        post(body).then().statusCode(400).body("error", equalTo("invalid")).body("field", equalTo("login"));
-        body.put("login", "  admin0 ");
-        body.put("email", " admin0@example.org ");
-        body.put("displayName", " Admin ");
-        post(body).then().statusCode(201);
-        var u = users.findByLogin("admin0").orElseThrow();
-        assertThat(List.of(u.email(), u.displayName())).containsExactly("admin0@example.org", "Admin");
-    }
-
-    @Test
-    void wrongTokenIs403() {
-        setup("not-the-token").then().statusCode(403).body("error", equalTo("bad_token"));
-    }
-
-    @Test
-    void secondSetupIs409EvenWithTheToken() {
-        var t = token.current().orElseThrow();
-        setup(t).then().statusCode(201);
-        setup(t).then().statusCode(409).body("error", equalTo("already_set_up"));
-    }
-
-    @Test
-    void concurrentSetupsCreateOneAdministrator() {
-        var t = token.current().orElseThrow();
-        var codes = IntStream
-            .range(0, 8)
-            .parallel()
-            .mapToObj(i -> setup(t, "admin" + i).statusCode())
-            .toList();
-        assertThat(codes).containsOnlyOnce(201);
-        assertThat(users.countAdministrators()).isEqualTo(1);
-    }
-
-    @Test
-    void setupPublishesAnEmptySite() {
-        setup(token.current().orElseThrow()).then().statusCode(201);
-        TestStore.await(() -> Files.exists(dataDir.current().resolve("index.html")), 20);
-        assertThat(dataDir.current().resolve("index.html")).exists();
-    }
-
-    @Test
-    void badLanguageIs400() {
-        var body = body(token.current().orElseThrow(), "admin0");
-        body.put("language", "Russian");
-        post(body).then().statusCode(400).body("error", equalTo("invalid")).body("field", equalTo("language"));
-        assertThat(token.current()).isPresent();
-    }
-
-    @Test
-    void timezoneIsStored() {
-        var body = body(token.current().orElseThrow(), "admin0");
-        body.put("timezone", "Europe/Moscow");
-        post(body).then().statusCode(201);
-        assertThat(settings.get("timezone")).hasValue("Europe/Moscow");
-    }
-
-    @Test
-    void badTimezoneIs400() {
-        var body = body(token.current().orElseThrow(), "admin0");
-        body.put("timezone", "Mars/Base");
-        post(body).then().statusCode(400).body("field", equalTo("timezone"));
-    }
-
-    @Test
-    void weakPasswordIs400() {
-        var body = body(token.current().orElseThrow(), "admin0");
-        body.put("password", "short");
-        post(body).then().statusCode(400).body("field", equalTo("password"));
-    }
-
-    @Test
-    void startEmptyThenImportIs409() {
-        var cookie = setup(token.current().orElseThrow()).then().statusCode(201).extract().cookie("sp_session");
-        csrf().cookie("sp_session", cookie).post("/admin/api/setup/start-empty").then().statusCode(204);
-        upload(cookie).then().statusCode(409).body("error", equalTo("already_imported"));
-        csrf().cookie("sp_session", cookie).get("/admin/api/site").then().body("importAllowed", is(false));
-    }
-
-    @Test
-    void startEmptyNeedsAnAdministrator() {
-        csrf().post("/admin/api/setup/start-empty").then().statusCode(401);
-    }
-
-    @Test
-    void userCreatedBeforeImportClosesIt() {
-        var cookie = setup(token.current().orElseThrow()).then().statusCode(201).extract().cookie("sp_session");
-        csrf()
-            .cookie("sp_session", cookie)
-            .contentType(JSON)
-            .body(Map.of("login", "w", "email", "w@example.org", "displayName", "W", "role", "author"))
-            .post("/admin/api/users")
-            .then()
-            .statusCode(201);
-        upload(cookie).then().statusCode(409);
-    }
-
-    @Test
-    void importStillAllowedRightAfterSetup() throws InterruptedException {
-        var cookie = setup(token.current().orElseThrow()).then().statusCode(201).extract().cookie("sp_session");
-        csrf().cookie("sp_session", cookie).get("/admin/api/site").then().body("importAllowed", is(true));
-        upload(cookie).then().statusCode(202);
-        var deadline = Instant.now().plusSeconds(30);
-        while (Instant.now().isBefore(deadline)
-                && csrf().cookie("sp_session", cookie).get("/admin/api/import").path("state").equals("running")) {
-            Thread.sleep(100);
-        }
-    }
-
-    private static Response upload(String cookie) {
-        try (var in = TestStore.sample()) {
-            return csrf()
-                .cookie("sp_session", cookie)
-                .multiPart("file", "export.xml", in.readAllBytes(), "text/xml")
-                .post("/admin/api/import");
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    static Response setup(String token) {
-        return setup(token, "admin0");
-    }
-
-    static Response setup(String token, String login) {
-        return post(body(token, login));
-    }
-
-    private static Map<String, String> body(String token, String login) {
-        return new HashMap<>(Map.of(
+    private static SetupResource.Setup body(String field, String value) {
+        var m = new HashMap<String, String>(Map.of(
                 "token",
-                token,
+                "tok",
                 "title",
                 "My Site",
                 "language",
                 "en-GB",
                 "login",
-                login,
+                "admin0",
                 "email",
-                login + "@example.org",
+                "admin0@example.org",
                 "displayName",
                 "Admin",
                 "password",
                 "correct horse battery"
         ));
+        if (field != null) {
+            m.put(field, value);
+        }
+        return new SetupResource.Setup(
+                m.get("token"),
+                m.get("title"),
+                m.get("language"),
+                m.get("login"),
+                m.get("email"),
+                m.get("displayName"),
+                m.get("password"),
+                m.get("timezone"),
+                "solved",
+                "hp"
+        );
     }
 
-    private static Response post(Map<String, String> body) {
-        return csrf().contentType(JSON).body(body).post("/admin/api/setup");
+    private void tokenOk() {
+        when(token.matches("tok")).thenReturn(true);
+    }
+
+    private void assertAnswer(Response r, int status, Map<String, String> body) {
+        try (r) {
+            assertThat(r.getStatus()).isEqualTo(status);
+            assertThat(r.getEntity()).isEqualTo(body);
+        }
+    }
+
+    @Test
+    void statusSaysRequiredUntilAnAdministratorHasAPassword() {
+        when(users.anyAdministratorWithPassword()).thenReturn(false, true);
+        assertThat(resource.status()).isEqualTo(Map.of("required", true));
+        assertThat(resource.status()).isEqualTo(Map.of("required", false));
+    }
+
+    @Test
+    void secondSetupIs409EvenWithTheTokenAndChecksNothingElse() {
+        when(users.anyAdministratorWithPassword()).thenReturn(true);
+        assertAnswer(resource.setup(body(null, null)), 409, Map.of("error", "already_set_up"));
+        verifyNoInteractions(token, captcha);
+    }
+
+    @Test
+    void aWrongOrMissingBodyOrTokenIs403BadToken() {
+        when(token.matches("nope")).thenReturn(false);
+        assertAnswer(resource.setup(body("token", "nope")), 403, Map.of("error", "bad_token"));
+        assertAnswer(resource.setup(null), 403, Map.of("error", "bad_token"));
+        verifyNoInteractions(captcha, sessions);
+        verify(token, never()).discard();
+    }
+
+    @Test
+    void theCaptchaIsVerifiedWithTheTokenTheHoneypotAndTheClientAddress() {
+        tokenOk();
+        resource.setup(body("language", "Russian"));
+        verify(captcha).verify("solved", "hp", "198.51.100.7");
+    }
+
+    @Test
+    void invalidFieldsAre400OnTheFirstBadFieldAndTheTokenSurvives() {
+        tokenOk();
+        var cases = new LinkedHashMap<String, String>();
+        cases.put("title", " ");
+        cases.put("language", "Russian");
+        cases.put("login", "ad#min");
+        cases.put("email", "nobody");
+        cases.put("displayName", "x".repeat(251));
+        cases.put("password", "short");
+        cases.forEach((field, value) -> assertAnswer(
+                resource.setup(body(field, value)),
+                400,
+                Map.of("error", "invalid", "field", field)
+        ));
+        verify(token, never()).discard();
+        verifyNoInteractions(sessions, queue, jobs);
+    }
+
+    @Test
+    void aBadTimezoneIs400OnTimezone() {
+        tokenOk();
+        var s = body(null, null);
+        var withZone = new SetupResource.Setup(
+                s.token(),
+                s.title(),
+                s.language(),
+                s.login(),
+                s.email(),
+                s.displayName(),
+                s.password(),
+                "Mars/Base",
+                s.captcha(),
+                s.website()
+        );
+        assertAnswer(resource.setup(withZone), 400, Map.of("error", "invalid", "field", "timezone"));
+    }
+
+    @Test
+    void fieldsAreTrimmedBeforeTheyAreChecked() {
+        tokenOk();
+        assertAnswer(resource.setup(body("login", "  ad#min ")), 400, Map.of("error", "invalid", "field", "login"));
+        // a padded but valid value passes validation and goes on to the email check
+        when(users.findByLogin("admin0")).thenReturn(Optional.empty());
+        when(users.emailTaken("admin0@example.org", -1L)).thenReturn(true);
+        assertAnswer(resource.setup(body("email", " admin0@example.org ")), 409, Map.of("error", "email_taken"));
+    }
+
+    @Test
+    void anEmailAnotherUserHasIs409EmailTakenButAnUpgradedAuthorsOwnIsNot() {
+        tokenOk();
+        when(users.findByLogin("admin0")).thenReturn(Optional.of(author(9, "admin0", Role.AUTHOR, null)));
+        when(users.emailTaken("admin0@example.org", 9L)).thenReturn(true);
+        assertAnswer(resource.setup(body(null, null)), 409, Map.of("error", "email_taken"));
+        verify(token, never()).discard();
+        verify(users, never()).create(any(), any(), any(), any());
+        verify(users, never()).setRole(anyLong(), any());
+    }
+
+    @Test
+    void aRequestWithoutAHostIs400NoHostAndNothingIsCreated() {
+        tokenOk();
+        when(users.findByLogin("admin0")).thenReturn(Optional.empty());
+        when(resource.request.authority()).thenReturn(null);
+        assertAnswer(resource.setup(body(null, null)), 400, Map.of("error", "no_host"));
+        verify(token, never()).discard();
+        verifyNoInteractions(sessions, queue, jobs);
+    }
+
+    @Test
+    void startEmptyClosesImportAndAnswers204() {
+        try (var r = resource.startEmpty()) {
+            assertThat(r.getStatus()).isEqualTo(204);
+        }
+        verify(guard).close();
     }
 }
