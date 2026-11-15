@@ -11,6 +11,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.webauthn.WebAuthnEndpointHelper;
 import io.quarkus.test.security.webauthn.WebAuthnHardware;
 import io.restassured.RestAssured;
+import io.restassured.response.ValidatableResponse;
 import io.restassured.specification.RequestSpecification;
 import io.vertx.core.json.JsonObject;
 import jakarta.inject.Inject;
@@ -65,11 +66,11 @@ class PasskeyRegistrationTest {
         return new Challenge(r.path("challenge"), r.cookie(WebAuthnEndpointHelper.getChallengeCookie()));
     }
 
-    io.restassured.response.ValidatableResponse register(Challenge c, String name) {
+    ValidatableResponse register(Challenge c, String name) {
         return post(c, name, new WebAuthnHardware(url).makeRegistrationJson(c.challenge()));
     }
 
-    io.restassured.response.ValidatableResponse post(Challenge c, String name, JsonObject credential) {
+    ValidatableResponse post(Challenge c, String name, JsonObject credential) {
         return asAdmin()
             .cookie(WebAuthnEndpointHelper.getChallengeCookie(), c.cookie())
             .contentType(JSON)
@@ -143,7 +144,10 @@ class PasskeyRegistrationTest {
             .body("error", equalTo("invalid"))
             .body("field", equalTo("name"));
         register(challengeFor("admin"), "x".repeat(101)).statusCode(400).body("field", equalTo("name"));
-        assertThat(factors.passkeys(user)).isEmpty();
+        // the limit is in UTF-16 units, as the column stores them: 100 key emoji are 200, refused rather than a 500
+        register(challengeFor("admin"), "🔑".repeat(100)).statusCode(400).body("field", equalTo("name"));
+        register(challengeFor("admin"), "🔑".repeat(50)).statusCode(201);
+        assertThat(factors.passkeys(user)).hasSize(1);
     }
 
     @Test

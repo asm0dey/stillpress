@@ -13,6 +13,8 @@ import module java.base;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import site.asm0dey.stillpress.Csrf;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.store.AuthorRepository;
@@ -195,11 +197,25 @@ class SessionAuthTest {
         given().get("/admin/api/session").then().statusCode(401).header("Location", (String) null);
     }
 
-    @Test
-    void webauthnCookieNeverAuthenticates() {
+    /**
+     * The extension seals its challenge and credential cookies with one key and no name binding, so a real challenge
+     * cookie replayed as {@code quarkus-credential} decrypts. It must still never authenticate.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"/admin/api/media", "/admin/api/oembed?url=https://example.org", "/admin/api/publish"})
+    void webauthnChallengeCookieNeverAuthenticates(String path) {
+        var challenge = given()
+            .queryParam("username", "x")
+            .get("/q/webauthn/register-options-challenge")
+            .then()
+            .statusCode(200)
+            .extract()
+            .cookie("_quarkus_webauthn_challenge");
         given()
-            .cookie("quarkus-credential", "anything")
-            .get("/admin/api/session")
+            .redirects()
+            .follow(false)
+            .cookie("quarkus-credential", challenge)
+            .get(path)
             .then()
             .statusCode(401)
             .header("Location", (String) null);

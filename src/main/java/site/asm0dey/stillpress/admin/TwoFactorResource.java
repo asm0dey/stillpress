@@ -14,6 +14,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.core.Response;
 import module java.base;
+import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.jooq.exception.IntegrityConstraintViolationException;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
@@ -28,6 +29,7 @@ import site.asm0dey.stillpress.store.TwoFactorRepository;
 @Path("/admin/api/2fa")
 @Authenticated
 public class TwoFactorResource {
+    private static final Logger LOG = Logger.getLogger(TwoFactorResource.class);
     @Inject
     SecurityIdentity identity;
     @Inject
@@ -95,6 +97,7 @@ public class TwoFactorResource {
     @Path("/passkeys")
     public Response addPasskey(NewPasskey body, RoutingContext ctx) {
         var name = body == null || body.name() == null ? "" : body.name().strip();
+        // UTF-16 units, as H2 counts VARCHAR(100); a code-point limit would let 100 emoji through to a 500
         if (name.isEmpty() || name.length() > 100) {
             throw new ItemService.Refused(400, "invalid", "name");
         }
@@ -106,6 +109,7 @@ public class TwoFactorResource {
                 .await()
                 .atMost(Duration.ofSeconds(10));
         } catch (RuntimeException e) {
+            LOG.debugf(e, "passkey registration refused");
             throw new ItemService.Refused(400, "invalid_passkey", null);
         }
         var data = passkey.getRequiredPersistedData();
