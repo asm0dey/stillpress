@@ -131,6 +131,17 @@ class ItemsResourceTest {
     }
 
     @Test
+    void createWithoutABodyOrTypeIs400NotACrash() {
+        var resource = as(1, Role.AUTHOR);
+        for (var body : Arrays.asList(null, new ItemsResource.NewItem(null))) {
+            assertThat(thrownBy(() -> resource.create(body)))
+                .extracting(r -> r.status, r -> r.field)
+                .containsExactly(400, "type");
+        }
+        verifyNoInteractions(service);
+    }
+
+    @Test
     void getBuildsTheViewFromTermsAuthorAndAutosave() {
         namedAuthors();
         var stored = Fixtures.item(5, "post", "publish", 1L);

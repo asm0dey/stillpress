@@ -140,7 +140,8 @@ public class ItemsResource {
     public Response create(NewItem n) {
         var a = actor();
         var type = n == null ? null : n.type();
-        if (!Set.of("post", "page").contains(type)) {
+        // Set.of(...).contains(null) throws NPE, so a missing type is checked first
+        if (type == null || !Set.of("post", "page").contains(type)) {
             throw new ItemService.Refused(400, "invalid", "type");
         }
         if (!Capabilities.canCreate(a.role(), type)) {
