@@ -1,7 +1,9 @@
 package site.asm0dey.stillpress.pg;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import static site.asm0dey.stillpress.db.Tables.SESSION;
+import io.quarkus.security.webauthn.WebAuthnCredentialRecord.RequiredPersistedData;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
@@ -16,6 +18,7 @@ import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.TokenRepository;
+import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 @QuarkusTest
 @TestProfile(PostgresProfile.class)
@@ -30,6 +33,8 @@ class PostgresAccountsTest {
     SessionRepository sessions;
     @Inject
     TokenRepository tokens;
+    @Inject
+    TwoFactorRepository factors;
 
     @BeforeEach
     void reset() {
@@ -122,5 +127,58 @@ class PostgresAccountsTest {
             }
             assertThat(winners).isEqualTo(1);
         }
+    }
+
+    @Test
+    void twoFactorSql() {
+        var totpUser = users.create("totp", "totp@example.org", "Totp", Role.ADMINISTRATOR).getId();
+        var keyUser = users.create("key", "key@example.org", "Key", Role.AUTHOR).getId();
+        var none = users.create("none", "none@example.org", "None", Role.AUTHOR).getId();
+
+        assertThat(factors.putTotp(totpUser, "first")).isTrue();
+        assertThat(factors.putTotp(totpUser, "second")).isTrue();
+        assertThat(factors.confirmTotp(totpUser, "first", 10)).isFalse();
+        assertThat(factors.confirmTotp(totpUser, "second", 10)).isTrue();
+        assertThat(factors.putTotp(totpUser, "third")).isFalse();
+        assertThat(factors.advanceTotp(totpUser, 10)).isFalse();
+        assertThat(factors.advanceTotp(totpUser, 11)).isTrue();
+        assertThat(factors.totp(totpUser)).hasValueSatisfying(t -> assertThat(t.getLastStep()).isEqualTo(11L));
+
+        factors.addPasskey(
+                keyUser,
+                "key",
+                new RequiredPersistedData(
+                        "key",
+                        "credential-1",
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        new byte[] {1, 2, 3, 4},
+                        -7,
+                        0
+                )
+        );
+        assertThat(factors.factorCount(keyUser)).isEqualTo(1);
+        assertThat(factors.factorCount(totpUser)).isEqualTo(1);
+        assertThat(factors.factorCount(none)).isZero();
+        assertThat(factors.hasFactor(keyUser)).isTrue();
+        assertThat(factors.hasFactor(none)).isFalse();
+
+        assertThat(users
+            .allWithTwoFactor()
+            .stream()
+            .collect(Collectors.toMap(r -> r.get(AUTHOR.LOGIN), r -> r.get(AuthorRepository.TWO_FACTOR)))
+        )
+            .containsExactlyInAnyOrderEntriesOf(Map.of("totp", true, "key", true, "none", false));
+
+        var a = sessions.create(totpUser);
+        var b = sessions.create(keyUser);
+        var c = sessions.create(none);
+        sessions.deleteAllWithoutSecondFactor();
+        assertThat(sessions.find(a)).isPresent();
+        assertThat(sessions.find(b)).isPresent();
+        assertThat(sessions.find(c)).isEmpty();
+
+        var since = Instant.now().minus(Duration.ofMinutes(5));
+        assertThat(tokens.createUnlessIssuedSince(none, "set_password", Duration.ofHours(1), since)).isPresent();
+        assertThat(tokens.createUnlessIssuedSince(none, "set_password", Duration.ofHours(1), since)).isEmpty();
     }
 }
