@@ -31,7 +31,7 @@ Split into three plans (agreed 2026-11-04):
   - Separate from publish time (serving bandwidth): Mode 1's `StaticSiteRoute` sends `Cache-Control` but no `ETag`/`Last-Modified` and never answers 304, so feed readers re-download unchanged feeds. Add conditional GET (nginx in Mode 2 already does it).
 - **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications. Split in two:
   - **02c-1 keys, mail, invites and reset, CAPTCHA, hardening** (done 2026-11-15; plan `2026-11-14-stillpress-02c-1-keys-mail-captcha.md`, results in `2026-11-14-stillpress-02c-1-results.md`): Tink keysets and encrypted secrets, signed CSRF, `admin_url`, SMTP settings, invite and email-reset mail, "pending review" mail, `none | turnstile | altcha` CAPTCHA with honeypot, and the 02c carry-over items below.
-  - **02c-2**: TOTP, passkeys, mandatory 2FA.
+  - **02c-2 TOTP, passkeys, mandatory 2FA** (done 2026-11-15; plan `2026-11-15-stillpress-02c-2-two-factor.md`, results in `2026-11-15-stillpress-02c-2-results.md`): authenticator apps (TOTP) and passkeys (quarkus-security-webauthn) as a second step after the password, passkey-only sign-in, mandatory 2FA with an enrollment fence, clearing a user's 2FA from Users and `stillpress user reset-2fa`, and the 02c-1 carry-over items below.
   - Secrets stored at rest (TOTP seeds, SMTP password, Turnstile secret, ALTCHA HMAC key) are encrypted with Google Tink: a keyset, per-row AEAD, and a keyed HMAC for anything looked up by value (precedent `encryption-tink`).
 
 - Serving Mode 2, the default: one-time generated nginx include (static root at `output/current`, `try_files $uri $uri/ @stillpress` fallback, proxied `/admin`, login, API, preview and legacy query URLs) plus an example nginx setup; the acceptance run goes through nginx (§6.2 item 9, ADR 0004). Mode 1 (Stillpress serves everything) ships in plan 01 and stays supported.
@@ -104,11 +104,11 @@ The open items from the 02b ledger, grouped by owner. Each was reviewed and acce
 
 02c-2 reworks login, reset and set-password for 2FA, so the minors found there go with it.
 
-- Early in 02c-2 (from the final review): fail fast at startup for an env-locked Turnstile without keys and for an invalid `STILLPRESS_CAPTCHA_PROVIDER`; a failed Turnstile script load is silent; a reset replaces a pending invite; the ALTCHA widget is English-only.
-- The Turnstile site key is never checked on save; verify the pair by requiring a token solved with the new site key and siteverifying it with the new secret.
-- Reset: a known account does more synchronous work than an unknown one (timing side channel; hand lookup, issue and send to a worker and answer 204 at once); two concurrent resets can both pass `issuedSince` and both mail; a reset replaces a pending 7-day invite with a 1-hour link; two concurrent `TokenRepository.create` calls for one user and purpose can leave two live tokens (unique `(user_id, purpose)` plus upsert).
-- CAPTCHA: an invalid `STILLPRESS_CAPTCHA_PROVIDER` fails on first use, not at startup; an env-locked `turnstile` without the env keys isn't rejected, so every login fails closed and the CLI can't help; `login-options` returns a stale `turnstileSiteKey` when the provider isn't Turnstile.
-- Admin UI: the ALTCHA widget is English-only (feed its strings from `__()`); `challengeFetch` drops the query string and ignores `init`; a failed Turnstile script load is silent (submit stays disabled); the widget resets on any failed submit; the `loginDisabledUntilToken` test races the mount and doesn't check re-disable on expiry; `ForgotPassword` treats a failed `login-options` as `mail: true`.
+- Done in 02c-2 (Tasks 1 and 4; from the final review): fail fast at startup for an env-locked Turnstile without keys and for an invalid `STILLPRESS_CAPTCHA_PROVIDER`; a failed Turnstile script load is silent; a reset replaces a pending invite; the ALTCHA widget is English-only.
+- Done in 02c-2 (Task 3): the Turnstile site key is never checked on save; verify the pair by requiring a token solved with the new site key and siteverifying it with the new secret.
+- Done in 02c-2 (Tasks 1 and 2): reset: a known account does more synchronous work than an unknown one (timing side channel; hand lookup, issue and send to a worker and answer 204 at once); two concurrent resets can both pass `issuedSince` and both mail; a reset replaces a pending 7-day invite with a 1-hour link; two concurrent `TokenRepository.create` calls for one user and purpose can leave two live tokens (unique `(user_id, purpose)` plus upsert).
+- Done in 02c-2 (Tasks 1 and 3): CAPTCHA: an invalid `STILLPRESS_CAPTCHA_PROVIDER` fails on first use, not at startup; an env-locked `turnstile` without the env keys isn't rejected, so every login fails closed and the CLI can't help; `login-options` returns a stale `turnstileSiteKey` when the provider isn't Turnstile.
+- Done in 02c-2 (Task 4): admin UI: the ALTCHA widget is English-only (feed its strings from `__()`); `challengeFetch` drops the query string and ignores `init`; a failed Turnstile script load is silent (submit stays disabled); the widget resets on any failed submit; the `loginDisabledUntilToken` test races the mount and doesn't check re-disable on expiry; `ForgotPassword` treats a failed `login-options` as `mail: true`.
 
 ## Plan 03: Themes & Site Editor
 
@@ -221,6 +221,7 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - CLI `publish` beside a live server is now safe: it takes the same row lock as the server's publish task.
 - Every node needs the same keyset: set `STILLPRESS_KEYS_DIR` to one shared copy of `aead.json` and `prf.json`. A node that generates its own can't read the stored secrets or another node's CSRF cookies.
 - SMTP settings are reloaded only on the node where they were saved; other nodes keep the old mail client until restart. The login and reset rate limits are per node too.
+- 2FA: the spent passkey-challenge set (a passkey sign-in can't be replayed for 30 minutes) and the login limiter are per node, so a captured passkey assertion could be replayed once on another replica within that window. The second-step token (`sp_2fa`) and the TOTP replay guard (`last_step`) live in the database, and the WebAuthn cookie key is derived from the keyset, so with the shared `STILLPRESS_KEYS_DIR` every node reads the others' cookies.
 
 ### From 02b
 
@@ -243,6 +244,18 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - h2c: `BodyLimitFilter` builds a `Set.of(...)` per HTTP/2 request; an empty-body h2 POST without `Content-Length` gets 411 (browsers send `content-length: 0`).
 - Tests: `LoginLimiterTest.expiredFailuresStopBlockingWithoutAPrune` overclaims in its name; `assertThat(boolean).isTrue()` in the `issuedSince` test and around `waitForIncomingEmail` in `PasswordResetTest` and `UsersResourceTest`; a redundant assertion in `UsersResourceTest`; login literals not switched to `TestStore.PASSWORD`, and `ResetResourceTest` keeps its own `PASSWORD`; the Turnstile WireMock uses a fixed port, 8093.
 - Dev mode (Quarkus 3.40): host validation answers 400 to any non-localhost `Host`; with `quarkus.http.host-validation.require-localhost=false`, Quinoa forwards `/admin/api` requests with a foreign `Host` to Vite (403). Forged-`Host` checks need the packaged jar.
+
+### From 02c-2
+
+- Factor storage: `TwoFactorRepository.putTotp` is update-then-insert, not atomic, and its catch covers every SQLSTATE class 23 (an FK violation is swallowed on H2; matches the `SettingRepository` precedent); `secrets reset` runs `deleteAll` and `deleteAllTotp` in separate transactions.
+- TOTP enrollment: `TwoFactorResource:61` reads then answers 409 redundantly; the concurrent-enrollment race test can't force the interleaving.
+- Passkeys: `SessionOnlyAugmentor` priority → `Integer.MIN_VALUE`, so a later augmentor can't rewrite the identity after the gate; `SessionAuthTest`'s GREEN case lacks a positive control; `blankOrLongNameIs400` also asserts the 201 of a valid name; a planted decryptable `quarkus-credential` cookie 401s public pages (fails closed).
+- Passkey sign-in: `verifyPasskey` blocks a worker while `Passkeys.blocking` queues on the same pool (starvation pattern); `getConfirmed()` unboxing (use `Boolean.TRUE::equals`); no garbage-cookie test; the spent-challenge sweep is untested.
+- Mandatory 2FA: `admin_needs_2fa` races a concurrent delete of the admin's own factor (no lockout, no bypass); a concurrent delete of a user's last two factors can leave none (self only; the fence recovers); +1/+2 queries per cookie-bearing request, public pages included (cache the setting if it matters); no tests for an unconfirmed-seed-only user being signed out on enable, or for a multipart request hitting the fence.
+- Lost device: "Removed 1 … methods" plural; the CLI test doesn't assert the sessions were deleted; import tidiness.
+- Admin UI, login: `Login.tsx:350` trusts any truthy body as a `SecondStep`; no "back to password" on step 2; no tests for `NotAllowedError`, `invalid_passkey`, 429, the `Gate` loop guard or the WebAuthn script load retry.
+- Acceptance (Task 13): with mandatory 2FA on, `POST /admin/api/set-password` from a browser that already holds an enrollment session is 403 `enroll_2fa` (open it in the fence, or drop the old session); the db-scheduler line "Expected one execution to be removed, but removed 0" (task `publish-site`, during `CaptchaEnforcementTest`) predates db-scheduler 17 and looks like `TestStore.clear()` deleting `scheduled_tasks` under a completing publish.
+- Admin UI, Two-factor and Users: `TwoFactor.tsx`'s `act()` reloads in `finally`, which overwrites a specific error when the reload fails; clearing your own 2FA on Users gives 401 "Could not load the users" without a redirect to login; a whitespace-only passkey name; no tests for `invalid_code`, `NotAllowedError`, the name and a failed `PUT`.
 
 ## Not in scope
 
