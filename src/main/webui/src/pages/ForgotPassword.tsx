@@ -13,7 +13,7 @@ export default function ForgotPassword() {
   const [busy, setBusy] = useState(false);
 
   const captcha = useCaptcha();
-  const mail = captcha.options?.mail;
+  const mail = captcha.optionsFailed ? undefined : captcha.options?.mail;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -24,7 +24,7 @@ export default function ForgotPassword() {
       setSent(true);
     } catch (e) {
       const err = asApiError(e);
-      captcha.reset();
+      captcha.failed(err);
       setError(err.error === 'captcha_failed' ? CAPTCHA_FAILED() : err.error === 'csrf' ? err.message : err.status === 429 ? __('Too many attempts. Wait a few minutes and try again.', 'stillpress')
         : __('Could not send the link. Try again.', 'stillpress'));
     } finally {
@@ -35,6 +35,7 @@ export default function ForgotPassword() {
   return (
     <main className="page narrow">
       <h1>{__('Forgot password', 'stillpress')}</h1>
+      {captcha.optionsFailed && <p role="alert" className="error">{__('Could not reach the server. Reload the page and try again.', 'stillpress')}</p>}
       {mail === false && <p>{__("Email isn't set up on this site. Ask an administrator for a link to set your password.", 'stillpress')}</p>}
       {sent && <p role="status">{__('If an account matches, we sent a link to its email address. The link works for one hour.', 'stillpress')}</p>}
       {mail && !sent && (

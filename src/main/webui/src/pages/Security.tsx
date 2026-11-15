@@ -3,6 +3,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import { asApiError, type CaptchaSettings, type MailSettings, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
+import { Captcha, tokenMaybeSpent } from '../Captcha.tsx';
 
 const mailMessages = (): Record<string, string> => ({
   host: __('Enter the SMTP server, or leave it empty to turn mail off.', 'stillpress'),
@@ -121,11 +122,13 @@ const captchaMessages = (): Record<string, string> => ({
   provider: __('Choose a CAPTCHA.', 'stillpress'),
   turnstileSiteKey: __('Enter the site key from Cloudflare.', 'stillpress'),
   turnstileSecret: __('Enter the secret key from Cloudflare.', 'stillpress'),
+  turnstileToken: __('Solve the check below.', 'stillpress'),
 });
 
 const captchaErrors = (): Record<string, string> => ({
   invalid_turnstile_secret: __('Cloudflare rejected this secret key.', 'stillpress'),
   turnstile_unreachable: __('Could not reach Cloudflare to check the secret key. Try again.', 'stillpress'),
+  turnstile_key_mismatch: __("The site key doesn't match this secret key.", 'stillpress'),
   captcha_locked: __('Set by STILLPRESS_CAPTCHA_PROVIDER on the server.', 'stillpress'),
 });
 
@@ -136,6 +139,10 @@ function CaptchaSettingsForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  // Cloudflare's token from the widget for the typed site key; each save spends it, so a spent one remounts the widget
+  const [testToken, setTestToken] = useState<string>();
+  const [round, setRound] = useState(0);
+  const [widgetError, setWidgetError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,15 +160,24 @@ function CaptchaSettingsForm() {
     setStatus(null);
     try {
       const { provider, turnstileSiteKey } = form!;
-      setForm(await api<CaptchaSettings>('/captcha', { method: 'PUT', body: { provider, turnstileSiteKey, turnstileSecret: secret } }));
+      setForm(await api<CaptchaSettings>('/captcha', { method: 'PUT', body: { provider, turnstileSiteKey, turnstileSecret: secret, ...(provider === 'turnstile' && { turnstileToken: testToken }) } }));
       setSecret(null);
+      respawn();
       setStatus(__('Saved.', 'stillpress'));
     } catch (err) {
       const f = asApiError(err);
+      if (tokenMaybeSpent(f)) respawn();
       if (f.field) setErrors({ [f.field]: captchaMessages()[f.field] ?? __('Check this field.', 'stillpress') });
       else if (f.error === 'invalid_turnstile_secret') setErrors({ turnstileSecret: captchaErrors()[f.error] });
+      else if (f.error === 'turnstile_key_mismatch') setErrors({ turnstileSiteKey: captchaErrors()[f.error] });
       else setMessage(f.error === 'csrf' ? f.message! : captchaErrors()[f.error ?? ''] ?? __('Could not save the CAPTCHA settings.', 'stillpress'));
     }
+  }
+
+  function respawn() {
+    setTestToken(undefined);
+    setWidgetError(false);
+    setRound((r) => r + 1);
   }
 
   const providers: [CaptchaSettings['provider'], string][] = [
@@ -187,16 +203,22 @@ function CaptchaSettingsForm() {
           {form.provider === 'turnstile' && (
             <>
               <Field label={__('Site key', 'stillpress')} name="turnstileSiteKey" autoComplete="off" value={form.turnstileSiteKey ?? ''}
-                onChange={(e) => setForm({ ...form, turnstileSiteKey: e.target.value })} error={errors.turnstileSiteKey} />
+                onChange={(e) => { setTestToken(undefined); setWidgetError(false); setForm({ ...form, turnstileSiteKey: e.target.value }); }} error={errors.turnstileSiteKey} />
               <Field label={__('Secret key', 'stillpress')} name="turnstileSecret" type="password" autoComplete="new-password"
                 placeholder={form.secretSet ? __('Saved', 'stillpress') : undefined} value={secret ?? ''}
                 onChange={(e) => setSecret(e.target.value)} error={errors.turnstileSecret} />
+              {form.turnstileSiteKey && (
+                <Captcha key={`${form.turnstileSiteKey}/${round}`} options={{ mail: true, captcha: 'turnstile', turnstileSiteKey: form.turnstileSiteKey }}
+                  onToken={setTestToken} onError={() => setWidgetError(true)} />
+              )}
+              {errors.turnstileToken && <p role="alert" className="error">{errors.turnstileToken}</p>}
+              {widgetError && <p role="alert" className="error">{__('Could not load the CAPTCHA. Check your connection and reload the page.', 'stillpress')}</p>}
             </>
           )}
         </fieldset>
         {message && <p role="alert" className="error">{message}</p>}
         {status && <p role="status">{status}</p>}
-        <button type="submit" className="primary" disabled={form.locked}>{__('Save', 'stillpress')}</button>
+        <button type="submit" className="primary" disabled={form.locked || (form.provider === 'turnstile' && !testToken)}>{__('Save', 'stillpress')}</button>
       </form>
     </section>
   );

@@ -25,7 +25,7 @@ export default function SetPassword() {
       setState('done');
     } catch (e) {
       const err = asApiError(e);
-      captcha.reset();
+      captcha.failed(err);
       if (err.error === 'csrf') setState('csrf');
       else if (err.error === 'captcha_failed') setErrors({ captcha: CAPTCHA_FAILED() });
       else if (err.status === 429) setState('limited');

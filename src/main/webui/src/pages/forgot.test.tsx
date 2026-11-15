@@ -32,3 +32,10 @@ test('too many requests says to wait', async () => {
   await t.user.click(view.getByRole('button', { name: 'Send link' }));
   expect((await view.findByRole('alert')).textContent).toBe('Too many attempts. Wait a few minutes and try again.');
 });
+
+test('loginOptionsFailureIsNotMailOn', async () => {
+  fakeApi({ 'GET /login-options': { status: 500, body: { error: 'boom' } } });
+  const view = page();
+  expect(await view.findByText('Could not reach the server. Reload the page and try again.')).toBeTruthy();
+  expect(view.queryByRole('textbox')).toBeNull();
+});

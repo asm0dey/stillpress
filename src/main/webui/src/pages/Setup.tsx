@@ -59,7 +59,7 @@ export default function Setup() {
       setDone(true);
     } catch (e) {
       const err = asApiError(e);
-      captcha.reset();
+      captcha.failed(err);
       if (err.error === 'csrf') setProblem(err.message!);
       else if (err.error === 'captcha_failed') setProblem(CAPTCHA_FAILED());
       else if (err.status === 403) setErrors({ token: __('That token does not match the one in the server log.', 'stillpress') });

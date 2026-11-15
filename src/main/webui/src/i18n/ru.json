@@ -1254,5 +1254,17 @@
  ],
  "Secret key": [
   "Секретный ключ"
+ ],
+ "Could not load the CAPTCHA. Check your connection and reload the page.": [
+  "Не удалось загрузить CAPTCHA. Проверьте соединение и перезагрузите страницу."
+ ],
+ "Could not reach the server. Reload the page and try again.": [
+  "Не удалось связаться с сервером. Перезагрузите страницу и попробуйте ещё раз."
+ ],
+ "Solve the check below.": [
+  "Пройдите проверку ниже."
+ ],
+ "The site key doesn't match this secret key.": [
+  "Ключ сайта не подходит к этому секретному ключу."
  ]
 }

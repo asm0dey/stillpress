@@ -28,7 +28,7 @@ export default function Login() {
       void navigate(next?.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true });
     } catch (e) {
       const err = asApiError(e);
-      captcha.reset();
+      captcha.failed(err);
       setError(err.error === 'captcha_failed' ? CAPTCHA_FAILED() : err.error === 'csrf' ? err.message : err.status === 429 ? __('Too many attempts. Wait a few minutes and try again.', 'stillpress')
         : err.status === 401 ? __('The login or password is incorrect.', 'stillpress') : __('Login failed. Try again.', 'stillpress'));
     } finally {

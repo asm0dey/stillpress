@@ -3,6 +3,15 @@ import type { MailSettings } from '../api.ts';
 import { fakeApi, usePages } from '../testapi.ts';
 
 const t = usePages();
+/** A Turnstile that renders nothing; the returned function solves the latest widget. */
+function fakeTurnstile() {
+  let solved: (token: string) => void = () => {};
+  (window as unknown as { turnstile: unknown }).turnstile = {
+    render: (_el: HTMLElement, o: { callback: (t: string) => void }) => { solved = o.callback; return 'w1'; },
+    remove: () => {},
+  };
+  return (token: string) => solved(token);
+}
 let page: () => ReturnType<typeof t.rtl.render>;
 beforeAll(async () => {
   const { default: Security } = await import('./Security.tsx');
@@ -65,12 +74,34 @@ test('turnstileSavesKeysAndShowsRejectedSecret', async () => {
     ...SESSION, 'GET /mail': { body: MAIL }, 'GET /captcha': { body: CAPTCHA },
     'PUT /captcha': { status: 400, body: { error: 'invalid_turnstile_secret' } },
   });
+  const callback = fakeTurnstile();
   const view = page();
   await t.user.click(await view.findByLabelText('Cloudflare Turnstile'));
   await t.user.type(view.getByLabelText('Site key'), '0x4AAA');
   await t.user.type(view.getByLabelText('Secret key'), 'bad');
+  await t.rtl.waitFor(() => document.querySelector('script[src*="turnstile"]')!.dispatchEvent(new Event('load')));
+  await t.rtl.waitFor(() => { t.rtl.act(() => callback('test-token')); expect((view.getAllByRole('button', { name: 'Save' })[1] as HTMLButtonElement).disabled).toBe(false); });
   await t.user.click(view.getAllByRole('button', { name: 'Save' })[1]);
   expect((await view.findByRole('alert')).textContent).toBe('Cloudflare rejected this secret key.');
   expect(calls.find((c) => c.path === '/captcha' && c.method === 'PUT')?.body)
-    .toEqual({ provider: 'turnstile', turnstileSiteKey: '0x4AAA', turnstileSecret: 'bad' });
+    .toEqual({ provider: 'turnstile', turnstileSiteKey: '0x4AAA', turnstileSecret: 'bad', turnstileToken: 'test-token' });
+});
+
+test('turnstileSaveSendsTestToken', async () => {
+  const calls = fakeApi({
+    ...SESSION, 'GET /mail': { body: MAIL }, 'PUT /captcha': { body: { ...CAPTCHA, provider: 'turnstile', turnstileSiteKey: '0x4AAA', secretSet: true } },
+  });
+  const callback = fakeTurnstile();
+  const view = page();
+  await t.user.click(await view.findByLabelText('Cloudflare Turnstile'));
+  await t.user.type(view.getByLabelText('Site key'), '0x4AAA');
+  await t.user.type(view.getByLabelText('Secret key'), 'secret');
+  const save = view.getAllByRole('button', { name: 'Save' })[1] as HTMLButtonElement;
+  expect(save.disabled).toBe(true);
+  await t.rtl.waitFor(() => document.querySelector('script[src*="turnstile"]')!.dispatchEvent(new Event('load')));
+  await t.rtl.waitFor(() => { t.rtl.act(() => callback('test-token')); expect(save.disabled).toBe(false); });
+  await t.user.click(save);
+  await view.findByText('Saved.');
+  expect(calls.find((c) => c.path === '/captcha' && c.method === 'PUT')?.body)
+    .toEqual({ provider: 'turnstile', turnstileSiteKey: '0x4AAA', turnstileSecret: 'secret', turnstileToken: 'test-token' });
 });
