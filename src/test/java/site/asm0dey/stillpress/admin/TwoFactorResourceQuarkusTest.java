@@ -111,10 +111,10 @@ class TwoFactorResourceQuarkusTest {
         asAdmin().contentType(JSON).body(Map.of("code", codeFor(secret))).post("/admin/api/2fa/totp/confirm");
         var stored = factors.totp(user).orElseThrow().ciphertext();
         asAdmin().post("/admin/api/2fa/totp").then().statusCode(409);
-        assertThat(factors.totp(user)).hasValueSatisfying(t -> {
-            assertThat(t.confirmed()).isTrue();
-            assertThat(t.ciphertext()).isEqualTo(stored);
-        });
+        assertThat(factors.totp(user))
+            .get()
+            .extracting(t -> t.confirmed(), t -> t.ciphertext())
+            .containsExactly(true, stored);
     }
 
     @Test

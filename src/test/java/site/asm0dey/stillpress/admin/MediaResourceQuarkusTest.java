@@ -193,8 +193,16 @@ class MediaResourceQuarkusTest {
     }
 
     @Test
-    void writeWithoutCsrfTokenIs400() {
-        AuthMatrix.missingCsrfIs400(author, "POST", "/admin/api/media");
+    void writeWithoutCsrfTokenIs400() throws IOException {
+        // a real image with a session but no token: with a token the same upload is a 201 (uploadClosesImport)
+        io.restassured.RestAssured
+            .given()
+            .cookie("sp_session", author)
+            .multiPart("file", "a.png", png(1, 1), "application/octet-stream")
+            .post("/admin/api/media")
+            .then()
+            .statusCode(400);
+        assertThat(db.fetchCount(MEDIA)).isZero();
         AuthMatrix.missingCsrfIs400(author, "PUT", "/admin/api/media/1");
     }
 

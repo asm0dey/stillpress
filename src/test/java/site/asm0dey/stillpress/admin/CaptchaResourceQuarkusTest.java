@@ -170,7 +170,9 @@ class CaptchaResourceQuarkusTest {
 
     @Test
     void writeWithoutCsrfTokenIs400() {
-        AuthMatrix.missingCsrfIs400(admin, "PUT", "/admin/api/captcha");
+        // with a token this body answers 200 (see matchingPairIsSaved), so only the CSRF filter can refuse it
+        AuthMatrix.missingCsrfIs400(admin, "PUT", "/admin/api/captcha", Map.of("provider", "altcha"));
+        assertThat(settings.get("captcha_provider")).isEmpty();
     }
 
     private Response get() {

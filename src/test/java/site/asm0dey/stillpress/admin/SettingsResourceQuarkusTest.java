@@ -211,6 +211,10 @@ class SettingsResourceQuarkusTest {
 
     @Test
     void writeWithoutCsrfTokenIs400() {
-        AuthMatrix.missingCsrfIs400(admin, "PUT", "/admin/api/settings");
+        var body = current();
+        body.put("title", "Changed");
+        // the same body with a token is a 200 (titleChangeRepublishesTheWholeSite)
+        AuthMatrix.missingCsrfIs400(admin, "PUT", "/admin/api/settings", body);
+        assertThat(settings.get("title")).hasValue("Blog");
     }
 }

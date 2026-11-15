@@ -40,11 +40,18 @@ final class AuthMatrix {
      * A write with a session but without the CSRF token is refused before the resource runs.
      */
     static void missingCsrfIs400(String session, String method, String path) {
+        missingCsrfIs400(session, method, path, "{}");
+    }
+
+    /**
+     * Same, with a body the endpoint accepts when the token is present, so only the CSRF filter can produce the 400.
+     */
+    static void missingCsrfIs400(String session, String method, String path, Object body) {
         RestAssured
             .given()
             .contentType(JSON)
             .cookie("sp_session", session)
-            .body("{}")
+            .body(body)
             .request(method, path)
             .then()
             .statusCode(400);

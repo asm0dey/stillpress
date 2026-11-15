@@ -101,12 +101,16 @@ class MailResourceTest {
 
     @Test
     void testMailNeedsTheAdminsEmail() {
-        when(users.findById(1L))
-            .thenReturn(Optional.of(new Author(1L, "admin", "A", " ", "admin", null, "administrator", null, null, null))
-            );
-        try (var r = resource.test()) {
-            assertThat(r.getStatus()).isEqualTo(400);
-            assertThat(r.getEntity()).isEqualTo(Map.of("error", "no_email"));
+        // author.email is nullable (V1__core.sql), so a missing and a blank address are both possible
+        for (var email : new String[] {null, " "}) {
+            when(users.findById(1L))
+                .thenReturn(Optional.of(
+                        new Author(1L, "admin", "A", email, "admin", null, "administrator", null, null, null)
+                ));
+            try (var r = resource.test()) {
+                assertThat(r.getStatus()).isEqualTo(400);
+                assertThat(r.getEntity()).isEqualTo(Map.of("error", "no_email"));
+            }
         }
         verify(mail, never()).send(any());
     }

@@ -146,7 +146,13 @@ class ReusableBlocksResourceQuarkusTest {
     @Test
     void writeWithoutCsrfTokenIs400() {
         AuthMatrix.missingCsrfIs400(author1, "POST", "/admin/api/blocks");
-        AuthMatrix.missingCsrfIs400(author1, "PUT", "/admin/api/blocks/1");
+        // an update that passes validation: with a token it reaches the service (404 or 409), never the 400 of a missing field
+        AuthMatrix.missingCsrfIs400(
+                author1,
+                "PUT",
+                "/admin/api/blocks/1",
+                Map.of("title", "T", "content", "x", "expectedModifiedAt", "2026-01-01T00:00:00")
+        );
         AuthMatrix.missingCsrfIs400(author1, "PUT", "/admin/api/blocks/1/autosave");
         AuthMatrix.missingCsrfIs400(author1, "POST", "/admin/api/blocks/1/revisions/1/restore");
     }

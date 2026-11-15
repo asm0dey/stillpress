@@ -126,7 +126,10 @@ class SetupResourceQuarkusTest {
         setup(token.current().orElseThrow()).then().statusCode(201);
         var u = users.findById(id).orElseThrow();
         assertThat(u.role()).isEqualTo(Role.ADMINISTRATOR.id());
-        assertThat(Passwords.verify("correct horse battery", u.passwordHash())).isTrue();
+        assertThat(Stream
+            .of("correct horse battery", "wrong")
+            .filter(p -> Passwords.verify(p, u.passwordHash())))
+            .containsExactly("correct horse battery");
         assertThat(users.all()).hasSize(1);
     }
 

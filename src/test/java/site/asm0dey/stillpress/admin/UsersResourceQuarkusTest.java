@@ -70,7 +70,7 @@ class UsersResourceQuarkusTest {
         enroll(writerId);
         assertThat(factors.factorCount(writerId)).isEqualTo(2);
         as(adminCookie).delete("/admin/api/users/" + writerId + "/two-factor").then().statusCode(204);
-        assertThat(factors.hasFactor(writerId)).isFalse();
+        assertThat(factors.factorCount(writerId)).isZero();
         csrf().cookie("sp_session", writerCookie).get("/admin/api/session").then().statusCode(401);
         as(adminCookie).get("/admin/api/users").then().body("find { it.login == 'writer' }.twoFactor", equalTo(false));
         as(adminCookie).delete("/admin/api/users/999999/two-factor").then().statusCode(404);
@@ -119,8 +119,9 @@ class UsersResourceQuarkusTest {
             .body("$", not(hasKey("setPasswordUrl")))
             .extract()
             .<Integer>path("id");
-        assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
+        TestStore.await(() -> SMTP.getReceivedMessages().length == 1, 10);
         var received = SMTP.getReceivedMessages();
+        assertThat(received).hasSize(1);
         assertThat(received[0].getAllRecipients()).extracting(Object::toString).containsExactly("editor1@example.org");
         var body = received[0].getContent().toString();
         assertThat(body).contains("https://blog.example.org/admin/set-password?token=");
@@ -167,7 +168,8 @@ class UsersResourceQuarkusTest {
         smtp(ServerSetupTest.SMTP.getPort());
         asAdmin().post("/admin/api/users/" + pending + "/invite").then().statusCode(204);
         asAdmin().post("/admin/api/users/" + pending + "/invite").then().statusCode(204);
-        assertThat(SMTP.waitForIncomingEmail(5000, 2)).isTrue();
+        TestStore.await(() -> SMTP.getReceivedMessages().length == 2, 10);
+        assertThat(SMTP.getReceivedMessages()).hasSize(2);
         var first = token(SMTP.getReceivedMessages()[0].getContent().toString());
         var second = token(SMTP.getReceivedMessages()[1].getContent().toString());
         setPassword(first, "pending password 1").then().statusCode(410);

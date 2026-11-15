@@ -125,7 +125,13 @@ class ResetResourceQuarkusTest {
 
     @Test
     void writeWithoutCsrfTokenIs400() {
-        AuthMatrix.missingCsrfIs400(adminCookie, "POST", "/admin/api/reset");
+        // right password and title: with a token this resets (otherUsersAreLoggedOutCallerIsNot answers 204)
+        AuthMatrix.missingCsrfIs400(
+                adminCookie,
+                "POST",
+                "/admin/api/reset",
+                Map.of("password", PASSWORD, "confirm", "My Site")
+        );
         assertThat(users.all()).hasSize(2);
     }
 }

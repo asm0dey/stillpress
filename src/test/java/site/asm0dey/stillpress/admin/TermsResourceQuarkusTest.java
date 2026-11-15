@@ -157,8 +157,12 @@ class TermsResourceQuarkusTest {
 
     @Test
     void writeWithoutCsrfTokenIs400() {
-        AuthMatrix.missingCsrfIs400(admin, "POST", "/admin/api/terms");
-        AuthMatrix.missingCsrfIs400(admin, "PUT", "/admin/api/terms/1");
+        // with a token this body is a 201 (term helper)
+        AuthMatrix.missingCsrfIs400(admin, "POST", "/admin/api/terms", Map.of("taxonomy", "category", "name", "Travel"));
+        assertThat(terms.byTaxonomy("category"))
+            .extracting(t -> t.name())
+            .doesNotContain("Travel");
+        AuthMatrix.missingCsrfIs400(admin, "PUT", "/admin/api/terms/1", Map.of("name", "Trips", "slug", "trips"));
         AuthMatrix.missingCsrfIs400(admin, "DELETE", "/admin/api/terms/1");
     }
 

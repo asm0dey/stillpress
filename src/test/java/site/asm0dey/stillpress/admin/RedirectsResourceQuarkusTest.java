@@ -115,7 +115,14 @@ class RedirectsResourceQuarkusTest {
 
     @Test
     void writeWithoutCsrfTokenIs400() {
-        AuthMatrix.missingCsrfIs400(admin, "POST", "/admin/api/redirects");
+        // with a token this body is a 201 (add helper)
+        AuthMatrix.missingCsrfIs400(
+                admin,
+                "POST",
+                "/admin/api/redirects",
+                Map.of("from", "/old-page/", "to", POST, "status", 301)
+        );
+        assertThat(redirects.find("/old-page/")).isEmpty();
         AuthMatrix.missingCsrfIs400(admin, "DELETE", "/admin/api/redirects?from=/x/");
     }
 
