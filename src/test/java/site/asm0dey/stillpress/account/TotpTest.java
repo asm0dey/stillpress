@@ -37,7 +37,12 @@ class TotpTest {
         totp = new Totp(clock, secrets, factors, settings);
         user = users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).getId();
         factors.putTotp(user, secrets.encrypt("totp:" + user, Base64.getEncoder().encodeToString(SEED)));
-        factors.confirmTotp(user);
+        confirm();
+    }
+
+    void confirm() {
+        var c = factors.totp(user).orElseThrow().getCiphertext();
+        assertThat(factors.confirmTotp(user, c, 0)).isTrue();
     }
 
     static String code(long epochSecond) throws Exception {
@@ -95,7 +100,16 @@ class TotpTest {
     }
 
     @Test
+    void confirmingCodeIsSpentForVerify() {
+        factors.deleteTotp(user);
+        factors.putTotp(user, secrets.encrypt("totp:" + user, Base64.getEncoder().encodeToString(SEED)));
+        assertThat(totp.confirm(user, "287082")).isTrue();
+        assertThat(totp.verify(user, "287082")).isFalse();
+    }
+
+    @Test
     void unconfirmedSeedDoesNotVerifyButConfirms() {
+        factors.deleteTotp(user);
         factors.putTotp(user, secrets.encrypt("totp:" + user, Base64.getEncoder().encodeToString(SEED)));
         assertThat(totp.verify(user, "287082")).isFalse();
         assertThat(totp.confirm(user, "287082")).isTrue();

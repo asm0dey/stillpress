@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import javax.crypto.spec.SecretKeySpec;
+import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TwoFactorRepository;
 
@@ -40,12 +41,15 @@ public class Totp {
     }
 
     /**
-     * Stores a fresh unconfirmed seed, replacing any earlier unconfirmed one. The caller refuses a confirmed factor.
+     * Stores a fresh unconfirmed seed, replacing any earlier unconfirmed one; refuses (409) when a confirmed factor exists.
      */
     public Enrollment start(long userId, String login) {
         var seed = new byte[20];
         random.nextBytes(seed);
-        factors.putTotp(userId, secrets.encrypt(name(userId), Base64.getEncoder().encodeToString(seed)));
+        var ciphertext = secrets.encrypt(name(userId), Base64.getEncoder().encodeToString(seed));
+        if (!factors.putTotp(userId, ciphertext)) {
+            throw new ItemService.Refused(409, "totp_exists", null);
+        }
         var secret = Base32.encode(seed);
         var issuer = encode(settings
             .get("title")
@@ -71,11 +75,12 @@ public class Totp {
         if (row.isEmpty() || !CODE.matcher(code == null ? "" : code).matches()) {
             return false;
         }
-        var seed = seed(userId, row.get().getCiphertext());
-        for (long step = currentStep() - 1; seed.isPresent() && step <= currentStep() + 1; step++) {
+        var ciphertext = row.get().getCiphertext();
+        var seed = seed(userId, ciphertext);
+        var now = currentStep();
+        for (long step = now - 1; seed.isPresent() && step <= now + 1; step++) {
             if (matches(seed.get(), step, code)) {
-                factors.confirmTotp(userId);
-                return factors.advanceTotp(userId, step);
+                return factors.confirmTotp(userId, ciphertext, step);
             }
         }
         return false;

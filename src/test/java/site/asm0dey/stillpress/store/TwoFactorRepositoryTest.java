@@ -30,7 +30,7 @@ class TwoFactorRepositoryTest {
     void advanceTotpIsMonotonic() {
         factors.putTotp(id, "c");
         assertThat(factors.advanceTotp(id, 10)).isFalse();
-        factors.confirmTotp(id);
+        factors.confirmTotp(id, "c", 0);
         assertThat(factors.advanceTotp(id, 10)).isTrue();
         assertThat(factors.advanceTotp(id, 10)).isFalse();
         assertThat(factors.advanceTotp(id, 9)).isFalse();
@@ -40,10 +40,8 @@ class TwoFactorRepositoryTest {
 
     @Test
     void putTotpReplacesAndUnconfirms() {
-        factors.putTotp(id, "one");
-        factors.confirmTotp(id);
-        factors.advanceTotp(id, 5);
-        factors.putTotp(id, "two");
+        assertThat(factors.putTotp(id, "one")).isTrue();
+        assertThat(factors.putTotp(id, "two")).isTrue();
         assertThat(factors.totp(id)).hasValueSatisfying(t -> {
             assertThat(t.getCiphertext()).isEqualTo("two");
             assertThat(t.getConfirmed()).isFalse();
@@ -52,12 +50,36 @@ class TwoFactorRepositoryTest {
     }
 
     @Test
+    void putTotpNeverReplacesAConfirmedFactor() {
+        factors.putTotp(id, "one");
+        assertThat(factors.confirmTotp(id, "one", 5)).isTrue();
+        assertThat(factors.putTotp(id, "two")).isFalse();
+        assertThat(factors.totp(id)).hasValueSatisfying(t -> {
+            assertThat(t.getCiphertext()).isEqualTo("one");
+            assertThat(t.getConfirmed()).isTrue();
+            assertThat(t.getLastStep()).isEqualTo(5);
+        });
+    }
+
+    @Test
+    void confirmIsBoundToTheVerifiedCiphertext() {
+        factors.putTotp(id, "two");
+        assertThat(factors.confirmTotp(id, "one", 5)).isFalse();
+        assertThat(factors.totp(id)).hasValueSatisfying(t -> {
+            assertThat(t.getConfirmed()).isFalse();
+            assertThat(t.getLastStep()).isZero();
+        });
+        assertThat(factors.confirmTotp(id, "two", 5)).isTrue();
+        assertThat(factors.confirmTotp(id, "two", 6)).isFalse();
+    }
+
+    @Test
     void factorCountIgnoresUnconfirmedTotp() {
         factors.putTotp(id, "c");
         factors.addPasskey(id, "laptop", data("a"));
         factors.addPasskey(id, "phone", data("b"));
         assertThat(factors.factorCount(id)).isEqualTo(2);
-        factors.confirmTotp(id);
+        factors.confirmTotp(id, "c", 0);
         assertThat(factors.factorCount(id)).isEqualTo(3);
         assertThat(factors.hasFactor(id)).isTrue();
     }

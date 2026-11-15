@@ -124,6 +124,18 @@ class TwoFactorResourceTest {
     }
 
     @Test
+    void enrollingAfterConfirmKeepsTheFactor() throws Exception {
+        var secret = asAdmin().post("/admin/api/2fa/totp").then().extract().path("secret").toString();
+        asAdmin().contentType(JSON).body(Map.of("code", codeFor(secret))).post("/admin/api/2fa/totp/confirm");
+        var stored = factors.totp(user).orElseThrow().getCiphertext();
+        asAdmin().post("/admin/api/2fa/totp").then().statusCode(409);
+        assertThat(factors.totp(user)).hasValueSatisfying(t -> {
+            assertThat(t.getConfirmed()).isTrue();
+            assertThat(t.getCiphertext()).isEqualTo(stored);
+        });
+    }
+
+    @Test
     void anonymousIs401() {
         RestAssured.get("/admin/api/2fa").then().statusCode(401);
         csrf().post("/admin/api/2fa/totp").then().statusCode(401);

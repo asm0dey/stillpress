@@ -25,33 +25,46 @@ public class TwoFactorRepository {
     }
 
     /**
-     * An unconfirmed row with {@code last_step = 0}, replacing any earlier one.
+     * An unconfirmed row with {@code last_step = 0}, replacing an earlier unconfirmed one. False, with the row
+     * untouched, when a confirmed factor exists: the insert is ignored on the user_id primary key.
      */
     @Transactional
-    public void putTotp(long userId, String ciphertext) {
+    public boolean putTotp(long userId, String ciphertext) {
         var now = SessionRepository.now();
         var updated = db
             .update(TOTP_FACTOR)
             .set(TOTP_FACTOR.CIPHERTEXT, ciphertext)
+            .set(TOTP_FACTOR.LAST_STEP, 0L)
+            .set(TOTP_FACTOR.CREATED_AT, now)
+            .where(TOTP_FACTOR.USER_ID.eq(userId), TOTP_FACTOR.CONFIRMED.isFalse())
+            .execute();
+        return updated == 1
+                || db
+            .insertInto(TOTP_FACTOR)
+            .set(TOTP_FACTOR.USER_ID, userId)
+            .set(TOTP_FACTOR.CIPHERTEXT, ciphertext)
             .set(TOTP_FACTOR.CONFIRMED, false)
             .set(TOTP_FACTOR.LAST_STEP, 0L)
             .set(TOTP_FACTOR.CREATED_AT, now)
-            .where(TOTP_FACTOR.USER_ID.eq(userId))
-            .execute();
-        if (updated == 0) {
-            db
-                .insertInto(TOTP_FACTOR)
-                .set(TOTP_FACTOR.USER_ID, userId)
-                .set(TOTP_FACTOR.CIPHERTEXT, ciphertext)
-                .set(TOTP_FACTOR.CONFIRMED, false)
-                .set(TOTP_FACTOR.LAST_STEP, 0L)
-                .set(TOTP_FACTOR.CREATED_AT, now)
-                .execute();
-        }
+            .onDuplicateKeyIgnore()
+            .execute() == 1;
     }
 
-    public void confirmTotp(long userId) {
-        db.update(TOTP_FACTOR).set(TOTP_FACTOR.CONFIRMED, true).where(TOTP_FACTOR.USER_ID.eq(userId)).execute();
+    /**
+     * Confirms the unconfirmed seed whose ciphertext was verified and spends {@code step}, in one statement. False
+     * when the row was replaced, already confirmed or gone.
+     */
+    public boolean confirmTotp(long userId, String ciphertext, long step) {
+        return db
+            .update(TOTP_FACTOR)
+            .set(TOTP_FACTOR.CONFIRMED, true)
+            .set(TOTP_FACTOR.LAST_STEP, step)
+            .where(
+                    TOTP_FACTOR.USER_ID.eq(userId),
+                    TOTP_FACTOR.CONFIRMED.isFalse(),
+                    TOTP_FACTOR.CIPHERTEXT.eq(ciphertext)
+            )
+            .execute() == 1;
     }
 
     /**
