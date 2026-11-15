@@ -88,6 +88,7 @@ stillpress publish                     # render a full release and make it live;
 stillpress serve                       # serve the live release on :8080 (also the default command)
 stillpress verify-urls --source https://old-blog.example --target http://localhost:8080
 stillpress user reset-password <login>  # print a single-use set-password link (valid 24 h); login or email
+stillpress captcha none                # turn the login/reset/setup CAPTCHA off (e.g. a broken Turnstile key)
 stillpress reset                       # show what a reset would delete (row counts, data directory); exits 1
 stillpress reset --yes                 # delete everything, users and settings included; the next serve prints a setup token
 stillpress reset --yes --force         # the same after a crash mid-import left it marked running; stop the server first
@@ -119,6 +120,8 @@ Options: `--root <path>` is the site root as nginx sees it (default: the data di
 Stillpress takes the client IP and scheme from nginx's `X-Forwarded-*` headers only when the connection comes from a trusted proxy: `127.0.0.1` and `::1` by default. If nginx connects from another address (another host or container), list it in `STILLPRESS_TRUSTED_PROXIES` (comma-separated addresses or CIDRs; IPv6 in brackets, e.g. `[::1]`). nginx in a Docker container connects from the bridge network, so it always needs this, for example `STILLPRESS_TRUSTED_PROXIES=172.17.0.0/16`.
 
 Mode 1 still works for the simplest setups: run `serve` behind any TLS-terminating reverse proxy and it serves the files itself. That proxy must overwrite `X-Forwarded-For` with the client address (nginx: `proxy_set_header X-Forwarded-For $remote_addr;`), never append to it (`$proxy_add_x_forwarded_for`): Stillpress takes the leftmost entry, so an appended header lets any client pick its own IP and dodge the login rate limit.
+
+The public admin forms (login, password reset, set-password, setup) take a CAPTCHA chosen in the admin: none (default), Cloudflare Turnstile or self-hosted ALTCHA, plus an always-on honeypot. `STILLPRESS_CAPTCHA_PROVIDER` (`none`, `turnstile`, `altcha`) overrides and locks that choice; with it set, the Turnstile keys come from `STILLPRESS_TURNSTILE_SITE_KEY` and `STILLPRESS_TURNSTILE_SECRET`.
 
 Data lives in `./data`, or wherever `STILLPRESS_DATA_DIR` points: the H2 database, `media/` and `output/`.
 

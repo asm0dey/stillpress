@@ -12,6 +12,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import module java.base;
+import site.asm0dey.stillpress.account.Captcha;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SessionAuthMechanism;
@@ -35,6 +36,8 @@ public class SetupResource {
     @Inject
     SetupToken token;
     @Inject
+    Captcha captcha;
+    @Inject
     AuthorRepository users;
     @Inject
     SessionRepository sessions;
@@ -57,7 +60,9 @@ public class SetupResource {
             String email,
             String displayName,
             String password,
-            String timezone
+            String timezone,
+            String captcha,
+            String website
     ) {}
 
     @GET
@@ -76,6 +81,7 @@ public class SetupResource {
             if (sent == null || !token.matches(sent.token())) {
                 return error(403, Map.of("error", "bad_token"));
             }
+            captcha.verify(sent.captcha(), sent.website(), request.remoteAddress().hostAddress());
             var s = new Setup(
                     sent.token(),
                     sent.title(),
@@ -84,7 +90,9 @@ public class SetupResource {
                     UserFields.trim(sent.email()),
                     UserFields.trim(sent.displayName()),
                     sent.password(),
-                    sent.timezone()
+                    sent.timezone(),
+                    sent.captcha(),
+                    sent.website()
             );
             var field = invalidField(s);
             if (field != null) {

@@ -15,6 +15,7 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import module java.base;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
+import site.asm0dey.stillpress.account.Captcha;
 import site.asm0dey.stillpress.account.LoginLimiter;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
@@ -41,6 +42,8 @@ public class AuthResource {
     @Inject
     LoginLimiter limiter;
     @Inject
+    Captcha captcha;
+    @Inject
     AuthorRepository users;
     @Inject
     SessionRepository sessions;
@@ -57,23 +60,24 @@ public class AuthResource {
     @Context
     HttpServerRequest request;
 
-    public record Credentials(String login, String password) {}
+    /**
+     * {@code captcha} is the provider's token and {@code website} the honeypot, on every public form.
+     */
+    public record Credentials(String login, String password, String captcha, String website) {}
 
-    public record NewPassword(String token, String password) {}
+    public record NewPassword(String token, String password, String captcha, String website) {}
 
     public record SessionUser(long id, String login, String displayName, String email, String role, String locale) {}
 
     public record NewLocale(String locale) {}
 
-    /**
-     * {@code captcha} and the honeypot {@code website} are checked from 02c's CAPTCHA task on.
-     */
     public record ResetRequest(String login, String captcha, String website) {}
 
     /**
-     * What the login screen offers: {@code mail} says whether "Forgot password?" can mail a link.
+     * What the login screen offers: {@code mail} says whether "Forgot password?" can mail a link,
+     * {@code captcha} which widget the forms show.
      */
-    public record LoginOptions(boolean mail) {}
+    public record LoginOptions(boolean mail, String captcha, String turnstileSiteKey) {}
 
     private static final Set<String> LOCALES = Set.of("en", "ru");
 
@@ -89,6 +93,8 @@ public class AuthResource {
         if (wait.isPresent()) {
             return rateLimited(wait.get());
         }
+        // before any lookup, and never against the account: a bot without a token learns nothing and locks no one out
+        captcha.verify(c.captcha(), c.website(), ip);
         // no real login or password is this long: refuse before it becomes a limiter key or Argon2 input, counting
         // it against the IP only so oversized spam still runs into the IP limit
         if (c.login().length() > MAX_LOGIN
@@ -123,7 +129,7 @@ public class AuthResource {
     @GET
     @Path("login-options")
     public LoginOptions loginOptions() {
-        return new LoginOptions(mail.configured());
+        return new LoginOptions(mail.configured(), captcha.provider(), captcha.turnstileSiteKey().orElse(null));
     }
 
     /**
@@ -135,6 +141,7 @@ public class AuthResource {
     @Path("password-reset")
     public Response passwordReset(ResetRequest r) {
         var ip = request.remoteAddress().hostAddress();
+        captcha.verify(r == null ? null : r.captcha(), r == null ? null : r.website(), ip);
         var wait = limiter.blockedIp(ip);
         if (wait.isPresent()) {
             return rateLimited(wait.get());
@@ -223,6 +230,11 @@ public class AuthResource {
     @Path("set-password")
     @Transactional
     public Response setPassword(NewPassword p) {
+        captcha.verify(
+                p == null ? null : p.captcha(),
+                p == null ? null : p.website(),
+                request.remoteAddress().hostAddress()
+        );
         var password = p == null ? null : p.password();
         try {
             Passwords.validate(password);

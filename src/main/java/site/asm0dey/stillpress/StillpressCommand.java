@@ -3,6 +3,7 @@ package site.asm0dey.stillpress;
 import io.quarkus.picocli.runtime.annotations.TopCommand;
 import io.quarkus.runtime.Quarkus;
 import picocli.CommandLine.Command;
+import site.asm0dey.stillpress.account.CaptchaCommand;
 import site.asm0dey.stillpress.account.SecretsCommand;
 import site.asm0dey.stillpress.account.UserCommand;
 import site.asm0dey.stillpress.importer.ImportCommand;
@@ -21,6 +22,7 @@ import site.asm0dey.stillpress.verify.VerifyUrlsCommand;
         VerifyUrlsCommand.class,
         UserCommand.class,
         SecretsCommand.class,
+        CaptchaCommand.class,
         NginxConfigCommand.class,
         ResetCommand.class
         }
