@@ -164,6 +164,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-test-security-webauthn</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>com.icegreen</groupId>
             <artifactId>greenmail-junit5</artifactId>
             <version>2.1.15</version>

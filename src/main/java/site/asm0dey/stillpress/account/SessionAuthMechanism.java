@@ -45,6 +45,15 @@ public class SessionAuthMechanism implements HttpAuthenticationMechanism {
         return Uni.createFrom().item(new ChallengeData(401, null, null));
     }
 
+    /**
+     * Above the WebAuthn mechanism's 1000: the highest-priority mechanism answers the challenge, and WebAuthn's would
+     * redirect to a login page instead of our 401.
+     */
+    @Override
+    public int getPriority() {
+        return 2000;
+    }
+
     @Override
     public Set<Class<? extends AuthenticationRequest>> getCredentialTypes() {
         return Set.of(SessionAuthenticationRequest.class);

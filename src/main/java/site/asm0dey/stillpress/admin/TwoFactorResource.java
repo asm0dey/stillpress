@@ -2,14 +2,20 @@ package site.asm0dey.stillpress.admin;
 
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
+import io.quarkus.security.webauthn.WebAuthnCredentialRecord;
+import io.quarkus.security.webauthn.WebAuthnSecurity;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.RoutingContext;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.core.Response;
 import module java.base;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
+import org.jooq.exception.IntegrityConstraintViolationException;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
 import site.asm0dey.stillpress.account.Totp;
 import site.asm0dey.stillpress.content.ItemService;
@@ -28,12 +34,16 @@ public class TwoFactorResource {
     Totp totp;
     @Inject
     TwoFactorRepository factors;
+    @Inject
+    WebAuthnSecurity webAuthn;
 
     public record PasskeyView(String id, String name, String createdAt, String lastUsedAt) {}
 
     public record Factors(boolean totp, List<PasskeyView> passkeys, boolean required) {}
 
     public record Code(String code) {}
+
+    public record NewPasskey(String name, JsonObject credential) {}
 
     @ServerExceptionMapper
     public Response refused(ItemService.Refused e) {
@@ -76,6 +86,42 @@ public class TwoFactorResource {
     @Path("/totp")
     public Response remove() {
         if (factors.deleteTotp(userId()) == 0) {
+            throw new ItemService.Refused(404, "not_found", null);
+        }
+        return Response.noContent().build();
+    }
+
+    @POST
+    @Path("/passkeys")
+    public Response addPasskey(NewPasskey body, RoutingContext ctx) {
+        var name = body == null || body.name() == null ? "" : body.name().strip();
+        if (name.isEmpty() || name.length() > 100) {
+            throw new ItemService.Refused(400, "invalid", "name");
+        }
+        WebAuthnCredentialRecord passkey;
+        try {
+            // the extension does not bind the challenge to its username; ownership comes from the session alone
+            passkey = webAuthn
+                .register(identity.getPrincipal().getName(), body.credential(), ctx)
+                .await()
+                .atMost(Duration.ofSeconds(10));
+        } catch (RuntimeException e) {
+            throw new ItemService.Refused(400, "invalid_passkey", null);
+        }
+        var data = passkey.getRequiredPersistedData();
+        try {
+            factors.addPasskey(userId(), name, data);
+        } catch (IntegrityConstraintViolationException e) {
+            // a replayed registration: that credential is already stored
+            throw new ItemService.Refused(400, "invalid_passkey", null);
+        }
+        return Response.status(201).entity(view(factors.passkey(data.credentialId()).orElseThrow())).build();
+    }
+
+    @DELETE
+    @Path("/passkeys/{id}")
+    public Response removePasskey(@PathParam("id") String id) {
+        if (factors.deletePasskey(userId(), id) == 0) {
             throw new ItemService.Refused(404, "not_found", null);
         }
         return Response.noContent().build();

@@ -18,4 +18,10 @@ class CsrfSignatureTest {
         var key = ConfigProvider.getConfig().getValue("quarkus.rest-csrf.token-signature-key", String.class);
         assertThat(key).hasSize(64).isEqualTo(HexFormat.of().formatHex(secrets.derive("csrf-token-signature", 32)));
     }
+
+    @Test
+    void sessionEncryptionKeyFromKeyset() {
+        var key = ConfigProvider.getConfig().getValue("quarkus.http.auth.session.encryption-key", String.class);
+        assertThat(key).hasSize(64).isEqualTo(HexFormat.of().formatHex(secrets.derive("webauthn-cookie-key", 32)));
+    }
 }

@@ -189,4 +189,19 @@ class SessionAuthTest {
         assertThat(SessionAuthMechanism.cookie("abc", true).encode()).containsIgnoringCase("secure");
         assertThat(SessionAuthMechanism.clearedCookie(false).encode()).contains("sp_session=", "Max-Age=0");
     }
+
+    @Test
+    void anonymousApiStays401WithWebAuthn() {
+        given().get("/admin/api/session").then().statusCode(401).header("Location", (String) null);
+    }
+
+    @Test
+    void webauthnCookieNeverAuthenticates() {
+        given()
+            .cookie("quarkus-credential", "anything")
+            .get("/admin/api/session")
+            .then()
+            .statusCode(401)
+            .header("Location", (String) null);
+    }
 }

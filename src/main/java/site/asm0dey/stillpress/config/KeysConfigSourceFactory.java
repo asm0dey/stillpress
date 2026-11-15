@@ -12,7 +12,8 @@ import module java.base;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 
 /**
- * Supplies {@code quarkus.rest-csrf.token-signature-key} from the PRF keyset, below env and application.properties.
+ * Supplies {@code quarkus.rest-csrf.token-signature-key} and {@code quarkus.http.auth.session.encryption-key} from the
+ * PRF keyset, below env and application.properties.
  */
 public class KeysConfigSourceFactory implements ConfigSourceFactory {
     @Override
@@ -24,13 +25,17 @@ public class KeysConfigSourceFactory implements ConfigSourceFactory {
         var dataDir = value(context.getValue("stillpress.data-dir")).orElseThrow();
         var keys = Keys.get(Path.of(dataDir), value(context.getValue("stillpress.keys-dir")).map(Path::of));
         try {
-            var key = keys
-                .prf()
-                .getPrimitive(RegistryConfiguration.get(), PrfSet.class)
-                .computePrimary("csrf-token-signature".getBytes(UTF_8), 32);
+            var prf = keys.prf().getPrimitive(RegistryConfiguration.get(), PrfSet.class);
+            var hex = HexFormat.of();
             return List.of(
                     new PropertiesConfigSource(
-                            Map.of("quarkus.rest-csrf.token-signature-key", HexFormat.of().formatHex(key)),
+                            Map.of(
+                                    "quarkus.rest-csrf.token-signature-key",
+                                    hex.formatHex(prf.computePrimary("csrf-token-signature".getBytes(UTF_8), 32)),
+                                    // seals the WebAuthn challenge cookie; stable across restarts
+                                    "quarkus.http.auth.session.encryption-key",
+                                    hex.formatHex(prf.computePrimary("webauthn-cookie-key".getBytes(UTF_8), 32))
+                            ),
                             "stillpress-keys",
                             50
                     )

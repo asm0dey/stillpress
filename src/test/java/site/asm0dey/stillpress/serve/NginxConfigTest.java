@@ -14,6 +14,7 @@ class NginxConfigTest {
             .contains("try_files ${uri}index.html @stillpress;")
             .contains("location ^~ /admin")
             .contains("location = /wp-login.php")
+            .contains("location ^~ /q/webauthn/")
             .contains("application/rss+xml")
             // nginx's own peer, never a client-sent X-Forwarded-For that Quarkus would read leftmost
             .contains("proxy_set_header X-Forwarded-For $remote_addr;")
