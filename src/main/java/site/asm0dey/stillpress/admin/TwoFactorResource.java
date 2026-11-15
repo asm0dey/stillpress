@@ -17,7 +17,7 @@ import jakarta.ws.rs.core.Response;
 import module java.base;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
-import org.jooq.exception.IntegrityConstraintViolationException;
+import org.jooq.exception.DataAccessException;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
 import site.asm0dey.stillpress.account.Totp;
 import site.asm0dey.stillpress.account.TwoFactorPolicy;
@@ -96,18 +96,21 @@ public class TwoFactorResource {
     @Path("/totp")
     @Transactional
     public Response remove() {
-        // an unconfirmed seed is a setup being cancelled, never a factor, so it is never the last one
-        var confirmed = factors
-            .totp(userId())
-            .filter(t -> t.getConfirmed())
-            .isPresent();
-        if (factors.deleteTotp(userId()) == 0) {
-            throw new ItemService.Refused(404, "not_found", null);
+        // an unconfirmed seed is a setup being cancelled, never a factor, so it is never the last one; the delete
+        // matches the state read, so a confirm landing in between is read again rather than removed unchecked
+        while (true) {
+            var row = factors.totp(userId());
+            if (row.isEmpty()) {
+                throw new ItemService.Refused(404, "not_found", null);
+            }
+            boolean confirmed = row.get().getConfirmed();
+            if (factors.deleteTotp(userId(), confirmed) == 1) {
+                if (confirmed) {
+                    keepOneFactor();
+                }
+                return Response.noContent().build();
+            }
         }
-        if (confirmed) {
-            keepOneFactor();
-        }
-        return Response.noContent().build();
     }
 
     @POST
@@ -132,8 +135,8 @@ public class TwoFactorResource {
         var data = passkey.getRequiredPersistedData();
         try {
             factors.addPasskey(userId(), name, data);
-        } catch (IntegrityConstraintViolationException e) {
-            // a replayed registration: that credential is already stored
+        } catch (DataAccessException e) {
+            // a replayed registration (credential already stored) or an id longer than the column holds
             throw new ItemService.Refused(400, "invalid_passkey", null);
         }
         return Response.status(201).entity(view(factors.passkey(data.credentialId()).orElseThrow())).build();

@@ -85,7 +85,7 @@ export default function TwoFactor() {
     if (ok) setAdded(true);
   }
 
-  const removePasskey = (id: number, label: string) => confirm(sprintf(__('Remove the passkey "%s"?', 'stillpress'), label))
+  const removePasskey = (id: string, label: string) => confirm(sprintf(__('Remove the passkey "%s"?', 'stillpress'), label))
     && act(() => api(`/2fa/passkeys/${id}`, { method: 'DELETE' }), __('Could not remove the passkey.', 'stillpress'), lastFactor);
 
   const count = factors ? (factors.totp ? 1 : 0) + factors.passkeys.length : 0;
@@ -139,7 +139,7 @@ export default function TwoFactor() {
             {passkeysSupported() ? (
               <form onSubmit={addPasskey}>
                 <Field label={__('Passkey name', 'stillpress')} name="passkey-name" required maxLength={100} value={name} onChange={(e) => setName(e.target.value)}
-                  hint={sprintf(__('A passkey works only on the address it was added on (%s). After the site moves to its final domain, add your passkeys again.', 'stillpress'), location.host)} />
+                  hint={sprintf(__('A passkey works only on the address it was added on (%s). After the site moves to its final domain, add your passkeys again, and set up an authenticator app too: on the new address a passkey alone cannot finish signing in.', 'stillpress'), location.host)} />
                 <button type="submit">{__('Add a passkey', 'stillpress')}</button>
               </form>
             ) : <p className="muted">{__('This browser does not support passkeys.', 'stillpress')}</p>}

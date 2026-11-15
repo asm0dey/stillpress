@@ -124,6 +124,27 @@ class PasskeyRegistrationTest {
     }
 
     @Test
+    void credentialIdTooLongForTheColumnIs400() throws Exception {
+        var hardware = new WebAuthnHardware(url);
+        // the spec allows ids up to 1023 bytes; the column holds 255 characters
+        var raw = new byte[300];
+        new Random().nextBytes(raw);
+        for (var entry : Map
+            .of("credID", raw, "id", Base64.getUrlEncoder().withoutPadding().encodeToString(raw))
+            .entrySet()) {
+            var field = WebAuthnHardware.class.getDeclaredField(entry.getKey());
+            field.setAccessible(true);
+            field.set(hardware, entry.getValue());
+        }
+        var c = challengeFor("admin");
+        post(c, "Key", hardware.makeRegistrationJson(c.challenge())).statusCode(400).body(
+                "error",
+                equalTo("invalid_passkey")
+        );
+        assertThat(factors.passkeys(user)).isEmpty();
+    }
+
+    @Test
     void forgedCredentialIs400() {
         var c = challengeFor("admin");
         asAdmin()

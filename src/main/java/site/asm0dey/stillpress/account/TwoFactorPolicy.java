@@ -13,7 +13,7 @@ import site.asm0dey.stillpress.store.TwoFactorRepository;
  */
 @ApplicationScoped
 public class TwoFactorPolicy {
-    static final String KEY = "require_2fa";
+    public static final String KEY = "require_2fa";
     @Inject
     SettingRepository settings;
     @Inject
@@ -26,15 +26,17 @@ public class TwoFactorPolicy {
     }
 
     /**
-     * Turning it on needs an administrator who already has a factor, and signs out every session without one.
+     * Turning it on needs an administrator who already has a factor, and signs out every session without one. Saying
+     * "on" again leaves the sessions alone: those without a factor are already fenced to enrolling one.
      */
     @Transactional
     public void set(boolean on, long adminId) {
         if (on && !factors.hasFactor(adminId)) {
             throw new ItemService.Refused(409, "admin_needs_2fa", null);
         }
+        var was = required();
         settings.put(KEY, String.valueOf(on));
-        if (on) {
+        if (on && !was) {
             sessions.deleteAllWithoutSecondFactor();
         }
     }

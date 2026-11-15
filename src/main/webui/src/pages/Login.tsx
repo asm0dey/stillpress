@@ -80,6 +80,7 @@ export default function Login() {
         {step.passkey && (
           <p><button type="button" disabled={busy} onClick={() => void withPasskey('/login/passkey-step')}>{__('Use a passkey', 'stillpress')}</button></p>
         )}
+        <p><button type="button" disabled={busy} onClick={() => { setStep(undefined); setCode(''); setPassword(''); setError(undefined); }}>{__('Use a different account', 'stillpress')}</button></p>
       </main>
     );
   }

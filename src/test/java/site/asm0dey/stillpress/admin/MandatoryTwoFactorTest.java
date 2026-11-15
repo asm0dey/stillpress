@@ -260,6 +260,41 @@ class MandatoryTwoFactorTest {
     }
 
     @Test
+    void requiringAgainKeepsEnrollmentSessions() {
+        require();
+        var enrolling = sessions.create(editor);
+        as(adminSession)
+            .contentType(JSON)
+            .body(Map.of("required", true))
+            .put(POLICY)
+            .then()
+            .statusCode(200)
+            .body("required", equalTo(true));
+        as(enrolling).get("/admin/api/session").then().statusCode(200).body("enrollRequired", equalTo(true));
+    }
+
+    @Test
+    void anUnconfirmedSeedIsNoFactorWhenRequiring() {
+        assertThat(factors.putTotp(editor, "unconfirmed")).isTrue();
+        var editorSession = sessions.create(editor);
+        require();
+        as(editorSession).get("/admin/api/session").then().statusCode(401);
+    }
+
+    @Test
+    void aConfirmedAuthenticatorAsTheLastFactorStays() {
+        assertThat(factors.putTotp(editor, "seed")).isTrue();
+        assertThat(factors.confirmTotp(editor, "seed", 1)).isTrue();
+        var editorSession = sessions.create(editor);
+        require();
+        as(editorSession).delete("/admin/api/2fa/totp").then().statusCode(409).body("error", equalTo("last_factor"));
+        assertThat(factors.factorCount(editor)).isEqualTo(1);
+        // the delete is conditional on what was read: a seed confirmed since then is not removed as unconfirmed
+        assertThat(factors.deleteTotp(editor, false)).isZero();
+        assertThat(factors.factorCount(editor)).isEqualTo(1);
+    }
+
+    @Test
     void lastFactorCannotBeRemovedWhileRequired() {
         require();
         as(adminSession)

@@ -1291,6 +1291,9 @@
  "Use a passkey": [
   "Использовать ключ доступа"
  ],
+ "Use a different account": [
+  "Войти под другой учётной записью"
+ ],
  "Sign in with passkey": [
   "Войти с ключом доступа"
  ],
@@ -1387,8 +1390,8 @@
  "Passkey name": [
   "Название ключа доступа"
  ],
- "A passkey works only on the address it was added on (%s). After the site moves to its final domain, add your passkeys again.": [
-  "Ключ доступа работает только на адресе, где он был добавлен (%s). Когда сайт переедет на окончательный домен, добавьте ключи заново."
+ "A passkey works only on the address it was added on (%s). After the site moves to its final domain, add your passkeys again, and set up an authenticator app too: on the new address a passkey alone cannot finish signing in.": [
+  "Ключ доступа работает только на адресе, где он был добавлен (%s). Когда сайт переедет на окончательный домен, добавьте ключи заново и настройте также приложение-аутентификатор: на новом адресе одним ключом доступа вход не завершить."
  ],
  "Add a passkey": [
   "Добавить ключ доступа"

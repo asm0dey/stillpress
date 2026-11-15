@@ -16,7 +16,7 @@ beforeAll(async () => {
 
 const ME = { id: 4, login: 'carol', displayName: 'Carol', email: 'c@example.com', role: 'author', enrollRequired: false };
 const NONE: Factors = { totp: false, passkeys: [], required: false };
-const KEY = { id: 7, name: 'Laptop', createdAt: '2026-11-01T10:00:00Z', lastUsedAt: null };
+const KEY = { id: 'cred-7', name: 'Laptop', createdAt: '2026-11-01T10:00:00Z', lastUsedAt: null };
 const base = (me = ME) => ({ 'GET /session': { body: me }, 'GET /site': { body: { importAllowed: false } } });
 
 test('enrollTotp', async () => {
@@ -42,7 +42,7 @@ test('enrollTotp', async () => {
 test('lastFactorMessage', async () => {
   fakeApi({
     ...base(), 'GET /2fa': { body: { ...NONE, passkeys: [KEY] } },
-    'DELETE /2fa/passkeys/7': { status: 409, body: { error: 'last_factor' } },
+    'DELETE /2fa/passkeys/cred-7': { status: 409, body: { error: 'last_factor' } },
   });
   vi.stubGlobal('confirm', () => true);
   const view = page();

@@ -197,7 +197,7 @@ function CaptchaSettingsForm() {
           {providers.map(([value, label]) => (
             <label key={value} className="option">
               <input type="radio" name="provider" value={value} checked={form.provider === value}
-                onChange={() => setForm({ ...form, provider: value })} />
+                onChange={() => { setTestToken(undefined); setForm({ ...form, provider: value }); }} />
               {' '}{label}
             </label>
           ))}

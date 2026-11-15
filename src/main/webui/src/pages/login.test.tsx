@@ -86,3 +86,14 @@ test('passkeyButtonHiddenWithoutSupport', async () => {
   await view.findByLabelText('Login or email');
   expect(view.queryByRole('button', { name: 'Sign in with passkey' })).toBeNull();
 });
+
+test('backFromTheSecondStepReturnsToPassword', async () => {
+  fakeApi({ ...base, 'POST /login': { body: { totp: true, passkey: false } } });
+  const view = page();
+  await password(view);
+  await t.user.type(await view.findByLabelText('Code'), '12');
+  await t.user.click(view.getByRole('button', { name: 'Use a different account' }));
+  expect((view.getByLabelText('Login or email') as HTMLInputElement).value).toBe('ann');
+  expect((view.getByLabelText('Password') as HTMLInputElement).value).toBe('');
+  expect(view.queryByLabelText('Code')).toBeNull();
+});

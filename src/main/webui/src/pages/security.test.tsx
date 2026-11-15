@@ -107,6 +107,20 @@ test('turnstileSaveSendsTestToken', async () => {
     .toEqual({ provider: 'turnstile', turnstileSiteKey: '0x4AAA', turnstileSecret: 'secret', turnstileToken: 'test-token' });
 });
 
+test('changing the provider drops the Turnstile test token', async () => {
+  fakeApi({ ...SESSION, 'GET /mail': { body: MAIL } });
+  const callback = fakeTurnstile();
+  const view = page();
+  await t.user.click(await view.findByLabelText('Cloudflare Turnstile'));
+  await t.user.type(view.getByLabelText('Site key'), '0x4AAA');
+  const save = view.getAllByRole('button', { name: 'Save' })[1] as HTMLButtonElement;
+  await t.rtl.waitFor(() => document.querySelector('script[src*="turnstile"]')!.dispatchEvent(new Event('load')));
+  await t.rtl.waitFor(() => { t.rtl.act(() => callback('test-token')); expect(save.disabled).toBe(false); });
+  await t.user.click(view.getByLabelText('None'));
+  await t.user.click(view.getByLabelText('Cloudflare Turnstile'));
+  expect(save.disabled).toBe(true);
+});
+
 test('requireNeedsOwn2fa', async () => {
   fakeApi({
     ...SESSION, 'GET /mail': { body: MAIL }, 'GET /captcha': { body: CAPTCHA },

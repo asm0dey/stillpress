@@ -88,6 +88,7 @@ class SiteResetTest {
         settings.put("timezone", "Europe/Berlin");
         settings.put("posts_per_page", "3");
         settings.put("permalink_structure", "/%postname%/");
+        settings.put("require_2fa", "true");
         var item = db.select(DSL.min(ITEM.ID)).from(ITEM).fetchOne(DSL.min(ITEM.ID));
         db.update(AUTHOR).set(AUTHOR.SOURCE_ID, 7L).where(AUTHOR.ID.eq(adminId)).execute();
         blocks.create("Block", "<p>x</p>", adminId, LocalDateTime.now());
@@ -167,6 +168,7 @@ class SiteResetTest {
                     "language",
                     "home_url",
                     "timezone",
+                    "require_2fa",
                     "publish_lock",
                     // written by the publish of the empty site that follows
                     "publish_state",
@@ -176,6 +178,8 @@ class SiteResetTest {
                     "tag_base"
             );
         assertThat(settings.get("title")).hasValue("Experiment");
+        // the kept administrator keeps their factors, so mandatory 2FA stays on
+        assertThat(settings.get("require_2fa")).hasValue("true");
         assertThat(settings.get("posts_per_page")).hasValue("10");
         assertThat(settings.get("category_base")).hasValue("category");
         assertThat(children(dataDir.media())).isEmpty();

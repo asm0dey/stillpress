@@ -98,6 +98,16 @@ public class TwoFactorRepository {
         return db.deleteFrom(TOTP_FACTOR).where(TOTP_FACTOR.USER_ID.eq(userId)).execute();
     }
 
+    /**
+     * Deletes the seed only while it is still in the {@code confirmed} state the caller read.
+     */
+    public int deleteTotp(long userId, boolean confirmed) {
+        return db
+            .deleteFrom(TOTP_FACTOR)
+            .where(TOTP_FACTOR.USER_ID.eq(userId), TOTP_FACTOR.CONFIRMED.eq(confirmed))
+            .execute();
+    }
+
     public int deleteAllTotp() {
         return db.deleteFrom(TOTP_FACTOR).execute();
     }

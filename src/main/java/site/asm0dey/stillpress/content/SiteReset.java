@@ -8,6 +8,7 @@ import module java.base;
 import org.jboss.logging.Logger;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
+import site.asm0dey.stillpress.account.TwoFactorPolicy;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.mail.SiteMail;
@@ -33,7 +34,7 @@ public class SiteReset {
     // the row every publish locks (created by V4); reset holds the lock on it while it runs
     private static final String LOCK_ROW = "publish_lock";
     private static final Set<String> KEPT =
-            Set.of("title", "language", "home_url", "timezone", LOCK_ROW, ImportGuard.STATE);
+            Set.of("title", "language", "home_url", "timezone", TwoFactorPolicy.KEY, LOCK_ROW, ImportGuard.STATE);
     private static final Logger LOG = Logger.getLogger(SiteReset.class);
     @Inject
     DSLContext db;
