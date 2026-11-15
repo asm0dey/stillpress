@@ -4,7 +4,7 @@ A self-hostable CMS on Quarkus that replaces WordPress for blogs. Authors write 
 
 One install runs one site. Several sites means several installs.
 
-> **Status: early development.** Plan 01 (the core pipeline: import → store → render → publish → serve) is done and has been run against a real blog: every post, page, archive, pagination page and feed URL matches the live WordPress site ([results](docs/superpowers/plans/2026-11-03-stillpress-01-results.md)). Plan 02a (the admin foundation: setup wizard, login, users, wizard import, nginx Mode 2) is done and has been run against the same blog through nginx ([results](docs/superpowers/plans/2026-11-04-stillpress-02a-results.md)). There is no theme yet; pages use a minimal built-in "plain" layout. Plan 02b (editing and publishing: the block editor, scheduling, incremental publishing, revisions, an English and Russian admin) is done and has been run on the same blog, plus one built from scratch ([results](docs/superpowers/plans/2026-11-04-stillpress-02b-results.md)); the rest is in the [roadmap](docs/superpowers/plans/ROADMAP.md).
+> **Status: early development.** Plan 01 (the core pipeline: import → store → render → publish → serve) is done and has been run against a real blog: every post, page, archive, pagination page and feed URL matches the live WordPress site ([results](docs/superpowers/plans/2026-11-03-stillpress-01-results.md)). Plan 02a (the admin foundation: setup wizard, login, users, wizard import, nginx Mode 2) is done and has been run against the same blog through nginx ([results](docs/superpowers/plans/2026-11-04-stillpress-02a-results.md)). There is no theme yet; pages use a minimal built-in "plain" layout. Plan 02b (editing and publishing: the block editor, scheduling, incremental publishing, revisions, an English and Russian admin) is done and has been run on the same blog, plus one built from scratch ([results](docs/superpowers/plans/2026-11-04-stillpress-02b-results.md)). Plan 02c-1 (encrypted secrets, SMTP mail, invites and email reset, "pending review" mail, CAPTCHA) is done ([results](docs/superpowers/plans/2026-11-14-stillpress-02c-1-results.md)); 2FA and passkeys come in 02c-2. The rest is in the [roadmap](docs/superpowers/plans/ROADMAP.md).
 
 ## What works today
 
@@ -41,11 +41,13 @@ One install runs one site. Several sites means several installs.
   - Posts and Pages lists (`/admin/posts`, `/admin/pages`): status tabs with counts, search, add, trash and restore.
   - A setup wizard on first start. It asks for the one-time setup token Stillpress prints to its log, creates the site and the first administrator, then offers **Start empty** or **Import from WordPress**.
   - WXR upload import: the file is uploaded from the admin and imported as a background job with live progress, then queued for publishing. A site is imported at most once, from the admin or the CLI: only into an empty site, and only when no import is running or done; a failed import that left nothing behind may be retried.
-  - Users and roles (administrator, editor, author, contributor). Imported authors become accounts without a password; an administrator issues them a single-use set-password link, and `stillpress user reset-password <login>` prints one from the server.
+  - Users and roles (administrator, editor, author, contributor). Imported authors become accounts without a password. With SMTP set up, an administrator mails them an invite (a set-password link valid 7 days); without it, "Copy link" gives a link valid 24 hours, and `stillpress user reset-password <login>` prints one from the server. A new link replaces the user's earlier ones.
+  - "Forgot password?" on the login screen mails a reset link valid 1 hour, at most one per account every 5 minutes. The answer is the same whether or not the account exists.
+  - Submitting an item for review mails every editor and administrator who has an email.
   - Every user edits their own display name and email on **Profile** (`/admin/profile`). Each role sees only the screens it may use: a screen it may not (Users, Settings, Import and Redirects for non-administrators; Pages, Categories and Tags for authors and contributors) sends it to the dashboard. New users (`POST /admin/api/users`) get the same checks as profile edits: login of 1–60 letters, digits, spaces and `_ . - @`, email and name trimmed, 400 with `field` on bad input, 409 `login_taken` or `email_taken`.
   - **Reset site** at the bottom of Settings (administrators, `POST /admin/api/reset` with `{"password","confirm"}`; `confirm` is the site title): deletes all content, media, users other than you, categories, redirects and settings except the title, language, site address and time zone, publishes the empty site and opens import again. This is how to redo a bad import. The password counts towards the login rate limit; it is refused while an import runs.
   - Password login (Argon2id) with rate limits: 5 failures per account and 20 per client IP in 15 minutes, then 429 with `Retry-After`.
-  - CSRF protection by [quarkus-rest-csrf](https://quarkus.io/guides/security-csrf-prevention): every state-changing admin API call must echo the `csrf-token` cookie in `X-CSRF-TOKEN`.
+  - CSRF protection by [quarkus-rest-csrf](https://quarkus.io/guides/security-csrf-prevention): a GET issues the token in the `X-CSRF-TOKEN` response header and its signature (keyed from the keyset) in the HttpOnly `csrf-token` cookie; every state-changing admin API call must send the token back in `X-CSRF-TOKEN`.
   - `/wp-admin` and `/wp-login.php` redirect to `/admin/`, so WordPress bookmarks keep working.
   - The admin in English and Russian, per user: the header's language switch stores it (`PUT /admin/api/session/locale` with `{"locale":"en"|"ru"}`, anything else 400); `GET /admin/api/session` returns the effective `locale` (the user's choice, else `ru` when the site language starts with `ru`, else `en`). Setup and login follow the browser's language. The block editor uses WordPress's own Russian translation, a filtered snapshot in `src/main/webui/src/i18n/wp-ru.json`; refresh it after a Gutenberg upgrade with `mise run i18n:wp`.
 - `stillpress nginx-config`: the include for Mode 2, where nginx serves the published files (see below).
@@ -88,6 +90,7 @@ stillpress publish                     # render a full release and make it live;
 stillpress serve                       # serve the live release on :8080 (also the default command)
 stillpress verify-urls --source https://old-blog.example --target http://localhost:8080
 stillpress user reset-password <login>  # print a single-use set-password link (valid 24 h); login or email
+stillpress secrets reset               # delete every stored secret (SMTP password, Turnstile secret) after losing the keyset
 stillpress captcha none                # turn the login/reset/setup CAPTCHA off (e.g. a broken Turnstile key)
 stillpress reset                       # show what a reset would delete (row counts, data directory); exits 1
 stillpress reset --yes                 # delete everything, users and settings included; the next serve prints a setup token
@@ -123,7 +126,19 @@ Mode 1 still works for the simplest setups: run `serve` behind any TLS-terminati
 
 The public admin forms (login, password reset, set-password, setup) take a CAPTCHA chosen in the admin: none (default), Cloudflare Turnstile or self-hosted ALTCHA, plus an always-on honeypot. `STILLPRESS_CAPTCHA_PROVIDER` (`none`, `turnstile`, `altcha`) overrides and locks that choice; with it set, the Turnstile keys come from `STILLPRESS_TURNSTILE_SITE_KEY` and `STILLPRESS_TURNSTILE_SECRET`.
 
-Data lives in `./data`, or wherever `STILLPRESS_DATA_DIR` points: the H2 database, `media/` and `output/`.
+Data lives in `./data`, or wherever `STILLPRESS_DATA_DIR` points: the H2 database, `keys/`, `media/` and `output/`.
+
+#### Keys
+
+Stored secrets (the SMTP password, the Turnstile secret) are encrypted with [Tink](https://developers.google.com/tink) keysets, which also sign the CSRF cookie and key the ALTCHA challenges. On first start Stillpress creates `aead.json` and `prf.json` in `<data dir>/keys/`. **Back them up together with the database**: the database alone can't decrypt its secrets. `STILLPRESS_KEYS_DIR` points at another directory (a mounted secret, say); Stillpress only reads it and never creates keys there, so copy the two generated files into it. Replicas must share one.
+
+If the keyset is lost, every command but `secrets` refuses to start and says so. Restore the two files, or run `stillpress secrets reset` to drop the stored secrets and start with a new keyset, then re-enter the SMTP password and Turnstile secret in the admin.
+
+#### Mail and the admin address
+
+SMTP is set up in the admin, in the Email section of the Security screen: host, port, security, login, password and from address, with a test mail. Mail never blocks or fails the action that sends it; the last error shows there.
+
+Every mailed or printed link starts with the **Admin address** setting (Settings), never with the host a request came in on. Setup fills it from the address the wizard was opened at, and so does an administrator's first visit after an upgrade. Before cutover that's the temporary host, so **change the Admin address when the site moves** to its own domain, or invites and resets keep pointing at the old one.
 
 ### Database
 
@@ -150,6 +165,7 @@ QUARKUS_DATASOURCE_USERNAME=stillpress QUARKUS_DATASOURCE_PASSWORD=… \
 - [Roadmap: plans 02–05](docs/superpowers/plans/ROADMAP.md)
 - [Plan 01 results on a real blog](docs/superpowers/plans/2026-11-03-stillpress-01-results.md)
 - [Plan 02a results on the real blog through nginx](docs/superpowers/plans/2026-11-04-stillpress-02a-results.md)
+- [Plan 02c-1 results](docs/superpowers/plans/2026-11-14-stillpress-02c-1-results.md)
 - [Glossary](CONTEXT.md)
 - [Architecture decisions](docs/adr/)
 

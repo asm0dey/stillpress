@@ -29,7 +29,9 @@ Split into three plans (agreed 2026-11-04):
   - First log per-phase timings: lock, snapshot, summaries/terms/published_item reads, the hard-link walk over unchanged files, rendering, fragment reads/writes, activate, bookkeeping. Measure on the real blog import.
   - Then fix the dominant phase while keeping every incremental == full test green. Candidates: avoid the per-file hard-link walk, narrow the whole-site DB reads, cache more rendered output.
   - Separate from publish time (serving bandwidth): Mode 1's `StaticSiteRoute` sends `Cache-Control` but no `ETag`/`Last-Modified` and never answers 304, so feed readers re-download unchanged feeds. Add conditional GET (nginx in Mode 2 already does it).
-- **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications.
+- **02c account security and mail**: TOTP, passkeys, mandatory 2FA, CAPTCHA, SMTP with reset, invites and notifications. Split in two:
+  - **02c-1 keys, mail, invites and reset, CAPTCHA, hardening** (done 2026-11-15; plan `2026-11-14-stillpress-02c-1-keys-mail-captcha.md`, results in `2026-11-14-stillpress-02c-1-results.md`): Tink keysets and encrypted secrets, signed CSRF, `admin_url`, SMTP settings, invite and email-reset mail, "pending review" mail, `none | turnstile | altcha` CAPTCHA with honeypot, and the 02c carry-over items below.
+  - **02c-2**: TOTP, passkeys, mandatory 2FA.
   - Secrets stored at rest (TOTP seeds, SMTP password, Turnstile secret, ALTCHA HMAC key) are encrypted with Google Tink: a keyset, per-row AEAD, and a keyed HMAC for anything looked up by value (precedent `encryption-tink`).
 
 - Serving Mode 2, the default: one-time generated nginx include (static root at `output/current`, `try_files $uri $uri/ @stillpress` fallback, proxied `/admin`, login, API, preview and legacy query URLs) plus an example nginx setup; the acceptance run goes through nginx (§6.2 item 9, ADR 0004). Mode 1 (Stillpress serves everything) ships in plan 01 and stays supported.
@@ -66,7 +68,7 @@ Split into three plans (agreed 2026-11-04):
 ### Carried over from 02a (acceptance run)
 
 - Done in 02b: an author who opens `/admin/users` directly sees "Could not load the users." and the Add user form; hide screens the role cannot use.
-- 02c: set-password links are built from the imported site URL, so before cutover they point at the live WordPress host; invites and email reset reuse the same builder and should use the admin's own host until cutover.
+- Done in 02c-1 (Task 3, `admin_url`): set-password links are built from the imported site URL, so before cutover they point at the live WordPress host; invites and email reset reuse the same builder and should use the admin's own host until cutover.
 
 ### Carried over from 02a (code reviews)
 
@@ -76,12 +78,12 @@ Split into three plans (agreed 2026-11-04):
 - Done in 02b: users screen: create lacks trim and length checks (a 61-character login gives 500); a duplicate-login race gives 500, not 409; duplicate emails are accepted; setup's upgrade path ignores the typed email and display name.
 - Done in 02b: the import screen stops polling while a CLI import runs in another process (reload needed).
 - Done in 02b: `Import.tsx` uses `status!` where a local alias would narrow; `catch` blocks cast `e as ApiError` instead of a type guard.
-- 02c: possible HTTP/2 cleartext (h2c, prior knowledge) bodies without `Content-Length` bypass `BodyLimitFilter`; check with `curl --http2-prior-knowledge`, or set `quarkus.http.http2=false`.
-- 02c: the `quarkus-rest-csrf` token cookie is unsigned double-submit; a same-site sibling subdomain could plant a token cookie and submit a matching multipart form to `/admin/api/import`. Set `quarkus.rest-csrf.token-signature-key` from a persisted secret (the Tink-managed secrets work).
-- 02c: set-password hashes the new password before consuming the token, so an invalid token still costs an Argon2 hash on an anonymous endpoint.
-- 02c: issuing a set-password link leaves the user's earlier links valid.
-- 02c: `LoginLimiter.prune()` walks both maps on every call under one lock.
-- 02c: setup returns 500 on a request without a `Host` header; IPv6 brackets in `home_url` are unchecked.
+- Done in 02c-1 (Task 5): possible HTTP/2 cleartext (h2c, prior knowledge) bodies without `Content-Length` bypass `BodyLimitFilter`; check with `curl --http2-prior-knowledge`, or set `quarkus.http.http2=false`.
+- Done in 02c-1 (Task 1): the `quarkus-rest-csrf` token cookie is unsigned double-submit; a same-site sibling subdomain could plant a token cookie and submit a matching multipart form to `/admin/api/import`. Set `quarkus.rest-csrf.token-signature-key` from a persisted secret (the Tink-managed secrets work).
+- Done in 02c-1 (Task 2): set-password hashes the new password before consuming the token, so an invalid token still costs an Argon2 hash on an anonymous endpoint.
+- Done in 02c-1 (Task 2): issuing a set-password link leaves the user's earlier links valid.
+- Done in 02c-1 (Task 2): `LoginLimiter.prune()` walks both maps on every call under one lock.
+- Done in 02c-1 (Task 3): setup returns 500 on a request without a `Host` header; IPv6 brackets in `home_url` are unchecked.
 - Docs: behind a CDN or load balancer, overwriting `X-Forwarded-For` with `$remote_addr` makes every client share one address; the README needs a line when that setup is supported.
 - Docs: `open_file_cache` at http level delays the release swap until `open_file_cache_valid` expires.
 
@@ -89,12 +91,22 @@ Split into three plans (agreed 2026-11-04):
 
 The open items from the 02b ledger, grouped by owner. Each was reviewed and accepted as minor when it was found.
 
-- 02c: no unique index on `lower(email)` (concurrent creates can share an email), and one email error text is misleading; an over-long password counts against the account's login bucket; "pending review" email notifications.
+- Done in 02c-1 (Task 4): no unique index on `lower(email)` (concurrent creates can share an email), and one email error text is misleading.
+- Already fixed in 02b (`AuthResourceTest.oversizedCredentialsAre401AndCountAgainstTheIpOnly`): an over-long password counts against the account's login bucket.
+- Done in 02c-1 (Task 8): "pending review" email notifications.
 - Plan 03: the editor shows galleries in one column, and layout settings reach the editor without the global-styles CSS that the style generator will provide; the home page `<title>` repeats the site title instead of "Title – Tagline".
 - Plan 04: in the Classic block's canvas a YouTube iframe shows "Error 153" (blob: canvas, no Referer), imported embed previews are cropped and `[caption]` shows raw in TinyMCE (`wpeditimage` ships with PHP).
 - Plan 03: theme templates must not wrap content in a formatting element (`a`, `b`, `em`, …); `HtmlPolicy` tolerates misnested formatting end tags on that assumption, so a theme that breaks it means revisiting the tolerance.
 - Plan 03: Task 8's link and scripts-inert checks are verified only in the browser, and the classic block's failed/retry state is untested; the TinyMCE fidelity test's defaults omit `allow_script_urls`/`allow_unsafe_link_target`.
 - Plan 03: Gutenberg upgrade risk: a future `saveEntityRecord` on an existing `wp_block` would hit the translator's unknown route.
+
+### Carried over from 02c-1 (for 02c-2)
+
+02c-2 reworks login, reset and set-password for 2FA, so the minors found there go with it.
+
+- Reset: a known account does more synchronous work than an unknown one (timing side channel; hand lookup, issue and send to a worker and answer 204 at once); two concurrent resets can both pass `issuedSince` and both mail; a reset replaces a pending 7-day invite with a 1-hour link; two concurrent `TokenRepository.create` calls for one user and purpose can leave two live tokens (unique `(user_id, purpose)` plus upsert).
+- CAPTCHA: an invalid `STILLPRESS_CAPTCHA_PROVIDER` fails on first use, not at startup; an env-locked `turnstile` without the env keys isn't rejected, so every login fails closed and the CLI can't help; `login-options` returns a stale `turnstileSiteKey` when the provider isn't Turnstile.
+- Admin UI: the ALTCHA widget is English-only (feed its strings from `__()`); `challengeFetch` drops the query string and ignores `init`; a failed Turnstile script load is silent (submit stays disabled); the widget resets on any failed submit; the `loginDisabledUntilToken` test races the mount and doesn't check re-disable on expiry; `ForgotPassword` treats a failed `login-options` as `mail: true`.
 
 ## Plan 03: Themes & Site Editor
 
@@ -136,6 +148,10 @@ The open items from the 02b ledger, grouped by owner. Each was reviewed and acce
 - Import report completeness for the blog's content: unknown blocks, shortcodes, missing media, password-protected items (§6.2 item 4, §4).
 - Distribution: multi-arch JVM image on GHCR and example `compose.yaml` with optional PostgreSQL and nginx (§6.2.5; assignment is a judgement call).
 - Cutover gate checks 2-5 for the blog: screenshot diff, counts match, feed GUIDs match, hands-on session (§12.1).
+
+### Carried over from 02c-1
+
+- Comments will reuse the `Captcha` bean on a high-volume public form: ALTCHA solutions are stateless and can be replayed within their 300 s; there is no test for ALTCHA expiry or for env-sourced Turnstile keys under the lock.
 
 ### Carried over from plan 01
 
@@ -201,6 +217,8 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - The in-memory login limiter and the import progress are per process; a second replica has its own.
 - Only one node publishes at a time (row lock on `publish_lock`), and its `output/` must be synced to the other nodes by an external tool; Stillpress does not copy releases.
 - CLI `publish` beside a live server is now safe: it takes the same row lock as the server's publish task.
+- Every node needs the same keyset: set `STILLPRESS_KEYS_DIR` to one shared copy of `aead.json` and `prf.json`. A node that generates its own can't read the stored secrets or another node's CSRF cookies.
+- SMTP settings are reloaded only on the node where they were saved; other nodes keep the old mail client until restart. The login and reset rate limits are per node too.
 
 ### From 02b
 
@@ -212,6 +230,17 @@ Robustness items from plan 01 that fit no feature plan. Pull them in when touchi
 - Editor and admin UI: about 15 MB of unused upload-media workers ship in the jar, and the entry chunk is 298 of 300 KB; the author select is administrator-only (editors cannot list users); a fragile `node_modules` CSS path; the translator lacks `media?include` and `OPTIONS settings` (console warnings); no focus move after a save error, and a repeated field error is not re-announced; the sidebar draft is not refreshed while a newer edit is pending; the block list is serialized on every change; `__experimentalValidateInput`; autosave and preview pause between Convert and Save; lightningcss `errorRecovery` is global; floatpanel z-index flattening; the restore screen shows a generic message without the list of violations, and a refused autosave is silent; broad cache invalidation after a block save; "Add new block" writes an empty row at once; no error boundary for a failed lazy chunk; the revisions screen has no "no differences" message, runs `diffLines` without `maxEditLength`, keeps its notice after a reload and shows browser time, not site time; the Classic block drops `&nbsp;` spacer paragraphs; TinyMCE and the import report stay English for server-written texts; the language switch reloads the page; the dashboard publish card lacks a stale-response guard; `Gate` blanks the tree on every navigation and `/session` is fetched up to three times; the Settings "(Uncategorized)" label is not localized; unused `type ApiError` imports in 14 files.
 - HTML policy (script-capable content): the test oracle does not flag `animate`/`set`, `javascript:` in mid-value or `style` `url(javascript:)` (the policy does); CSS-escaped `expression()` (old IE only); the generator's tag list lacks `i code small u s font nobr`; the stray-end-tag rule depends on jsoup's error wording; `<table><caption></b>` is refused although it is harmless.
 - Tests: `rolledBackRequestsLeaveNoTask`'s publish half, `PostgresJobsTest` (`<= 1`), `importStillAllowedRightAfterSetup` and `cliPublishAndTaskNeverOverlap` can pass without testing anything; no PostgreSQL coverage for `PublishLock` and `scheduled_tasks`; `JobsTest`'s control test relies on a spinning reader; `parallelAutosavesLeaveOneAutosave` and the concurrent-save test need PostgreSQL or real contention; no end-to-end 409 `import_running`; incremental publishing lacks tests that the previous release is unchanged, of failure paths and of category reassignment and term delete/reparent equivalence; refused block writes are not asserted to leave no revision or queue row; no go-live default-category or script/style excerpt tests; no contract test pinning the revision view keys; `AdminShellTest.siteRouteStillServesRoot` depends on another class's release; `MediaResourceTest` uses UTC, not the site zone; Spotless in the IDE flags `SessionAuthTest` while the CLI passes.
+
+### From 02c-1
+
+- Keys: two processes on an empty keys dir can mix `aead.json` and `prf.json`, and the half-present case has a misleading error; `KeysConfigSourceFactory` duplicates `Secrets.derive` (one `Keys.derive`); a bare `orElseThrow` when `stillpress.data-dir` is unset; `KeysetGuard.discardOrphaned` queries the database on `--help` and parse-error paths, so a down database makes help throw; `Secrets.readableWith` samples one unordered row; a start that fails before the command runs (port in use) keeps the keyset it generated, so the next start says "does not decrypt" instead of "created a new keyset" (it still refuses); `KeysTest.overrideDirIsNeverWritten` depends on not running as root.
+- CSRF (admin UI): `api.ts` retries any bodiless 400 GET without the token, not only a CSRF 400, which shows one 400 in the console after a keyset or cookie change; concurrent first writes each bootstrap `GET /setup` and rotate the token (share one bootstrap promise).
+- Settings: a null or blank `adminUrl` in a Settings `PUT` deletes `admin_url` (the next administrator `/session` refills it), untested; `TokenRepository.SET_PASSWORD_TTL` may be unused.
+- Email: the `email_lower` backfill uses SQL `LOWER()` while the code uses `toLowerCase(Locale.ROOT)` (non-ASCII drift, >100-character growth); legacy duplicate-email rows keep a NULL `email_lower`, so their address is claimable and they can't log in by email; the importer runs one `emailTaken` query per author; the backfill test reads the migration through a relative `src/` path.
+- Mail: reject CR/LF in user emails and `smtp_from` at write time (subjects are already stripped); a null subject would NPE in `SiteMail.start`; the language setting is re-read per reviewer; the `mail` package imports admin REST classes (`UsersResource.displayName`); the CRLF test doesn't pin the sanitized subject; `orTimeout` doesn't cancel the send. Security screen: the test button is gated on an unsaved host, and clearing a typed password sends `""` (deletes it).
+- h2c: `BodyLimitFilter` builds a `Set.of(...)` per HTTP/2 request; an empty-body h2 POST without `Content-Length` gets 411 (browsers send `content-length: 0`).
+- Tests: `LoginLimiterTest.expiredFailuresStopBlockingWithoutAPrune` overclaims in its name; `assertThat(boolean).isTrue()` in the `issuedSince` test and around `waitForIncomingEmail` in `PasswordResetTest` and `UsersResourceTest`; a redundant assertion in `UsersResourceTest`; login literals not switched to `TestStore.PASSWORD`, and `ResetResourceTest` keeps its own `PASSWORD`; the Turnstile WireMock uses a fixed port, 8093.
+- Dev mode (Quarkus 3.40): host validation answers 400 to any non-localhost `Host`; with `quarkus.http.host-validation.require-localhost=false`, Quinoa forwards `/admin/api` requests with a foreign `Host` to Vite (403). Forged-`Host` checks need the packaged jar.
 
 ## Not in scope
 
