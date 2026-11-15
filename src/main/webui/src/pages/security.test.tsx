@@ -1,4 +1,4 @@
-import { beforeAll, expect, test } from 'vitest';
+import { beforeAll, expect, test, vi } from 'vitest';
 import type { MailSettings } from '../api.ts';
 import { fakeApi, usePages } from '../testapi.ts';
 
@@ -25,6 +25,7 @@ const MAIL: MailSettings = {
 const CAPTCHA = { provider: 'none', turnstileSiteKey: null, secretSet: false, locked: false };
 const SESSION = {
   'GET /session': { body: { role: 'administrator' } }, 'GET /site': { body: { importAllowed: false } }, 'GET /captcha': { body: CAPTCHA },
+  'GET /security/two-factor': { body: { required: false } },
 };
 
 test('rendersSavedPasswordPlaceholder', async () => {
@@ -104,4 +105,17 @@ test('turnstileSaveSendsTestToken', async () => {
   await view.findByText('Saved.');
   expect(calls.find((c) => c.path === '/captcha' && c.method === 'PUT')?.body)
     .toEqual({ provider: 'turnstile', turnstileSiteKey: '0x4AAA', turnstileSecret: 'secret', turnstileToken: 'test-token' });
+});
+
+test('requireNeedsOwn2fa', async () => {
+  fakeApi({
+    ...SESSION, 'GET /mail': { body: MAIL }, 'GET /captcha': { body: CAPTCHA },
+    'GET /security/two-factor': { body: { required: false } },
+    'PUT /security/two-factor': { status: 409, body: { error: 'admin_needs_2fa' } },
+  });
+  vi.stubGlobal('confirm', () => true);
+  const view = page();
+  await t.user.click(await view.findByLabelText('Require two-factor authentication for every user'));
+  await view.findByText(/Add two-factor authentication to your own account first/);
+  expect(view.getByRole('link', { name: 'Two-factor authentication' }).getAttribute('href')).toBe('/two-factor');
 });

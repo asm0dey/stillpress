@@ -1293,5 +1293,140 @@
  ],
  "Sign in with passkey": [
   "Войти с ключом доступа"
+ ],
+ "Two-factor": [
+  "Двухфакторная"
+ ],
+ "Two-factor authentication": [
+  "Двухфакторная аутентификация"
+ ],
+ "Could not load your two-factor settings.": [
+  "Не удалось загрузить настройки двухфакторной аутентификации."
+ ],
+ "Passkey": [
+  "Ключ доступа"
+ ],
+ "Could not start the setup.": [
+  "Не удалось начать настройку."
+ ],
+ "An authenticator app is already set up.": [
+  "Приложение-аутентификатор уже настроено."
+ ],
+ "That code is not right. Try the next one.": [
+  "Код неверный. Попробуйте следующий."
+ ],
+ "Could not confirm the code.": [
+  "Не удалось подтвердить код."
+ ],
+ "Remove the authenticator app?": [
+  "Удалить приложение-аутентификатор?"
+ ],
+ "Could not remove the authenticator app.": [
+  "Не удалось удалить приложение-аутентификатор."
+ ],
+ "Could not add the passkey.": [
+  "Не удалось добавить ключ доступа."
+ ],
+ "The browser did not give a valid passkey. Try again.": [
+  "Браузер не вернул корректный ключ доступа. Попробуйте ещё раз."
+ ],
+ "Enter a name of 1 to 100 characters.": [
+  "Введите название от 1 до 100 символов."
+ ],
+ "Remove the passkey \"%s\"?": [
+  "Удалить ключ доступа «%s»?"
+ ],
+ "Could not remove the passkey.": [
+  "Не удалось удалить ключ доступа."
+ ],
+ "This site requires two-factor authentication, so you can't remove your last method.": [
+  "Этот сайт требует двухфакторную аутентификацию, поэтому нельзя удалить последний способ."
+ ],
+ "This site requires two-factor authentication. Add a passkey or an authenticator app to continue.": [
+  "Этот сайт требует двухфакторную аутентификацию. Чтобы продолжить, добавьте ключ доступа или приложение-аутентификатор."
+ ],
+ "Continue": [
+  "Продолжить"
+ ],
+ "Add a second method in case you lose this one.": [
+  "Добавьте второй способ на случай, если вы потеряете этот."
+ ],
+ "Authenticator app": [
+  "Приложение-аутентификатор"
+ ],
+ "Remove": [
+  "Удалить"
+ ],
+ "QR code for your authenticator app": [
+  "QR-код для вашего приложения-аутентификатора"
+ ],
+ "Or enter this key by hand:": [
+  "Или введите этот ключ вручную:"
+ ],
+ "6-digit code": [
+  "6-значный код"
+ ],
+ "Set up": [
+  "Настроить"
+ ],
+ "Passkeys": [
+  "Ключи доступа"
+ ],
+ "Added": [
+  "Добавлен"
+ ],
+ "Last used": [
+  "Последнее использование"
+ ],
+ "Never": [
+  "Никогда"
+ ],
+ "Remove %s": [
+  "Удалить %s"
+ ],
+ "Passkey name": [
+  "Название ключа доступа"
+ ],
+ "A passkey works only on the address it was added on (%s). After the site moves to its final domain, add your passkeys again.": [
+  "Ключ доступа работает только на адресе, где он был добавлен (%s). Когда сайт переедет на окончательный домен, добавьте ключи заново."
+ ],
+ "Add a passkey": [
+  "Добавить ключ доступа"
+ ],
+ "This browser does not support passkeys.": [
+  "Этот браузер не поддерживает ключи доступа."
+ ],
+ "Could not load the two-factor setting.": [
+  "Не удалось загрузить настройку двухфакторной аутентификации."
+ ],
+ "Users without two-factor authentication will be signed out and must add it to sign in again. Continue?": [
+  "Пользователи без двухфакторной аутентификации будут выведены из системы и должны будут настроить её, чтобы войти снова. Продолжить?"
+ ],
+ "Could not save the two-factor setting.": [
+  "Не удалось сохранить настройку двухфакторной аутентификации."
+ ],
+ "Require two-factor authentication for every user": [
+  "Требовать двухфакторную аутентификацию для каждого пользователя"
+ ],
+ "Add two-factor authentication to your own account first.": [
+  "Сначала добавьте двухфакторную аутентификацию в свою учётную запись."
+ ],
+ "2FA": [
+  "2FA"
+ ],
+ "On": [
+  "Вкл."
+ ],
+ "Off": [
+  "Выкл."
+ ],
+ "Clear 2FA": [
+  "Сбросить 2FA"
+ ],
+ "Clear two-factor authentication for %s? They are signed out and must set it up again.": [
+  "Сбросить двухфакторную аутентификацию для %s? Пользователь будет выведен из системы и должен настроить её заново."
+ ],
+ "Could not clear two-factor authentication.": [
+  "Не удалось сбросить двухфакторную аутентификацию."
  ]
 }

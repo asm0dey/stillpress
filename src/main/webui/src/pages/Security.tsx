@@ -1,5 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
+import { Link } from 'react-router';
 import { asApiError, type CaptchaSettings, type MailSettings, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
@@ -24,6 +25,7 @@ export default function Security() {
       <h1>{__('Security', 'stillpress')}</h1>
       <EmailSettings />
       <CaptchaSettingsForm />
+      <TwoFactorSetting />
     </Shell>
   );
 }
@@ -220,6 +222,51 @@ function CaptchaSettingsForm() {
         {status && <p role="status">{status}</p>}
         <button type="submit" className="primary" disabled={form.locked || (form.provider === 'turnstile' && !testToken)}>{__('Save', 'stillpress')}</button>
       </form>
+    </section>
+  );
+}
+
+function TwoFactorSetting() {
+  const [required, setRequired] = useState<boolean | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [needsOwn, setNeedsOwn] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<{ required: boolean }>('/security/two-factor').then((r) => !cancelled && setRequired(r.required),
+      () => !cancelled && setMessage(__('Could not load the two-factor setting.', 'stillpress')));
+    return () => { cancelled = true; };
+  }, []);
+
+  async function toggle(next: boolean) {
+    if (next && !confirm(__('Users without two-factor authentication will be signed out and must add it to sign in again. Continue?', 'stillpress'))) return;
+    setMessage(null);
+    setNeedsOwn(false);
+    try {
+      setRequired((await api<{ required: boolean }>('/security/two-factor', { method: 'PUT', body: { required: next } })).required);
+    } catch (e) {
+      const err = asApiError(e);
+      if (err.error === 'admin_needs_2fa') setNeedsOwn(true);
+      else setMessage(err.error === 'csrf' ? err.message! : __('Could not save the two-factor setting.', 'stillpress'));
+    }
+  }
+
+  return (
+    <section aria-labelledby="two-factor-heading">
+      <h2 id="two-factor-heading">{__('Two-factor authentication', 'stillpress')}</h2>
+      {required !== null && (
+        <label className="option">
+          <input type="checkbox" checked={required} onChange={(e) => toggle(e.target.checked)} />
+          {' '}{__('Require two-factor authentication for every user', 'stillpress')}
+        </label>
+      )}
+      {needsOwn && (
+        <p role="alert" className="error">
+          {__('Add two-factor authentication to your own account first.', 'stillpress')}{' '}
+          <Link to="/two-factor">{__('Two-factor authentication', 'stillpress')}</Link>
+        </p>
+      )}
+      {message && <p role="alert" className="error">{message}</p>}
     </section>
   );
 }

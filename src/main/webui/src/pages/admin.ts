@@ -8,3 +8,4 @@ export { default as Redirects } from './Redirects.tsx';
 export { default as Blocks } from './Blocks.tsx';
 export { default as Profile } from './Profile.tsx';
 export { default as Security } from './Security.tsx';
+export { default as TwoFactor } from './TwoFactor.tsx';

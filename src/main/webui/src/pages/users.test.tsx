@@ -1,4 +1,4 @@
-import { beforeAll, expect, test } from 'vitest';
+import { beforeAll, expect, test, vi } from 'vitest';
 import type { UserView } from '../api.ts';
 import { fakeApi, usePages } from '../testapi.ts';
 
@@ -145,4 +145,15 @@ test('adding a user with mail on says the invite went out', async () => {
   await t.user.type(view.getByLabelText('Display name', { selector: '[name="displayName"]' }), 'Carol');
   await t.user.click(view.getByRole('button', { name: 'Add user' }));
   expect((await view.findByRole('status')).textContent).toBe('Invite queued for carol@example.com. If it does not arrive, check Security → Email.');
+});
+
+test('clearTwoFactor', async () => {
+  const calls = fakeApi({
+    ...SESSION, 'GET /users': { body: [ADA, { ...BOB, twoFactor: true }] }, 'DELETE /users/2/two-factor': { status: 204 },
+  });
+  vi.stubGlobal('confirm', () => true);
+  const view = page();
+  await t.user.click(await view.findByRole('button', { name: 'Clear 2FA' }));
+  await t.rtl.waitFor(() => expect(calls.filter((c) => c.path === '/users')).toHaveLength(2));
+  expect(calls.some((c) => c.method === 'DELETE' && c.path === '/users/2/two-factor')).toBe(true);
 });

@@ -74,6 +74,18 @@ export default function Users() {
     }
   }
 
+  async function clearTwoFactor(u: UserView) {
+    if (!confirm(sprintf(__('Clear two-factor authentication for %s? They are signed out and must set it up again.', 'stillpress'), u.login))) return;
+    setMessage(null);
+    try {
+      await api(`/users/${u.id}/two-factor`, { method: 'DELETE' });
+    } catch (e) {
+      const err = asApiError(e);
+      setMessage(err.error === 'csrf' ? err.message! : __('Could not clear two-factor authentication.', 'stillpress'));
+    }
+    void load();
+  }
+
   async function invite(u: UserView) {
     setMessage(null);
     try {
@@ -136,12 +148,12 @@ export default function Users() {
       )}
       {users && (
         <table className="users">
-          <thead><tr><th>{__('Login', 'stillpress')}</th><th>{__('Name', 'stillpress')}</th><th>{__('Email', 'stillpress')}</th><th>{__('Role', 'stillpress')}</th><th /></tr></thead>
+          <thead><tr><th>{__('Login', 'stillpress')}</th><th>{__('Name', 'stillpress')}</th><th>{__('Email', 'stillpress')}</th><th>{__('Role', 'stillpress')}</th><th>{__('2FA', 'stillpress')}</th><th /></tr></thead>
           <tbody>
             {users.map((u) => editing?.id === u.id ? (
               <tr key={u.id}>
                 <td>{u.login}</td>
-                <td colSpan={4}>
+                <td colSpan={5}>
                   <form onSubmit={saveProfile}>
                     <Field label={__('Display name', 'stillpress')} name="edit-displayName" required value={editing.displayName} error={editErrors.displayName}
                       hint={__('The author archive address stays the same.', 'stillpress')} onChange={(e) => setEditing({ ...editing, displayName: e.target.value })} />
@@ -162,9 +174,11 @@ export default function Users() {
                     {ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
                   </select>
                 </td>
+                <td>{u.twoFactor ? __('On', 'stillpress') : __('Off', 'stillpress')}</td>
                 <td>
                   <button type="button" onClick={() => { setEditErrors({}); setEditing({ id: u.id, displayName: u.displayName ?? '', email: u.email ?? '' }); }}>{__('Edit', 'stillpress')}</button>{' '}
                   <button type="button" onClick={() => showLink(u)}>{__('Copy set-password link', 'stillpress')}</button>
+                  {u.twoFactor && <>{' '}<button type="button" onClick={() => clearTwoFactor(u)}>{__('Clear 2FA', 'stillpress')}</button></>}
                   {mail && !u.hasPassword && u.email && <>{' '}<button type="button" onClick={() => invite(u)}>{__('Send invite', 'stillpress')}</button></>}
                 </td>
               </tr>

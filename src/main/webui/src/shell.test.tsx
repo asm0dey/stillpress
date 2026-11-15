@@ -27,7 +27,7 @@ test('an administrator gets every screen', async () => {
   const view = page();
   await view.findByRole('link', { name: 'Import' });
   expect(links(view)).toEqual(['Stillpress', 'Posts', 'Pages', 'Reusable blocks', 'Categories', 'Tags', 'Redirects', 'Users',
-    'Settings', 'Security', 'Import', 'Profile']);
+    'Settings', 'Security', 'Import', 'Two-factor', 'Profile']);
   expect(view.getByText('content')).toBeTruthy();
 });
 
@@ -42,14 +42,14 @@ test('an editor also gets pages and the taxonomies, not the administrator screen
   fakeApi(as('editor'));
   const view = page();
   await view.findByRole('link', { name: 'Posts' });
-  expect(links(view)).toEqual(['Stillpress', 'Posts', 'Pages', 'Reusable blocks', 'Categories', 'Tags', 'Profile']);
+  expect(links(view)).toEqual(['Stillpress', 'Posts', 'Pages', 'Reusable blocks', 'Categories', 'Tags', 'Two-factor', 'Profile']);
 });
 
 test('an author gets posts, reusable blocks and the profile', async () => {
   fakeApi(as('author'));
   const view = page();
   await view.findByRole('link', { name: 'Posts' });
-  expect(links(view)).toEqual(['Stillpress', 'Posts', 'Reusable blocks', 'Profile']);
+  expect(links(view)).toEqual(['Stillpress', 'Posts', 'Reusable blocks', 'Two-factor', 'Profile']);
 });
 
 test('logging out goes to the login page, even when the call fails', async () => {

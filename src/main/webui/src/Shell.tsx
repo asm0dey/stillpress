@@ -57,6 +57,7 @@ export default function Shell({ children }: { children: ReactNode }) {
           {may('/settings') && <Link to="/settings">{__('Settings', 'stillpress')}</Link>}
           {may('/security') && <Link to="/security">{__('Security', 'stillpress')}</Link>}
           {may('/import') && importAllowed && <Link to="/import">{__('Import', 'stillpress')}</Link>}
+          {role && <Link to="/two-factor">{__('Two-factor', 'stillpress')}</Link>}
           {role && <Link to="/profile">{__('Profile', 'stillpress')}</Link>}
         </nav>
         <select aria-label={__('Language', 'stillpress')} value={locale()} onChange={(e) => switchLanguage(e.target.value as Locale)}>
