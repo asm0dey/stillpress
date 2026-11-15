@@ -145,6 +145,8 @@ class MandatoryTwoFactorTest {
             .extract()
             .cookie("sp_session");
         as(session).get("/admin/api/session").then().statusCode(200).body("enrollRequired", equalTo(true));
+        // the admin UI's Gate reads it on every navigation before it can send the user to /two-factor
+        as(session).get("/admin/api/setup").then().statusCode(200);
         as(session).get("/admin/api/items?type=post").then().statusCode(403).body("error", equalTo("enroll_2fa"));
         as(session).get("/admin/preview/1").then().statusCode(403).body("error", equalTo("enroll_2fa"));
         // sent raw: the server, not the client, must resolve the dot segments before the fence looks at the path

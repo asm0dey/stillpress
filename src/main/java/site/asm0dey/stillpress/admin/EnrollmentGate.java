@@ -18,7 +18,8 @@ public class EnrollmentGate {
             "GET /admin/api/session",
             "PUT /admin/api/session/locale",
             "POST /admin/api/logout",
-            "GET /admin/api/login-options"
+            "GET /admin/api/login-options",
+            "GET /admin/api/setup"
     );
     @Inject
     SecurityIdentity identity;
