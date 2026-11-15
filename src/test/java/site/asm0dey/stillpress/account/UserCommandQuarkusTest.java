@@ -72,7 +72,7 @@ class UserCommandQuarkusTest {
                     "Removed 1 two-factor methods for admin. They can sign in with their password."
                     + " They will be asked to add a new one."
             );
-        assertThat(factors.hasFactor(adminId)).isFalse();
+        assertThat(factors.totp(adminId)).isEmpty();
         var session = csrf()
             .contentType(JSON)
             .body(Map.of("login", "admin", "password", TestStore.PASSWORD))

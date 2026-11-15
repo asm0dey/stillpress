@@ -1,6 +1,7 @@
 package site.asm0dey.stillpress.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import io.quarkus.test.junit.QuarkusTest;
@@ -145,13 +146,19 @@ class AuthorRepositoryTest {
     @Test
     void administratorsWithPassword() {
         var a = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
+        var seen = new LinkedHashMap<String, Boolean>();
         assertThat(users.countAdministrators()).isEqualTo(1);
-        assertThat(users.anyAdministratorWithPassword()).isFalse();
+        seen.put("no password", users.anyAdministratorWithPassword());
         users.setPassword(a.id(), TestStore.PASSWORD_HASH);
-        assertThat(users.anyAdministratorWithPassword()).isTrue();
+        seen.put("with password", users.anyAdministratorWithPassword());
         users.setRole(a.id(), Role.EDITOR);
         assertThat(users.countAdministrators()).isZero();
-        assertThat(users.anyAdministratorWithPassword()).isFalse();
+        seen.put("demoted", users.anyAdministratorWithPassword());
+        assertThat(seen).containsExactly(
+                entry("no password", false),
+                entry("with password", true),
+                entry("demoted", false)
+        );
     }
 
     @Test
