@@ -96,10 +96,17 @@ public class TwoFactorResource {
     @Path("/totp")
     @Transactional
     public Response remove() {
+        // an unconfirmed seed is a setup being cancelled, never a factor, so it is never the last one
+        var confirmed = factors
+            .totp(userId())
+            .filter(t -> t.getConfirmed())
+            .isPresent();
         if (factors.deleteTotp(userId()) == 0) {
             throw new ItemService.Refused(404, "not_found", null);
         }
-        keepOneFactor();
+        if (confirmed) {
+            keepOneFactor();
+        }
         return Response.noContent().build();
     }
 
@@ -144,10 +151,10 @@ public class TwoFactorResource {
     }
 
     /**
-     * Run after a delete: when it took the last factor while 2FA is mandatory, the refusal rolls it back. An
-     * unconfirmed authenticator was never a factor, so dropping it always works.
+     * Run after deleting a factor: when it was the last one while 2FA is mandatory, the refusal rolls it back.
      */
     private void keepOneFactor() {
+        // shortcut: two concurrent deletes of a user's last two factors can leave none; the enrollment fence catches them on the next request — add a row lock if that ever matters
         if (policy.required() && !factors.hasFactor(userId())) {
             throw new ItemService.Refused(409, "last_factor", null);
         }

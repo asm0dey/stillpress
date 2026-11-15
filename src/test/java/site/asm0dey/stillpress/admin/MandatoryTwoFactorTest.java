@@ -99,7 +99,18 @@ class MandatoryTwoFactorTest {
 
     @Test
     void onlyAnAdministratorSetsThePolicy() {
-        as(sessions.create(editor)).get(POLICY).then().statusCode(403);
+        var session = sessions.create(editor);
+        as(session).get(POLICY).then().statusCode(403);
+        as(session).contentType(JSON).body(Map.of("required", false)).put(POLICY).then().statusCode(403);
+    }
+
+    @Test
+    void cancellingAnUnconfirmedSetupIsNeverRefused() {
+        require();
+        var session = sessions.create(editor);
+        as(session).post("/admin/api/2fa/totp").then().statusCode(200);
+        as(session).delete("/admin/api/2fa/totp").then().statusCode(204);
+        assertThat(factors.totp(editor)).isEmpty();
     }
 
     @Test
@@ -136,7 +147,13 @@ class MandatoryTwoFactorTest {
         as(session).get("/admin/api/session").then().statusCode(200).body("enrollRequired", equalTo(true));
         as(session).get("/admin/api/items?type=post").then().statusCode(403).body("error", equalTo("enroll_2fa"));
         as(session).get("/admin/preview/1").then().statusCode(403).body("error", equalTo("enroll_2fa"));
-        as(session).get("/admin/api/2fa/../items?type=post").then().statusCode(403);
+        // sent raw: the server, not the client, must resolve the dot segments before the fence looks at the path
+        as(session)
+            .urlEncodingEnabled(false)
+            .get("/admin/api/2fa/%2E%2E/items?type=post")
+            .then()
+            .statusCode(403)
+            .body("error", equalTo("enroll_2fa"));
         as(session).contentType(JSON).body(Map.of("locale", "ru")).put("/admin/api/session/locale").then().statusCode(
                 204
         );
