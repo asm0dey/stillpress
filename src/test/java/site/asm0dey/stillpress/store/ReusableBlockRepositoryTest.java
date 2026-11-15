@@ -1,6 +1,7 @@
 package site.asm0dey.stillpress.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK;
 import io.quarkus.test.junit.QuarkusTest;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.content.ItemService;
+import site.asm0dey.stillpress.content.ReusableBlockService;
 
 @QuarkusTest
 class ReusableBlockRepositoryTest {
@@ -21,6 +24,8 @@ class ReusableBlockRepositoryTest {
     ReusableBlockRepository blocks;
     @Inject
     ItemRepository items;
+    @Inject
+    ReusableBlockService service;
     @Inject
     AuthorRepository users;
     @Inject
@@ -40,6 +45,21 @@ class ReusableBlockRepositoryTest {
         var created =
                 blocks.create("New", "<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->", userId, LocalDateTime.now());
         assertThat(created.sourceId()).isEqualTo(imported + 1);
+    }
+
+    @Test
+    void staleExpectedModifiedAtIsRefused() {
+        var actor = new ItemService.Actor(userId, Role.EDITOR);
+        var created = service.save(null, "T", "one", null, actor);
+        var first = service.update(created.sourceId(), "T", "two", created.modifiedAt(), actor).block();
+        // what the database stores comes back equal to what the save wrote, so the next save can quote it
+        assertThat(blocks.find(created.sourceId()).orElseThrow().modifiedAt()).isEqualTo(first.modifiedAt());
+        assertThatThrownBy(() -> service.update(created.sourceId(), "T", "three", created.modifiedAt(), actor))
+            .isInstanceOfSatisfying(ItemService.Refused.class, e -> {
+                assertThat(e.status).isEqualTo(409);
+                assertThat(e.error).isEqualTo("conflict");
+            });
+        assertThat(blocks.find(created.sourceId()).orElseThrow().content()).isEqualTo("two");
     }
 
     @Test

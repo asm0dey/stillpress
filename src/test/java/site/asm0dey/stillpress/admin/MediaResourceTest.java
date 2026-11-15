@@ -1,267 +1,166 @@
 package site.asm0dey.stillpress.admin;
 
-import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static site.asm0dey.stillpress.Csrf.csrf;
-import static site.asm0dey.stillpress.db.Tables.MEDIA;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static site.asm0dey.stillpress.TestIdentities.user;
 import module java.base;
-import javax.imageio.ImageIO;
-import org.jooq.DSLContext;
-import org.junit.jupiter.api.BeforeEach;
+import io.quarkus.security.identity.SecurityIdentity;
+import jakarta.ws.rs.core.Response;
+import org.jboss.resteasy.reactive.multipart.FileUpload;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.config.DataDir;
-import site.asm0dey.stillpress.content.ItemService;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.importer.ImportGuard;
-import site.asm0dey.stillpress.store.AuthorRepository;
-import site.asm0dey.stillpress.store.SettingRepository;
-import site.asm0dey.stillpress.store.SessionRepository;
+import site.asm0dey.stillpress.content.ItemService;
+import site.asm0dey.stillpress.content.MediaService;
+import site.asm0dey.stillpress.db.tables.pojos.Media;
+import site.asm0dey.stillpress.store.MediaRepository;
+import site.asm0dey.stillpress.wpapi.OEmbedProxy;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class MediaResourceTest {
-    @Inject
-    TestStore store;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    SessionRepository sessions;
-    @Inject
-    DSLContext db;
-    @Inject
-    DataDir dataDir;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    ItemService items;
-    String contributor;
-    String author;
+    private static final long USER = 7;
+    @Mock
+    MediaRepository media;
+    @Mock
+    OEmbedProxy oembed;
+    @Mock
+    MediaService service;
 
-    @BeforeEach
-    void reset() {
-        store.reset();
-        contributor = sessions.create(users.create("c", "c@example.org", "C", Role.CONTRIBUTOR).id());
-        author = sessions.create(users.create("a", "a@example.org", "A", Role.AUTHOR).id());
+    private MediaResource as(Role role) {
+        return as(user(USER, "u", role));
     }
 
-    @Test
-    void uploadIsStoredListedAndPublished() throws IOException {
-        var folder = LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy/MM"));
-        int id = upload(author, "My Photo.PNG", png(3, 2))
-            .then()
-            .statusCode(201)
-            .body("url", equalTo("/media/" + folder + "/my-photo.png"))
-            .body("mimeType", equalTo("image/png"))
-            .body("width", equalTo(3))
-            .body("height", equalTo(2))
-            .extract()
-            .path("id");
-        var published = dataDir.current().resolve("media/" + folder + "/my-photo.png");
-        TestStore.await(() -> Files.exists(published), 30);
-        assertThat(published).exists();
-        given()
-            .cookie("sp_session", contributor)
-            .get("/admin/api/media")
-            .then()
-            .statusCode(200)
-            .body("total", equalTo(1))
-            .body("items[0].id", equalTo(id));
-        given().cookie("sp_session", contributor).get("/admin/api/media?type=audio").then().body("total", equalTo(0));
-        given().cookie("sp_session", contributor).get("/admin/api/media?search=photo").then().body("total", equalTo(1));
-        csrf()
-            .cookie("sp_session", author)
-            .contentType("application/json")
-            .body(Map.of("title", "T", "alt", "an a"))
-            .put("/admin/api/media/" + id)
-            .then()
-            .statusCode(200)
-            .body("title", equalTo("T"))
-            .body("alt", equalTo("an a"));
-        csrf()
-            .cookie("sp_session", author)
-            .contentType("application/json")
-            .body(Map.of("title", "T"))
-            .put("/admin/api/media/" + (id + 1))
-            .then()
-            .statusCode(404);
+    private MediaResource as(SecurityIdentity identity) {
+        return new MediaResource(media, oembed, service, identity);
     }
 
-    @Test
-    void svgAndHtmlRefused() throws IOException {
-        for (var name : List.of("x.svg", "x.html", "noextension")) {
-            upload(author, name, new byte[] {1}).then().statusCode(400).body("error", equalTo("type_not_allowed"));
-        }
-        try (var files = Files.walk(dataDir.media())) {
-            assertThat(files.filter(Files::isRegularFile)).isEmpty();
-        }
-    }
-
-    @Test
-    void traversalNameIsFlattened() throws IOException {
-        var folder = LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyy/MM"));
-        upload(author, "../../evil.png", png(1, 1))
-            .then()
-            .statusCode(201)
-            .body("url", equalTo("/media/" + folder + "/evil.png"));
-        assertThat(dataDir.media().resolve(folder).resolve("evil.png")).exists();
-    }
-
-    @Test
-    void clashGetsSuffix() throws IOException {
-        upload(author, "a.png", png(1, 1)).then().statusCode(201).body("url", org.hamcrest.Matchers.endsWith("/a.png"));
-        upload(author, "a.png", png(1, 1)).then().statusCode(201).body(
-                "url",
-                org.hamcrest.Matchers.endsWith("/a-2.png")
+    private static Media row(long id) {
+        return new Media(
+                id,
+                null,
+                null,
+                "/media/2024/01/a.jpg",
+                "image/jpeg",
+                null,
+                "an a",
+                "A",
+                640,
+                480,
+                3L,
+                null,
+                USER
         );
     }
 
+    private static final MediaResource.MediaView VIEW =
+            new MediaResource.MediaView(5, "/media/2024/01/a.jpg", "image/jpeg", 640, 480, "A", "an a");
+
     @Test
-    void parallelUploadsOfOneNameKeepTheirOwnBytes() throws Exception {
-        int n = 6;
-        var pool = Executors.newFixedThreadPool(n);
-        try {
-            var futures = new ArrayList<Future<String>>();
-            for (int i = 0; i < n; i++) {
-                var bytes = ("content-" + i).getBytes(StandardCharsets.UTF_8);
-                futures.add(pool.submit(() -> {
-                    var url = upload(author, "image.png", bytes).then().statusCode(201).extract().<String>path("url");
-                    return url + "|" + new String(bytes, StandardCharsets.UTF_8);
-                }));
-            }
-            var urls = new HashSet<String>();
-            for (var f : futures) {
-                var parts = f.get(60, TimeUnit.SECONDS).split("\\|");
-                assertThat(urls.add(parts[0])).as(parts[0]).isEqualTo(true);
-                assertThat(Files.readString(dataDir.root().resolve(parts[0].substring(1)))).isEqualTo(parts[1]);
-            }
-            assertThat(urls).hasSize(n);
-        } finally {
-            pool.shutdown();
+    void mediaByIdIsTheViewOfTheRow() {
+        when(media.findById(5)).thenReturn(Optional.of(row(5)));
+        assertThat(as(Role.CONTRIBUTOR).get(5)).isEqualTo(VIEW);
+    }
+
+    @Test
+    void unknownMediaIs404WithTheErrorBody() {
+        when(media.findById(6)).thenReturn(Optional.empty());
+        var resource = as(Role.CONTRIBUTOR);
+        var thrown = catchRefused(() -> resource.get(6));
+        try (var r = resource.refused(thrown)) {
+            assertThat(r.getStatus()).isEqualTo(404);
+            assertThat(r.getEntity()).isEqualTo(Map.of("error", "not_found"));
+        }
+    }
+
+    private static ItemService.Refused catchRefused(Runnable call) {
+        return (ItemService.Refused) assertThatThrownBy(call::run).isInstanceOf(ItemService.Refused.class).actual();
+    }
+
+    @Test
+    void listClampsThePageSizeAndMapsEachRow() {
+        when(media.list("image", "a", 2, 1)).thenReturn(new MediaRepository.Page(List.of(row(5)), 9));
+        when(media.list(null, null, 1, 100)).thenReturn(new MediaRepository.Page(List.of(), 0));
+        assertThat(as(Role.AUTHOR).list("image", "a", 2, 0)).isEqualTo(new MediaResource.Library(List.of(VIEW), 9));
+        assertThat(as(Role.AUTHOR).list(null, null, 1, 5000).total()).isZero();
+    }
+
+    @Test
+    void contributorCannotUploadOrEditMeta() {
+        var resource = as(Role.CONTRIBUTOR);
+        var file = mock(FileUpload.class);
+        var upload = catchRefused(() -> resource.upload(file));
+        var update = catchRefused(() -> resource.update(5, new MediaResource.Meta("T", "a")));
+        assertThat(upload.status).isEqualTo(403);
+        assertThat(update.status).isEqualTo(403);
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void uploadWithoutAFileIs400() {
+        try (var r = as(Role.AUTHOR).upload(null)) {
+            assertThat(r.getStatus()).isEqualTo(400);
+            assertThat(r.getEntity()).isEqualTo(Map.of("error", "file is required"));
+        }
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void uploadStoresTheFileForTheActor() {
+        var file = mock(FileUpload.class);
+        var path = Path.of("/tmp/upload");
+        when(file.fileName()).thenReturn("My Photo.PNG");
+        when(file.uploadedFile()).thenReturn(path);
+        when(service.store("My Photo.PNG", path, USER)).thenReturn(row(5));
+        try (var r = as(Role.AUTHOR).upload(file)) {
+            assertThat(r.getStatus()).isEqualTo(201);
+            assertThat(r.getEntity()).isEqualTo(VIEW);
         }
     }
 
     @Test
-    void firstConcurrentWritesOnAFreshSiteAllSucceed() throws Exception {
-        assertThat(settings.get(ImportGuard.STATE)).isEmpty();
-        long userId = users.create("w", "w@example.org", "W", Role.AUTHOR).id();
-        int n = 6;
-        var pool = Executors.newFixedThreadPool(n);
-        try {
-            var futures = new ArrayList<Future<Integer>>();
-            for (int i = 0; i < n; i++) {
-                int k = i;
-                futures.add(pool.submit(() -> {
-                    if (k % 2 == 0) {
-                        return upload(author, "p" + k + ".png", new byte[] {1}).statusCode();
-                    }
-                    items.create("post", userId);
-                    return 201;
-                }));
-            }
-            for (var f : futures) {
-                assertThat(f.get(60, TimeUnit.SECONDS)).isEqualTo(201);
-            }
-        } finally {
-            pool.shutdown();
+    void metaUpdateWithoutBodyIs400() {
+        var resource = as(Role.AUTHOR);
+        var thrown = catchRefused(() -> resource.update(5, null));
+        assertThat(thrown.status).isEqualTo(400);
+        assertThat(thrown.error).isEqualTo("invalid");
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void metaUpdateReturnsTheSavedRow() {
+        when(service.updateMeta(5, "T", "an a")).thenReturn(row(5));
+        assertThat(as(Role.AUTHOR).update(5, new MediaResource.Meta("T", "an a"))).isEqualTo(VIEW);
+    }
+
+    @Test
+    void metaUpdateOfAnUnknownIdPropagatesTheServicesRefusal() {
+        when(service.updateMeta(anyLong(), anyString(), anyString()))
+            .thenThrow(new ItemService.Refused(404, "not_found", null));
+        var resource = as(Role.AUTHOR);
+        assertThat(catchRefused(() -> resource.update(6, new MediaResource.Meta("T", "a"))).status).isEqualTo(404);
+    }
+
+    @Test
+    void aRefusedUploadTypeIs400WithItsCodeAsTheError() {
+        try (var r = as(Role.AUTHOR).notAllowed(new IllegalArgumentException("type_not_allowed"))) {
+            assertThat(r.getStatus()).isEqualTo(400);
+            assertThat(r.getEntity()).isEqualTo(Map.of("error", "type_not_allowed"));
         }
-        assertThat(settings.get(ImportGuard.STATE)).contains("closed");
     }
 
     @Test
-    void metaUpdateWithoutBodyIs400() throws IOException {
-        int id = upload(author, "a.png", png(1, 1)).then().statusCode(201).extract().path("id");
-        csrf()
-            .cookie("sp_session", author)
-            .contentType("application/json")
-            .put("/admin/api/media/" + id)
-            .then()
-            .statusCode(400)
-            .body("error", equalTo("invalid"));
-    }
-
-    @Test
-    void contributorIs403() throws IOException {
-        upload(contributor, "a.png", png(1, 1)).then().statusCode(403);
-        assertThat(db.fetchCount(MEDIA)).isZero();
-    }
-
-    @Test
-    void uploadAboveJsonLimitIsAccepted() {
-        upload(author, "big.mp3", new byte[2 * 1024 * 1024]).then().statusCode(201).body(
-                "mimeType",
-                equalTo("audio/mpeg")
-        );
-    }
-
-    @Test
-    void uploadClosesImport() throws IOException {
-        upload(author, "a.png", png(1, 1)).then().statusCode(201);
-        assertThat(db.fetchValue(
-                site.asm0dey.stillpress.db.Tables.SETTING.VALUE,
-                site.asm0dey.stillpress.db.Tables.SETTING.KEY.eq("import_state")
-        ))
-            .isEqualTo("closed");
-    }
-
-    private io.restassured.response.Response upload(String session, String name, byte[] bytes) {
-        return csrf()
-            .cookie("sp_session", session)
-            .multiPart("file", name, bytes, "application/octet-stream")
-            .post("/admin/api/media");
-    }
-
-    private static byte[] png(int w, int h) throws IOException {
-        var out = new ByteArrayOutputStream();
-        ImageIO.write(new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", out);
-        return out.toByteArray();
-    }
-
-    @Test
-    void refusedOembedIs404ForAnyRole() {
-        given()
-            .cookie("sp_session", contributor)
-            .queryParam("url", "http://169.254.169.254/")
-            .get("/admin/api/oembed")
-            .then()
-            .statusCode(404)
-            .body("code", equalTo("oembed_invalid_url"));
-    }
-
-    @Test
-    void mediaById() {
-        long id = db
-            .insertInto(
-                    MEDIA,
-                    MEDIA.SOURCE_URL,
-                    MEDIA.PATH,
-                    MEDIA.MIME_TYPE,
-                    MEDIA.WIDTH,
-                    MEDIA.HEIGHT,
-                    MEDIA.TITLE,
-                    MEDIA.ALT_TEXT
-            )
-            .values("https://old.example/a.jpg", "/media/2024/01/a.jpg", "image/jpeg", 640, 480, "A", "an a")
-            .returning(MEDIA.ID)
-            .fetchSingle(MEDIA.ID);
-        given()
-            .cookie("sp_session", contributor)
-            .get("/admin/api/media/" + id)
-            .then()
-            .statusCode(200)
-            .body("url", equalTo("/media/2024/01/a.jpg"))
-            .body("mimeType", equalTo("image/jpeg"))
-            .body("width", equalTo(640))
-            .body("height", equalTo(480))
-            .body("title", equalTo("A"))
-            .body("alt", equalTo("an a"));
-        given()
-            .cookie("sp_session", contributor)
-            .get("/admin/api/media/" + (id + 1))
-            .then()
-            .statusCode(404)
-            .body("error", equalTo("not_found"));
+    void oembedIsTheProxysAnswerForAnyRole() {
+        var answer = Response.status(404).entity(Map.of("code", "oembed_invalid_url")).build();
+        when(oembed.fetch("http://169.254.169.254/")).thenReturn(answer);
+        assertThat(as(Role.CONTRIBUTOR).oembed("http://169.254.169.254/")).isSameAs(answer);
+        verify(oembed).fetch("http://169.254.169.254/");
     }
 }

@@ -1,320 +1,223 @@
 package site.asm0dey.stillpress.admin;
 
-import static io.restassured.RestAssured.given;
-import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
-import static site.asm0dey.stillpress.Csrf.csrf;
-import static site.asm0dey.stillpress.db.Tables.ITEM;
-import static site.asm0dey.stillpress.db.Tables.SCHEDULED_TASKS;
-import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.path.json.JsonPath;
-import io.restassured.specification.RequestSpecification;
-import jakarta.inject.Inject;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static site.asm0dey.stillpress.TestIdentities.user;
 import module java.base;
-import org.jooq.DSLContext;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.TestStore;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import site.asm0dey.stillpress.Fixtures;
 import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.publish.Jobs;
+import site.asm0dey.stillpress.content.ItemService;
+import site.asm0dey.stillpress.content.ReusableBlockService;
+import site.asm0dey.stillpress.content.Revisions;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
+import site.asm0dey.stillpress.db.tables.pojos.ReusableBlock;
 import site.asm0dey.stillpress.store.AuthorRepository;
-import site.asm0dey.stillpress.store.SessionRepository;
+import site.asm0dey.stillpress.store.ReusableBlockRepository;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class ReusableBlocksResourceTest {
-    @Inject
-    TestStore store;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    SessionRepository sessions;
-    @Inject
-    DSLContext db;
-    @Inject
-    site.asm0dey.stillpress.importer.WordPressImporter importer;
-    @Inject
-    site.asm0dey.stillpress.store.SettingRepository settings;
-    String author1;
-    String author2;
-    long author1Id;
+    private static final long ME = 2;
+    private static final String TYPE = ReusableBlockService.OBJECT_TYPE;
+    private static final LocalDateTime T0 = Fixtures.T0;
+    private static final ItemService.Actor ACTOR = new ItemService.Actor(ME, Role.AUTHOR);
+    @Mock
+    ReusableBlockService service;
+    @Mock
+    ReusableBlockRepository blocks;
+    @Mock
+    AuthorRepository authors;
+    @Mock
+    Revisions revisions;
+    ReusableBlocksResource resource;
 
     @BeforeEach
-    void reset() {
-        store.reset();
-        author1Id = users.create("author1", "a1@example.org", "Author One", Role.AUTHOR).id();
-        author1 = sessions.create(author1Id);
-        author2 = sessions.create(users.create("author2", "a2@example.org", "Author Two", Role.AUTHOR).id());
+    void setUp() {
+        resource = new ReusableBlocksResource(service, blocks, authors, revisions, user(ME, "author2", Role.AUTHOR));
     }
 
-    @AfterEach
-    void settle() {
-        TestStore.await(() -> db.fetchCount(SCHEDULED_TASKS, SCHEDULED_TASKS.TASK_NAME.eq(Jobs.PUBLISH_SITE)) == 0, 30);
+    private static ReusableBlock block(long ref, String content, Long authorId) {
+        return new ReusableBlock(ref + 100, ref, "T" + ref, content, T0, authorId);
     }
 
-    @Test
-    void importedBlockCanBeSavedWithItsModifiedAt() throws Exception {
-        importer.importWxr(site.asm0dey.stillpress.TestStore.sample());
-        var admin = sessions.create(users.create("root", "root@example.org", "Root", Role.ADMINISTRATOR).id());
-        var id = db
-            .select(site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK.SOURCE_ID)
-            .from(site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK)
-            .fetchOne(site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK.SOURCE_ID);
-        var modifiedAt = as(admin)
-            .get("/admin/api/blocks/" + id)
-            .then()
-            .statusCode(200)
-            .extract()
-            .path("modifiedAt");
-        assertThat(modifiedAt).isNotNull();
-        as(admin)
-            .body(Map.of(
-                    "title",
-                    "T",
-                    "content",
-                    "<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->",
-                    "expectedModifiedAt",
-                    modifiedAt
-            ))
-            .put("/admin/api/blocks/" + id)
-            .then()
-            .statusCode(200);
+    private void authorsAre() {
+        when(authors.all())
+            .thenReturn(List.of(
+                    new Author(1L, "author1", "Author One", null, null, null, "author", null, null, null),
+                    new Author(ME, "author2", null, null, null, null, "author", null, null, null)
+            ));
+    }
+
+    private static ItemService.Refused thrownBy(Runnable call) {
+        return (ItemService.Refused) assertThatThrownBy(call::run).isInstanceOf(ItemService.Refused.class).actual();
     }
 
     @Test
-    void listShowsOwnerUsageAndCapability() {
-        var b = create(author1, "one");
-        var item = ItemsResourceTest.create(author1, "post").getLong("id");
-        db
-            .update(ITEM)
-            .set(ITEM.BODY, "<!-- wp:block {\"ref\":" + b.getLong("id") + "} /-->")
-            .where(ITEM.ID.eq(item))
-            .execute();
-        as(author2)
-            .get("/admin/api/blocks")
-            .then()
-            .statusCode(200)
-            .body("[0].id", equalTo(b.getInt("id")))
-            .body("[0].author", equalTo("Author One"))
-            .body("[0].usedBy", equalTo(1))
-            .body("[0].canEdit", equalTo(false))
-            .body("[0].content", nullValue());
+    void listCarriesOwnerUsageAndCapabilityButNoContentByDefault() {
+        authorsAre();
+        when(blocks.all()).thenReturn(List.of(block(1, "one", 1L), block(2, "two", ME)));
+        when(blocks.itemsUsing(Set.of(1L, 2L)))
+            .thenReturn(List.of(
+                    new ReusableBlockRepository.Use(10, "publish", Set.of(1L)),
+                    new ReusableBlockRepository.Use(11, "draft", Set.of(1L, 2L)),
+                    new ReusableBlockRepository.Use(12, "trash", Set.of(1L))
+            ));
+        assertThat(resource.list(false))
+            .containsExactly(
+                    new ReusableBlocksResource.BlockLine(1, "T1", null, "Author One", T0, 2, false),
+                    new ReusableBlocksResource.BlockLine(2, "T2", null, "author2", T0, 1, true)
+            );
     }
 
     @Test
     void listWithContentCarriesEachBlocksContent() {
-        var a = create(author1, "one");
-        var b = create(author2, "two");
-        as(author2)
-            .get("/admin/api/blocks?content=true")
-            .then()
-            .statusCode(200)
-            .body("id", equalTo(List.of(a.getInt("id"), b.getInt("id"))))
-            .body("content", equalTo(List.of("one", "two")))
-            .body("canEdit", equalTo(List.of(false, true)));
+        authorsAre();
+        when(blocks.all()).thenReturn(List.of(block(1, "one", 1L), block(2, "two", ME)));
+        when(blocks.itemsUsing(Set.of(1L, 2L))).thenReturn(List.of());
+        assertThat(resource.list(true)).extracting(ReusableBlocksResource.BlockLine::content).containsExactly(
+                "one",
+                "two"
+        );
     }
 
     @Test
-    void saveReportsThePublishedItemsItRepublishesThroughOtherBlocksToo() {
-        var inner = create(author1, "inner");
-        var outer = create(author1, "<!-- wp:block {\"ref\":" + inner.getLong("id") + "} /-->");
-        var draft = ItemsResourceTest.create(author1, "post");
-        ItemsResourceTest
-            .update(author1, draft, Map.of("body", "<!-- wp:block {\"ref\":" + inner.getLong("id") + "} /-->"))
-            .then()
-            .statusCode(200);
-        var published = ItemsResourceTest.create(author1, "post");
-        ItemsResourceTest
-            .update(
-                    author1,
-                    published,
-                    Map.of(
-                            "title",
-                            "Shows outer",
-                            "status",
-                            "publish",
-                            "body",
-                            "<!-- wp:block {\"ref\":" + outer.getLong("id") + "} /-->"
-                    )
-            )
-            .then()
-            .statusCode(200);
-        put(author1, inner, "changed").then().statusCode(200).body("republished", equalTo(1)).body("usedBy", equalTo(1));
+    void getShowsAnAutosaveOnlyWhenItIsNewerThanTheBlock() {
+        authorsAre();
+        when(blocks.find(1)).thenReturn(Optional.of(block(1, "one", ME)));
+        when(blocks.itemsUsing(Set.of(1L))).thenReturn(List.of());
+        when(revisions.autosaveOf(TYPE, 1, ME)).thenReturn(Optional.of(Fixtures.revision(
+                5,
+                TYPE,
+                1,
+                true,
+                T0.plusMinutes(1)
+        )));
+        assertThat(resource.get(1).autosave()).isEqualTo(new ItemsResource.AutosaveRef(T0.plusMinutes(1)));
+        when(revisions.autosaveOf(TYPE, 1, ME)).thenReturn(Optional.of(Fixtures.revision(5, TYPE, 1, true, T0)));
+        assertThat(resource.get(1).autosave()).isNull();
     }
 
     @Test
-    void staleExpectedModifiedAtIs409() {
-        var b = create(author1, "one");
-        put(author1, b, "two").then().statusCode(200);
-        put(author1, b, "three").then().statusCode(409).body("error", equalTo("conflict"));
-        as(author1).get("/admin/api/blocks/" + b.getLong("id")).then().body("content", equalTo("two"));
+    void unknownBlockIs404() {
+        when(blocks.find(9)).thenReturn(Optional.empty());
+        assertThat(thrownBy(() -> resource.get(9)).status).isEqualTo(404);
+        assertThat(thrownBy(() -> resource.autosave(9)).status).isEqualTo(404);
+        assertThat(thrownBy(() -> resource.revisions(9)).status).isEqualTo(404);
     }
 
     @Test
-    void missingExpectedModifiedAtIs400AndWritesNothing() {
-        var b = create(author1, "one");
-        as(author1)
-            .body(Map.of("content", "four"))
-            .put("/admin/api/blocks/" + b.getLong("id"))
-            .then()
-            .statusCode(400)
-            .body("error", equalTo("invalid"))
-            .body("field", equalTo("expectedModifiedAt"));
-        as(author1)
-            .get("/admin/api/blocks/" + b.getLong("id"))
-            .then()
-            .body("content", equalTo("one"))
-            .body("modifiedAt", equalTo(b.getString("modifiedAt")));
-        as(author1).get("/admin/api/blocks/" + b.getLong("id") + "/revisions").then().body("size()", equalTo(1));
+    void createAnswers201AndNeedsABody() {
+        authorsAre();
+        var saved = block(3, "x", ME);
+        when(service.save(null, "T3", "x", null, ACTOR)).thenReturn(saved);
+        when(blocks.itemsUsing(Set.of(3L))).thenReturn(List.of());
+        try (var r = resource.create(new ReusableBlocksResource.BlockSave("T3", "x", null))) {
+            assertThat(r.getStatus()).isEqualTo(201);
+            assertThat(r.getEntity()).isInstanceOfSatisfying(ReusableBlocksResource.BlockView.class, v -> {
+                assertThat(v.id()).isEqualTo(3);
+                assertThat(v.canEdit()).isTrue();
+                assertThat(v.republished()).isNull();
+            });
+        }
+        assertThat(thrownBy(() -> resource.create(null)).status).isEqualTo(400);
     }
 
     @Test
-    void autosaveRoundTrip() {
-        var b = create(author1, "one");
-        var path = "/admin/api/blocks/" + b.getLong("id");
-        as(author1).body(Map.of("title", "T", "content", "draft")).put(path + "/autosave").then().statusCode(204);
-        as(author1)
-            .get(path)
-            .then()
-            .statusCode(200)
-            .body("content", equalTo("one"))
-            .body("autosave.createdAt", notNullValue());
-        as(author1).get(path + "/autosave").then().statusCode(200).body("content", equalTo("draft"));
-        as(author2).get(path + "/autosave").then().statusCode(404);
-        as(author2).body(Map.of("title", "T", "content", "x")).put(path + "/autosave").then().statusCode(403);
-        put(author1, b, "saved").then().statusCode(200).body("autosave", nullValue());
+    void updateWithoutExpectedModifiedAtIs400AndWritesNothing() {
+        var thrown = thrownBy(() -> resource.update(1, new ReusableBlocksResource.BlockSave("T", "four", null)));
+        assertThat(thrown.body()).isEqualTo(Map.of("error", "invalid", "field", "expectedModifiedAt"));
+        assertThat(thrownBy(() -> resource.update(1, null)).body()).isEqualTo(Map.of("error", "invalid"));
+        verifyNoInteractions(service);
     }
 
     @Test
-    void anonymousOEmbedIs401() {
-        given().get("/admin/api/oembed?url=https://youtu.be/x").then().statusCode(401);
+    void updateAnswersWithHowManyItemsItRepublished() {
+        authorsAre();
+        var b = block(1, "changed", ME);
+        when(service.update(1, "T", "changed", T0, ACTOR)).thenReturn(new ReusableBlockService.Saved(b, 1));
+        when(blocks.itemsUsing(Set.of(1L))).thenReturn(List.of(
+                new ReusableBlockRepository.Use(10, "publish", Set.of(1L))
+        ));
+        var v = resource.update(1, new ReusableBlocksResource.BlockSave("T", "changed", T0));
+        assertThat(v.republished()).isEqualTo(1);
+        assertThat(v.usedBy()).isEqualTo(1);
+        assertThat(v.content()).isEqualTo("changed");
     }
 
     @Test
-    void revisionRestoreSavesOldContent() {
-        var b = create(author1, "one");
-        var path = "/admin/api/blocks/" + b.getLong("id");
-        put(author1, b, "two").then().statusCode(200);
-        var revs = as(author1).get(path + "/revisions").then().statusCode(200).extract().jsonPath();
-        var first = revs.getList("id", Long.class).getLast();
-        as(author1).get(path + "/revisions/" + first).then().statusCode(200).body("content", equalTo("one"));
-        as(author1)
-            .post(path + "/revisions/" + first + "/restore")
-            .then()
-            .statusCode(200)
-            .body("content", equalTo("one"))
-            .body("republished", equalTo(0));
-        as(author2).post(path + "/revisions/" + first + "/restore").then().statusCode(403);
-        assertThat(as(author1).get(path + "/revisions").then().extract().jsonPath().getList("id")).hasSize(3);
+    void aStaleSaveIsTheServicesConflictAsA409Body() {
+        when(service.update(1, "T", "x", T0, ACTOR)).thenThrow(new ItemService.Refused(409, "conflict", null));
+        var thrown = thrownBy(() -> resource.update(1, new ReusableBlocksResource.BlockSave("T", "x", T0)));
+        try (var r = resource.refused(thrown)) {
+            assertThat(r.getStatus()).isEqualTo(409);
+            assertThat(r.getEntity()).isEqualTo(Map.of("error", "conflict"));
+        }
     }
 
     @Test
-    void authorEditingOthersBlockIs403AndChangesNothing() {
-        var b = create(author1, "one");
-        put(author2, b, "taken").then().statusCode(403).body("error", equalTo("forbidden"));
-        as(author1).get("/admin/api/blocks/" + b.getLong("id")).then().body("content", equalTo("one"));
+    void anUnsafeSaveIsA400WithItsViolations() {
+        var refused = new ItemService.Refused(400, "unsafe_html", "content", List.of("<script> element"));
+        try (var r = resource.refused(refused)) {
+            assertThat(r.getStatus()).isEqualTo(400);
+            assertThat(r.getEntity())
+                .isEqualTo(Map.of("error", "unsafe_html", "field", "content", "violations", List.of("<script> element"))
+                );
+        }
     }
 
     @Test
-    void authorScriptInOwnBlockIs400EditorIs200() {
-        as(author1)
-            .body(Map.of("title", "T", "content", "<script>x</script>"))
-            .post("/admin/api/blocks")
-            .then()
-            .statusCode(400)
-            .body("error", equalTo("unsafe_html"))
-            .body("violations", org.hamcrest.Matchers.contains("<script> element"));
-        var b = create(author1, "one");
-        put(author1, b, "<script>x</script>").then().statusCode(400).body("error", equalTo("unsafe_html"));
-        as(author1)
-            .body(Map.of("title", "T", "content", "<script>x</script>"))
-            .put("/admin/api/blocks/" + b.getLong("id") + "/autosave")
-            .then()
-            .statusCode(400);
-        as(author1).get("/admin/api/blocks/" + b.getLong("id")).then().body("content", equalTo("one"));
-        var editor = sessions.create(users.create("editor", "e@example.org", "Ed", Role.EDITOR).id());
-        put(editor, b, "<script>x</script>").then().statusCode(200).body("content", equalTo("<script>x</script>"));
+    void autosaveIsPassedToTheServiceAndNeedsABody() {
+        try (var r = resource.autosave(1, new ReusableBlocksResource.Draft("T", "draft"))) {
+            assertThat(r.getStatus()).isEqualTo(204);
+        }
+        verify(service).autosave(1, ACTOR, "T", "draft");
+        assertThat(thrownBy(() -> resource.autosave(1, null)).status).isEqualTo(400);
     }
 
     @Test
-    void blockAndPostThatOnlyTogetherRunScriptAreRefusedInEitherOrder() {
-        // a tag split across a reusable block and the post that shows it; each half alone is plain text
-        var half = "<img src=x alt='";
-        var rest = "' onerror=alert(1)>";
-        settings.delete("import_state");
-        // an author's half is unclosed markup, refused on its own (R27)
-        as(author1)
-            .body(Map.of("title", "T", "content", half))
-            .post("/admin/api/blocks")
-            .then()
-            .statusCode(400)
-            .body("violations", org.hamcrest.Matchers.contains("unclosed markup at the end"));
-        // an editor's half is not checked; the post that completes the tag is
-        var editor = sessions.create(users.create("editor", "e@example.org", "Ed", Role.EDITOR).id());
-        var b = create(editor, half);
-        var post = ItemsResourceTest.create(author1, "post");
-        var ref = "<!-- wp:block {\"ref\":" + b.getLong("id") + "} /-->";
-        settings.delete("import_state");
-        ItemsResourceTest
-            .update(author1, post, Map.of("body", ref + rest))
-            .then()
-            .statusCode(400)
-            .body("error", equalTo("unsafe_html"))
-            .body(
-                    "violations",
-                    org.hamcrest.Matchers.contains(
-                            "onerror attribute on <img> in a reusable block owned by an editor; an editor must change it"
-                    )
-            );
-        // the review's payload 5: the block reference inside an attribute
-        ItemsResourceTest
-            .update(author1, post, Map.of("body", "<img src=x alt='" + ref + "'>"))
-            .then()
-            .statusCode(400)
-            .body("violations", org.hamcrest.Matchers.contains("block comment inside HTML"));
-        assertThat(ItemsResourceTest.get(author1, post.getLong("id")).getString("body")).isEqualTo("");
-        assertThat(settings.get("import_state")).isNotPresent();
-        // the other order: the post shows a harmless block, then the block is edited
-        var c = create(author1, "x");
-        var other = ItemsResourceTest.create(author1, "post");
-        ItemsResourceTest
-            .update(
-                    author1,
-                    other,
-                    Map.of("title", "Split", "body", "<!-- wp:block {\"ref\":" + c.getLong("id") + "} /-->" + rest)
-            )
-            .then()
-            .statusCode(200);
-        settings.delete("import_state");
-        put(author1, c, half)
-            .then()
-            .statusCode(400)
-            .body("error", equalTo("unsafe_html"))
-            .body("violations", org.hamcrest.Matchers.contains("unclosed markup at the end"));
-        as(author1).get("/admin/api/blocks/" + c.getLong("id")).then().body("content", equalTo("x"));
-        assertThat(settings.get("import_state")).isNotPresent();
+    void autosaveReadIsTheUsersOwnOrA404() {
+        when(blocks.find(1)).thenReturn(Optional.of(block(1, "one", ME)));
+        when(revisions.autosaveOf(TYPE, 1, ME)).thenReturn(Optional.empty());
+        assertThat(thrownBy(() -> resource.autosave(1)).status).isEqualTo(404);
+        when(revisions.autosaveOf(TYPE, 1, ME)).thenReturn(Optional.of(Fixtures.revision(5, TYPE, 1, true, T0)));
+        assertThat(resource.autosave(1)).isEqualTo(new ReusableBlocksResource.AutosaveView("rt", "rb", T0));
     }
 
-    private JsonPath create(String cookie, String content) {
-        return as(cookie)
-            .body(Map.of("title", "T", "content", content))
-            .post("/admin/api/blocks")
-            .then()
-            .statusCode(201)
-            .extract()
-            .jsonPath();
+    @Test
+    void revisionsListTheNamedAuthors() {
+        authorsAre();
+        when(blocks.find(1)).thenReturn(Optional.of(block(1, "one", ME)));
+        when(revisions.list(TYPE, 1)).thenReturn(List.of(Fixtures.revision(5, TYPE, 1, false, T0, 1L)));
+        assertThat(resource.revisions(1)).containsExactly(new ItemsResource.RevisionLine(5, "Author One", T0));
     }
 
-    private static io.restassured.response.Response put(String cookie, JsonPath block, String content) {
-        var body = new HashMap<String, Object>(Map.of("title", "T", "content", content));
-        body.put("expectedModifiedAt", block.getString("modifiedAt"));
-        return as(cookie).body(body).put("/admin/api/blocks/" + block.getLong("id"));
+    @Test
+    void aRevisionIsOnlyOfThisBlockAndNeverAnAutosave() {
+        authorsAre();
+        when(revisions.find(5)).thenReturn(Optional.of(Fixtures.revision(5, TYPE, 1, false, T0)));
+        when(revisions.find(6)).thenReturn(Optional.of(Fixtures.revision(6, TYPE, 2, false, T0)));
+        when(revisions.find(7)).thenReturn(Optional.of(Fixtures.revision(7, "item", 1, false, T0)));
+        when(revisions.find(8)).thenReturn(Optional.of(Fixtures.revision(8, TYPE, 1, true, T0)));
+        assertThat(resource.revision(1, 5).title()).isEqualTo("rt");
+        for (var rid : new long[] {6, 7, 8, 99}) {
+            assertThat(thrownBy(() -> resource.revision(1, rid)).status).as("revision %d", rid).isEqualTo(404);
+        }
     }
 
-    private static RequestSpecification as(String cookie) {
-        return csrf().contentType(JSON).cookie("sp_session", cookie);
+    @Test
+    void restoringARevisionAnswersWithTheSavedBlock() {
+        authorsAre();
+        when(service.restoreRevision(1, 5, ACTOR)).thenReturn(new ReusableBlockService.Saved(block(1, "one", ME), 0));
+        when(blocks.itemsUsing(Set.of(1L))).thenReturn(List.of());
+        var v = resource.restoreRevision(1, 5);
+        assertThat(v.content()).isEqualTo("one");
+        assertThat(v.republished()).isZero();
     }
 }

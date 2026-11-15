@@ -61,21 +61,21 @@ class HtmlCompositionTest {
     @Test
     void formatOnlyUpdateIsChecked() {
         var b = block(editor, HALF);
-        var p = ItemsResourceTest.create(author, "post");
-        var saved = ItemsResourceTest
+        var p = ItemsResourceQuarkusTest.create(author, "post");
+        var saved = ItemsResourceQuarkusTest
             .update(author, p, Map.of("body", ref(b) + REST, "bodyFormat", "classic"))
             .then()
             .statusCode(200)
             .extract()
             .jsonPath();
         reopenImport();
-        ItemsResourceTest
+        ItemsResourceQuarkusTest
             .update(author, saved, Map.of("bodyFormat", "blocks", "status", "publish"))
             .then()
             .statusCode(400)
             .body("error", equalTo("unsafe_html"))
             .body("violations", contains(EDITORS));
-        var now = ItemsResourceTest.get(author, p.getLong("id"));
+        var now = ItemsResourceQuarkusTest.get(author, p.getLong("id"));
         assertThat(List.of(now.getString("bodyFormat"), now.getString("status"))).containsExactly("classic", "draft");
         assertImportOpen();
     }
@@ -83,8 +83,8 @@ class HtmlCompositionTest {
     @Test
     void restoreFromTrashIsChecked() {
         var b = block(author, "x");
-        var p = ItemsResourceTest.create(author, "post");
-        ItemsResourceTest.update(author, p, Map.of("body", ref(b) + REST)).then().statusCode(200);
+        var p = ItemsResourceQuarkusTest.create(author, "post");
+        ItemsResourceQuarkusTest.update(author, p, Map.of("body", ref(b) + REST)).then().statusCode(200);
         as(author).delete("/admin/api/items/" + p.getLong("id")).then().statusCode(204);
         // an editor's edit is not checked
         putBlock(editor, b, HALF).then().statusCode(200);
@@ -94,15 +94,15 @@ class HtmlCompositionTest {
             .then()
             .statusCode(400)
             .body("violations", contains("onerror attribute on <img>"));
-        assertThat(ItemsResourceTest.get(author, p.getLong("id")).getString("status")).isEqualTo("trash");
+        assertThat(ItemsResourceQuarkusTest.get(author, p.getLong("id")).getString("status")).isEqualTo("trash");
         assertImportOpen();
     }
 
     @Test
     void blockEditChecksTrashedItemsToo() {
         var b = block(author, "x");
-        var p = ItemsResourceTest.create(author, "post");
-        ItemsResourceTest.update(author, p, Map.of("title", "Old", "body", ref(b))).then().statusCode(200);
+        var p = ItemsResourceQuarkusTest.create(author, "post");
+        ItemsResourceQuarkusTest.update(author, p, Map.of("title", "Old", "body", ref(b))).then().statusCode(200);
         as(author).delete("/admin/api/items/" + p.getLong("id")).then().statusCode(204);
         // imported content is never checked
         db.update(ITEM).set(ITEM.BODY, ref(b) + "<p onclick=x>a</p>").where(ITEM.ID.eq(p.getLong("id"))).execute();
@@ -118,8 +118,8 @@ class HtmlCompositionTest {
     @Test
     void blockCreatedForAFutureRefIsChecked() {
         var next = block(author, "x") + 1;
-        var p = ItemsResourceTest.create(author, "post");
-        ItemsResourceTest
+        var p = ItemsResourceQuarkusTest.create(author, "post");
+        ItemsResourceQuarkusTest
             .update(author, p, Map.of("title", "Waiting", "body", "<!-- wp:block {\"ref\":" + next + "} /-->" + REST))
             .then()
             .statusCode(200);
@@ -141,15 +141,15 @@ class HtmlCompositionTest {
 
     @Test
     void unclosedExcerptIsRefused() {
-        var a = ItemsResourceTest.create(author, "post");
+        var a = ItemsResourceQuarkusTest.create(author, "post");
         reopenImport();
-        ItemsResourceTest
+        ItemsResourceQuarkusTest
             .update(author, a, Map.of("excerpt", HALF))
             .then()
             .statusCode(400)
             .body("field", equalTo("excerpt"))
             .body("violations", contains("unclosed markup at the end"));
-        assertThat(ItemsResourceTest.get(author, a.getLong("id")).getString("excerpt")).isEqualTo("");
+        assertThat(ItemsResourceQuarkusTest.get(author, a.getLong("id")).getString("excerpt")).isEqualTo("");
         assertImportOpen();
     }
 
@@ -196,7 +196,7 @@ class HtmlCompositionTest {
             .toList();
         assertThat(posts).isNotEmpty();
         for (var i : posts) {
-            var p = ItemsResourceTest.create(author, "post");
+            var p = ItemsResourceQuarkusTest.create(author, "post");
             db
                 .update(ITEM)
                 .set(ITEM.BODY, i.content())
@@ -205,8 +205,8 @@ class HtmlCompositionTest {
                 .set(ITEM.AUTHOR_ID, authorId)
                 .where(ITEM.ID.eq(p.getLong("id")))
                 .execute();
-            var stored = ItemsResourceTest.get(author, p.getLong("id"));
-            ItemsResourceTest.update(author, stored, Map.of("title", i.title())).then().statusCode(200);
+            var stored = ItemsResourceQuarkusTest.get(author, p.getLong("id"));
+            ItemsResourceQuarkusTest.update(author, stored, Map.of("title", i.title())).then().statusCode(200);
         }
     }
 }

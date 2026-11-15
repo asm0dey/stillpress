@@ -73,7 +73,7 @@ class ImportClosedTest {
         );
         map.put(
                 "items PUT",
-                new Write(c -> ItemsResourceTest.create(c, "post"), (c, x) -> ItemsResourceTest.update(
+                new Write(c -> ItemsResourceQuarkusTest.create(c, "post"), (c, x) -> ItemsResourceQuarkusTest.update(
                         c,
                         (io.restassured.path.json.JsonPath) x,
                         Map.of("title", "T")
@@ -81,23 +81,23 @@ class ImportClosedTest {
         );
         map.put(
                 "items DELETE",
-                new Write(c -> ItemsResourceTest.create(c, "post").getLong("id"), (c, x) -> as(c)
+                new Write(c -> ItemsResourceQuarkusTest.create(c, "post").getLong("id"), (c, x) -> as(c)
                     .delete("/admin/api/items/" + x))
         );
         map.put("items restore POST", new Write(c -> {
-            var id = ItemsResourceTest.create(c, "post").getLong("id");
+            var id = ItemsResourceQuarkusTest.create(c, "post").getLong("id");
             as(c).delete("/admin/api/items/" + id).then().statusCode(204);
             return id;
         }, (c, x) -> as(c).post("/admin/api/items/" + x + "/restore")));
         map.put(
                 "items autosave PUT",
-                new Write(c -> ItemsResourceTest.create(c, "post").getLong("id"), (c, x) -> as(c)
+                new Write(c -> ItemsResourceQuarkusTest.create(c, "post").getLong("id"), (c, x) -> as(c)
                     .body(Map.of("title", "T", "body", "<p>x</p>", "excerpt", ""))
                     .put("/admin/api/items/" + x + "/autosave"))
         );
         map.put("items revision restore POST", new Write(c -> {
-            var item = ItemsResourceTest.create(c, "post");
-            ItemsResourceTest.update(c, item, Map.of("title", "First")).then().statusCode(200);
+            var item = ItemsResourceQuarkusTest.create(c, "post");
+            ItemsResourceQuarkusTest.update(c, item, Map.of("title", "First")).then().statusCode(200);
             var rid = as(c)
                 .get("/admin/api/items/" + item.getLong("id") + "/revisions")
                 .then()
@@ -137,13 +137,13 @@ class ImportClosedTest {
         );
         map.put(
                 "terms PUT",
-                new Write(c -> TermsResourceTest.term(c, "category", "News", null), (c, x) -> as(c)
+                new Write(c -> TermsResourceQuarkusTest.term(c, "category", "News", null), (c, x) -> as(c)
                     .body(Map.of("name", "Updates", "slug", "updates"))
                     .put("/admin/api/terms/" + x))
         );
         map.put(
                 "terms DELETE",
-                new Write(c -> TermsResourceTest.term(c, "post_tag", "Kids", null), (c, x) -> as(c)
+                new Write(c -> TermsResourceQuarkusTest.term(c, "post_tag", "Kids", null), (c, x) -> as(c)
                     .delete("/admin/api/terms/" + x))
         );
         map.put(

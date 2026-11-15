@@ -93,7 +93,9 @@ class SettingsResourceTest {
         put(admin, body).then().statusCode(200);
         var b = publish("B");
         assertThat(b.getString("permalink")).isEqualTo("/b/");
-        assertThat(ItemsResourceTest.get(admin, a.getLong("id")).getString("permalink")).isEqualTo("/" + day + "/a/");
+        assertThat(ItemsResourceQuarkusTest.get(admin, a.getLong("id")).getString("permalink")).isEqualTo(
+                "/" + day + "/a/"
+        );
     }
 
     @Test
@@ -218,8 +220,8 @@ class SettingsResourceTest {
     }
 
     private io.restassured.path.json.JsonPath publish(String title) {
-        var item = ItemsResourceTest.create(admin, "post");
-        return ItemsResourceTest
+        var item = ItemsResourceQuarkusTest.create(admin, "post");
+        return ItemsResourceQuarkusTest
             .update(admin, item, Map.of("title", title, "status", "publish"))
             .then()
             .statusCode(200)

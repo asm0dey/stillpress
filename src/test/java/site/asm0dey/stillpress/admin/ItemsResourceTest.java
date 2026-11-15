@@ -1,522 +1,283 @@
 package site.asm0dey.stillpress.admin;
 
-import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.everyItem;
-import static org.hamcrest.Matchers.nullValue;
-import static site.asm0dey.stillpress.Csrf.csrf;
-import static site.asm0dey.stillpress.db.Tables.ITEM;
-import static site.asm0dey.stillpress.db.Tables.REVISION;
-import static site.asm0dey.stillpress.db.Tables.SCHEDULED_TASKS;
-import io.quarkus.narayana.jta.QuarkusTransaction;
-import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.path.json.JsonPath;
-import io.restassured.response.Response;
-import io.restassured.specification.RequestSpecification;
-import jakarta.inject.Inject;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static site.asm0dey.stillpress.TestIdentities.user;
 import module java.base;
-import org.jooq.DSLContext;
-import org.jooq.impl.DSL;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import io.quarkus.security.identity.SecurityIdentity;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.TestStore;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import site.asm0dey.stillpress.Fixtures;
 import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.config.DataDir;
-import site.asm0dey.stillpress.publish.Jobs;
+import site.asm0dey.stillpress.content.ItemService;
+import site.asm0dey.stillpress.content.Permalinker;
+import site.asm0dey.stillpress.content.Revisions;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
+import site.asm0dey.stillpress.db.tables.pojos.Term;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
-import site.asm0dey.stillpress.store.RedirectRepository;
-import site.asm0dey.stillpress.store.SessionRepository;
-import site.asm0dey.stillpress.store.SettingRepository;
+import site.asm0dey.stillpress.store.TermRepository;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class ItemsResourceTest {
-    private static final ZoneId MOSCOW = ZoneId.of("Europe/Moscow");
-    @Inject
-    TestStore store;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    SessionRepository sessions;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    RedirectRepository redirects;
-    @Inject
-    DataDir dataDir;
-    @Inject
-    DSLContext db;
-    @Inject
+    private static final LocalDateTime T0 = Fixtures.T0;
+    @Mock
+    ItemService service;
+    @Mock
+    Permalinker permalinks;
+    @Mock
     ItemRepository items;
-    String admin;
-    String editor;
-    String author1;
-    String author2;
-    String contributor;
-    long author2Id;
+    @Mock
+    TermRepository terms;
+    @Mock
+    AuthorRepository authors;
+    @Mock
+    Revisions revisions;
 
-    @BeforeEach
-    void reset() {
-        store.reset();
-        settings.put("timezone", "Europe/Moscow");
-        admin = cookie("admin", Role.ADMINISTRATOR);
-        editor = cookie("editor", Role.EDITOR);
-        author1 = cookie("author1", Role.AUTHOR);
-        author2 = cookie("author2", Role.AUTHOR);
-        author2Id = users.findByLogin("author2").orElseThrow().id();
-        contributor = cookie("contributor", Role.CONTRIBUTOR);
+    private ItemsResource as(long id, Role role) {
+        return as(user(id, "u" + id, role));
     }
 
-    @AfterEach
-    void settle() {
-        // the next test's reset must not race a background publish
-        TestStore.await(() -> db.fetchCount(SCHEDULED_TASKS, SCHEDULED_TASKS.TASK_NAME.eq(Jobs.PUBLISH_SITE)) == 0, 30);
+    private ItemsResource as(SecurityIdentity identity) {
+        return new ItemsResource(service, permalinks, items, terms, authors, revisions, identity);
     }
 
-    @Test
-    void createEditPublishWritesPageAtStructurePermalink() {
-        var item = create(author1, "post");
-        var saved = update(author1, item, Map.of("title", "Привет мир", "status", "publish"))
-            .then()
-            .statusCode(200)
-            .extract()
-            .jsonPath();
-        var day = LocalDate.now(MOSCOW).format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-        assertThat(saved.getString("permalink")).isEqualTo("/" + day + "/привет-мир/");
-        assertThat(saved.getString("status")).isEqualTo("publish");
-        var page = page(saved.getString("permalink"));
-        TestStore.await(() -> Files.exists(page), 30);
-        assertThat(page).exists();
+    private static ItemService.Refused thrownBy(Runnable call) {
+        return (ItemService.Refused) assertThatThrownBy(call::run).isInstanceOf(ItemService.Refused.class).actual();
+    }
+
+    private void namedAuthors() {
+        when(authors.all())
+            .thenReturn(List.of(
+                    new Author(1L, "author1", "Author One", null, null, null, "author", null, null, null),
+                    new Author(3L, "editor", null, null, null, null, "editor", null, null, null)
+            ));
+    }
+
+    private ItemRepository.Filter listed(ItemRepository.Filter filter) {
+        when(items.list(filter, 0, 20)).thenReturn(List.of());
+        when(items.count(filter)).thenReturn(0);
+        when(items.countsByStatus(filter)).thenReturn(Map.of());
+        return filter;
     }
 
     @Test
-    void staleExpectedModifiedAtIs409AndChangesNothing() {
-        var item = create(author1, "post");
-        update(author1, item, Map.of("title", "A")).then().statusCode(200);
-        // item still carries the modifiedAt from before the first save
-        update(author1, item, Map.of("title", "B")).then().statusCode(409).body("error", equalTo("conflict"));
-        assertThat(get(author1, item.getLong("id")).getString("title")).isEqualTo("A");
+    void anAuthorOrContributorListsOnlyTheirOwnEvenWithoutMine() {
+        var filter = listed(new ItemRepository.Filter("post", null, 1L, null));
+        as(1, Role.AUTHOR).list("post", "any", false, null, 1);
+        as(1, Role.CONTRIBUTOR).list("post", null, false, null, 1);
+        verify(items, times(2)).list(filter, 0, 20);
     }
 
     @Test
-    void contributorPublishIs403AndStatusUnchanged() {
-        var item = create(contributor, "post");
-        update(contributor, item, Map.of("title", "Mine", "status", "publish")).then().statusCode(403);
-        assertThat(get(contributor, item.getLong("id")).getString("status")).isEqualTo("draft");
-        update(contributor, item, Map.of("title", "Mine", "status", "pending"))
-            .then()
-            .statusCode(200)
-            .body("status", equalTo("pending"));
+    void anEditorListsEverythingUnlessMineIsAsked() {
+        var all = listed(new ItemRepository.Filter("page", "publish", null, "tips"));
+        var mine = listed(new ItemRepository.Filter("page", "publish", 3L, "tips"));
+        as(3, Role.EDITOR).list("page", "publish", false, "tips", 1);
+        as(3, Role.EDITOR).list("page", "publish", true, "tips", 1);
+        verify(items).list(all, 0, 20);
+        verify(items).list(mine, 0, 20);
     }
 
     @Test
-    void authorEditingOthersPostIs403() {
-        var item = create(author1, "post");
-        update(author2, item, Map.of("title", "Taken over")).then().statusCode(403);
-        assertThat(get(author1, item.getLong("id")).getString("title")).isEqualTo("");
+    void listIsPagedTwentyAtATimeAndCarriesTotalAndCounts() {
+        var filter = new ItemRepository.Filter("post", null, null, null);
+        var row = new ItemRepository.Row(1, "post", "Out", "publish", "a", T0, T0, "/out/");
+        when(items.list(filter, 40, 20)).thenReturn(List.of(row));
+        when(items.list(filter, 0, 20)).thenReturn(List.of());
+        when(items.count(filter)).thenReturn(41);
+        when(items.countsByStatus(filter)).thenReturn(Map.of("publish", 41));
+        assertThat(as(3, Role.EDITOR).list("post", "any", false, null, 3))
+            .isEqualTo(new ItemsResource.ItemList(List.of(row), 41, Map.of("publish", 41)));
+        assertThat(as(3, Role.EDITOR).list("post", "any", false, null, -5).items()).isEmpty();
     }
 
     @Test
-    void authorScriptIs400AndChangesNothingAndKeepsImportOpen() {
-        var item = create(author1, "post");
-        // a fresh site: the create above settled the origin, so reopen it
-        settings.delete("import_state");
-        update(author1, item, Map.of("title", "t", "body", "<p onclick=\"go()\">a</p>"))
-            .then()
-            .statusCode(400)
-            .body("error", equalTo("unsafe_html"))
-            .body("field", equalTo("body"))
-            .body("violations", org.hamcrest.Matchers.contains("onclick attribute on <p>"));
-        as(author1)
-            .body(Map.of("title", "<script>x</script>", "body", "", "excerpt", ""))
-            .put("/admin/api/items/" + item.getLong("id") + "/autosave")
-            .then()
-            .statusCode(400)
-            .body("violations", org.hamcrest.Matchers.contains("<script> element"));
-        assertThat(get(author1, item.getLong("id")).getString("body")).isEqualTo("");
-        assertThat(db.fetchCount(REVISION, REVISION.OBJECT_ID.eq(item.getLong("id")))).isEqualTo(0);
-        assertThat(settings.get("import_state")).isNotPresent();
+    void anUnknownTypeIs400() {
+        var thrown = thrownBy(() -> as(3, Role.EDITOR).list("attachment", null, false, null, 1));
+        assertThat(thrown.body()).isEqualTo(Map.of("error", "invalid", "field", "type"));
+        verifyNoInteractions(items);
     }
 
     @Test
-    void editorMaySaveScript() {
-        var item = create(author1, "post");
-        update(editor, item, Map.of("body", "<p onclick=\"go()\">a</p>"))
-            .then()
-            .statusCode(200)
-            .body("body", equalTo("<p onclick=\"go()\">a</p>"));
+    void anAuthorCannotCreateAPageButCanCreateAPost() {
+        var thrown = thrownBy(() -> as(1, Role.AUTHOR).create(new ItemsResource.NewItem("page")));
+        assertThat(thrown.status).isEqualTo(403);
+        verifyNoInteractions(service);
+        namedAuthors();
+        var draft = Fixtures.item(5, "post", "draft", 1L);
+        when(service.create("post", 1)).thenReturn(draft);
+        when(terms.forItem(5)).thenReturn(List.of());
+        when(revisions.autosaveOf("item", 5, 1)).thenReturn(Optional.empty());
+        try (var r = as(1, Role.AUTHOR).create(new ItemsResource.NewItem("post"))) {
+            assertThat(r.getStatus()).isEqualTo(201);
+            assertThat(r.getEntity()).isInstanceOfSatisfying(ItemsResource.ItemView.class, v -> {
+                assertThat(v.id()).isEqualTo(5);
+                assertThat(v.canEdit()).isTrue();
+            });
+        }
     }
 
     @Test
-    void authorCannotCreatePage() {
-        as(author1).body(Map.of("type", "page")).post("/admin/api/items").then().statusCode(403);
+    void createNeedsAKnownTypeInTheBody() {
+        assertThat(thrownBy(() -> as(1, Role.AUTHOR).create(new ItemsResource.NewItem("x"))).field).isEqualTo("type");
+        verifyNoInteractions(service);
     }
 
     @Test
-    void futureDateMakesItScheduled() {
-        var item = create(author1, "post");
-        var tomorrow = LocalDateTime.now(MOSCOW).plusDays(1).withSecond(7).withNano(0);
-        update(author1, item, Map.of("title", "Later", "status", "publish", "localDate", tomorrow.toString()))
-            .then()
-            .statusCode(200)
-            .body("status", equalTo("future"))
-            .body("permalink", nullValue())
-            .body("date", equalTo(tomorrow.toString()));
-        assertThat(db
-            .select(SCHEDULED_TASKS.TASK_INSTANCE)
-            .from(SCHEDULED_TASKS)
-            .where(SCHEDULED_TASKS.TASK_NAME.eq(Jobs.GO_LIVE))
-            .fetch(SCHEDULED_TASKS.TASK_INSTANCE)
-        )
-            .containsExactly(item.getLong("id") + "@" + tomorrow.atZone(MOSCOW).toEpochSecond());
+    void getBuildsTheViewFromTermsAuthorAndAutosave() {
+        namedAuthors();
+        var stored = Fixtures.item(5, "post", "publish", 1L);
+        when(items.find(5)).thenReturn(Optional.of(stored));
+        when(permalinks.localDate(stored)).thenReturn(T0.plusHours(3));
+        when(terms.forItem(5))
+            .thenReturn(List.of(
+                    new Term(10L, null, "category", "C", "c", null, null),
+                    new Term(11L, null, "post_tag", "T", "t", null, null),
+                    new Term(12L, null, "post_tag", "U", "u", null, null)
+            ));
+        when(revisions.autosaveOf("item", 5, 1))
+            .thenReturn(Optional.of(Fixtures.revision(9, "item", 5, true, T0.plusMinutes(1))));
+        var v = as(1, Role.AUTHOR).get(5);
+        assertThat(v.categories()).containsExactly(10L);
+        assertThat(v.tags()).containsExactly(11L, 12L);
+        assertThat(v.author()).isEqualTo("Author One");
+        assertThat(v.date()).isEqualTo(T0.plusHours(3));
+        assertThat(v.autosave()).isEqualTo(new ItemsResource.AutosaveRef(T0.plusMinutes(1)));
+        assertThat(v.canEdit()).isTrue();
     }
 
     @Test
-    void futureStatusWithPastDateIs400() {
-        var item = create(author1, "post");
-        var yesterday = LocalDateTime.now(MOSCOW).minusDays(1).withSecond(7).withNano(0);
-        update(author1, item, Map.of("title", "Past", "status", "future", "localDate", yesterday.toString()))
-            .then()
-            .statusCode(400)
-            .body("error", equalTo("invalid"))
-            .body("field", equalTo("date"));
-        assertThat(get(author1, item.getLong("id")).getString("status")).isEqualTo("draft");
+    void anAutosaveOlderThanTheLastSaveIsNotOffered() {
+        namedAuthors();
+        when(items.find(5)).thenReturn(Optional.of(Fixtures.item(5, "post", "draft", 1L)));
+        when(terms.forItem(5)).thenReturn(List.of());
+        when(revisions.autosaveOf("item", 5, 1)).thenReturn(Optional.of(Fixtures.revision(9, "item", 5, true, T0)));
+        assertThat(as(1, Role.AUTHOR).get(5).autosave()).isNull();
     }
 
     @Test
-    void clearingParentMovesPageToTopLevel() {
-        var parent = update(editor, create(editor, "page"), Map.of("title", "Guide", "status", "publish"))
-            .then()
-            .statusCode(200)
-            .extract()
-            .jsonPath();
-        var child = update(
-                editor,
-                create(editor, "page"),
-                Map.of("title", "Tips", "status", "publish", "parentId", parent.getLong("id"))
-        )
-            .then()
-            .statusCode(200)
-            .extract()
-            .jsonPath();
-        assertThat(child.getString("permalink")).isEqualTo("/guide/tips/");
-        var cleared = update(editor, child, Map.of("parentId", 0)).then().statusCode(200).extract().jsonPath();
-        assertThat(cleared.getString("parentId")).isNull();
-        assertThat(cleared.getString("permalink")).isEqualTo("/tips/");
-        assertThat(redirects.find("/guide/tips/").orElseThrow().to()).isEqualTo("/tips/");
+    void getOfAnUnknownItemIs404AndOfSomeoneElsesPostByAnAuthorIs403() {
+        when(items.find(9)).thenReturn(Optional.empty());
+        assertThat(thrownBy(() -> as(1, Role.AUTHOR).get(9)).status).isEqualTo(404);
+        when(items.find(5)).thenReturn(Optional.of(Fixtures.item(5, "post", "draft", 1L)));
+        assertThat(thrownBy(() -> as(2, Role.AUTHOR).get(5)).status).isEqualTo(403);
+        verifyNoInteractions(terms);
     }
 
     @Test
-    void slugChangeOnPublishedPostRedirectsOldPath() {
-        var item = create(author1, "post");
-        var published = update(author1, item, Map.of("title", "Old", "status", "publish"))
-            .then()
-            .statusCode(200)
-            .extract()
-            .jsonPath();
-        var oldPath = published.getString("permalink");
-        var renamed = update(author1, published, Map.of("slug", "new-slug"))
-            .then()
-            .statusCode(200)
-            .extract()
-            .jsonPath();
-        var newPath = renamed.getString("permalink");
-        assertThat(newPath).isEqualTo(oldPath.replace("/old/", "/new-slug/"));
-        assertThat(redirects.find(oldPath).orElseThrow().to()).isEqualTo(newPath);
-        // the shortlink follows the move instead of chaining through the old path
-        var sourceId =
-                db.select(ITEM.SOURCE_ID).from(ITEM).where(ITEM.ID.eq(item.getLong("id"))).fetchOne(ITEM.SOURCE_ID);
-        assertThat(redirects.find("?p=" + sourceId).orElseThrow().to()).isEqualTo(newPath);
+    void updateIsTheServicesResultAndNeedsABody() {
+        namedAuthors();
+        var u = new ItemService.Update("T", null, null, null, null, null, null, null, null, null, null, null, null, T0);
+        var saved = Fixtures.item(5, "post", "draft", 1L);
+        when(service.update(5, u, new ItemService.Actor(1, Role.AUTHOR))).thenReturn(saved);
+        when(terms.forItem(5)).thenReturn(List.of());
+        when(revisions.autosaveOf("item", 5, 1)).thenReturn(Optional.empty());
+        assertThat(as(1, Role.AUTHOR).update(5, u).title()).isEqualTo("Title 5");
+        assertThat(thrownBy(() -> as(1, Role.AUTHOR).update(5, null)).body()).isEqualTo(Map.of("error", "invalid"));
     }
 
     @Test
-    void duplicateTitlesGetUniqueSlugs() {
-        var first = update(author1, create(author1, "post"), Map.of("title", "Same", "status", "publish")).jsonPath();
-        var second = update(author1, create(author1, "post"), Map.of("title", "Same", "status", "publish")).jsonPath();
-        assertThat(List.of(first.getString("slug"), second.getString("slug"))).containsExactly("same", "same-2");
+    void trashAnswers204AndRestoreReturnsTheDraftView() {
+        namedAuthors();
+        try (var r = as(1, Role.AUTHOR).trash(5)) {
+            assertThat(r.getStatus()).isEqualTo(204);
+        }
+        verify(service).trash(5, new ItemService.Actor(1, Role.AUTHOR));
+        var draft = Fixtures.item(5, "post", "draft", 1L);
+        when(items.find(5)).thenReturn(Optional.of(draft));
+        when(terms.forItem(5)).thenReturn(List.of());
+        when(revisions.autosaveOf("item", 5, 1)).thenReturn(Optional.empty());
+        assertThat(as(1, Role.AUTHOR).restore(5).status()).isEqualTo("draft");
+        verify(service).restore(5, new ItemService.Actor(1, Role.AUTHOR));
     }
 
     @Test
-    void trashUnpublishesAndRestoreGivesDraft() {
-        var published =
-                update(author1, create(author1, "post"), Map.of("title", "Gone soon", "status", "publish")).jsonPath();
-        var page = page(published.getString("permalink"));
-        TestStore.await(() -> Files.exists(page), 30);
-        assertThat(page).exists();
-        var id = published.getLong("id");
-        as(author2).delete("/admin/api/items/" + id).then().statusCode(403);
-        as(author1).delete("/admin/api/items/" + id).then().statusCode(204);
-        assertThat(get(author1, id).getString("status")).isEqualTo("trash");
-        TestStore.await(() -> !Files.exists(page), 30);
-        assertThat(page).doesNotExist();
-        as(author1).post("/admin/api/items/" + id + "/restore").then().statusCode(200).body("status", equalTo("draft"));
+    void autosaveWriteGoesToTheServiceAndNeedsABody() {
+        try (var r = as(1, Role.AUTHOR).autosave(5, new ItemsResource.Draft("T", "b", "e"))) {
+            assertThat(r.getStatus()).isEqualTo(204);
+        }
+        verify(service).autosave(5, new ItemService.Actor(1, Role.AUTHOR), "T", "b", "e");
+        assertThat(thrownBy(() -> as(1, Role.AUTHOR).autosave(5, null)).status).isEqualTo(400);
     }
 
     @Test
-    // test input
-    @SuppressWarnings("java:S8786")
-    void newItemIdSkipsImportedIdsAndGetsShortlink() throws Exception {
-        store.importSample();
-        var max = db.select(DSL.max(ITEM.SOURCE_ID)).from(ITEM).fetchOne(DSL.max(ITEM.SOURCE_ID));
-        var published = update(admin, create(admin, "post"), Map.of("title", "Fresh", "status", "publish"))
-            .then()
-            .statusCode(200)
-            .extract()
-            .jsonPath();
-        var home = settings.get("home_url").orElseThrow().replaceAll("/+$", "");
-        assertThat(db.select(ITEM.GUID).from(ITEM).where(ITEM.ID.eq(published.getLong("id"))).fetchOne(ITEM.GUID))
-            .isEqualTo(home + "/?p=" + (max + 1));
-        assertThat(redirects.find("?p=" + (max + 1)).orElseThrow().to()).isEqualTo(published.getString("permalink"));
-        assertThat(redirects.find("?p=5994").orElseThrow().to()).isEqualTo("/2023/01/14/месяц-ноябрь-год-2022/");
+    void autosaveReadIsTheUsersOwnAndOtherAuthorsGet403Not404() {
+        when(items.find(5)).thenReturn(Optional.of(Fixtures.item(5, "post", "draft", 1L)));
+        when(revisions.autosaveOf("item", 5, 1)).thenReturn(Optional.empty());
+        assertThat(thrownBy(() -> as(1, Role.AUTHOR).autosave(5)).status).isEqualTo(404);
+        assertThat(thrownBy(() -> as(2, Role.AUTHOR).autosave(5)).status).isEqualTo(403);
+        when(revisions.autosaveOf("item", 5, 1)).thenReturn(Optional.of(Fixtures.revision(9, "item", 5, true, T0)));
+        assertThat(as(1, Role.AUTHOR).autosave(5)).isEqualTo(new ItemsResource.AutosaveView("rt", "rb", "re", T0));
     }
 
     @Test
-    void editorReassignsAuthorButAuthorCannot() {
-        var byEditor = create(author1, "post");
-        update(editor, byEditor, Map.of("title", "Handed over", "authorId", author2Id))
-            .then()
-            .statusCode(200)
-            .body("authorId", equalTo((int) author2Id))
-            .body("author", equalTo("author2"));
-        var own = create(author1, "post");
-        update(author1, own, Map.of("title", "Mine", "authorId", author2Id)).then().statusCode(403);
-        assertThat(get(author1, own.getLong("id")).getString("title")).isEqualTo("");
+    void revisionsAreListedWithAuthorNamesAndOnlyForViewers() {
+        namedAuthors();
+        when(items.find(5)).thenReturn(Optional.of(Fixtures.item(5, "post", "draft", 1L)));
+        when(revisions.list("item", 5)).thenReturn(List.of(Fixtures.revision(7, "item", 5, false, T0)));
+        assertThat(as(1, Role.AUTHOR).revisions(5)).containsExactly(new ItemsResource.RevisionLine(7, "Author One", T0));
+        assertThat(thrownBy(() -> as(2, Role.AUTHOR).revisions(5)).status).isEqualTo(403);
     }
 
     @Test
-    void listShowsOnlyOwnForAuthorsAndCountsByStatus() {
-        update(author1, create(author1, "post"), Map.of("title", "Out", "status", "publish")).then().statusCode(200);
-        update(author1, create(author1, "post"), Map.of("title", "Draft one")).then().statusCode(200);
-        update(author2, create(author2, "post"), Map.of("title", "Someone else")).then().statusCode(200);
-        var mine = as(author1)
-            .get("/admin/api/items?type=post&status=any")
-            .then()
-            .statusCode(200)
-            .extract()
-            .jsonPath();
-        assertThat(mine.getInt("total")).isEqualTo(2);
-        assertThat(mine.getList("items.title", String.class)).containsExactly("Draft one", "Out");
-        assertThat(mine.getMap("counts", String.class, Integer.class)).isEqualTo(Map.of("draft", 1, "publish", 1));
-        as(author1)
-            .get("/admin/api/items?type=post&status=publish")
-            .then()
-            .statusCode(200)
-            .body("items.title", everyItem(equalTo("Out")))
-            .body("total", equalTo(1));
-        var all = as(editor).get("/admin/api/items?type=post").then().statusCode(200).extract().jsonPath();
-        assertThat(all.getInt("total")).isEqualTo(3);
-        assertThat(all.getMap("counts", String.class, Integer.class)).isEqualTo(Map.of("draft", 2, "publish", 1));
-        assertThat(as(editor).get("/admin/api/items?type=post&mine=true").jsonPath().getInt("total")).isZero();
-        assertThat(as(editor).get("/admin/api/items?type=post&search=someone").jsonPath().getList("items.title"))
-            .containsExactly("Someone else");
+    void aRevisionIsOnlyAnItemsNonAutosaveOneOfAnItemTheUserMayView() {
+        namedAuthors();
+        when(items.find(5)).thenReturn(Optional.of(Fixtures.item(5, "post", "draft", 1L)));
+        when(revisions.find(7)).thenReturn(Optional.of(Fixtures.revision(7, "item", 5, false, T0)));
+        when(revisions.find(8)).thenReturn(Optional.of(Fixtures.revision(8, "item", 5, true, T0)));
+        when(revisions.find(9)).thenReturn(Optional.of(Fixtures.revision(9, "reusable_block", 5, false, T0)));
+        assertThat(as(1, Role.AUTHOR).revision(7))
+            .isEqualTo(new ItemsResource.RevisionView(7, "rt", "rb", "re", T0, "Author One"));
+        assertThat(thrownBy(() -> as(2, Role.AUTHOR).revision(7)).status).isEqualTo(403);
+        for (var rid : new long[] {8, 9, 99}) {
+            assertThat(thrownBy(() -> as(1, Role.AUTHOR).revision(rid)).status).as("revision %d", rid).isEqualTo(404);
+        }
     }
 
     @Test
-    void restoringRevisionOfPublishedItemRepublishes() throws Exception {
-        var first = update(author1, create(author1, "post"), Map.of("title", "First", "status", "publish")).jsonPath();
-        update(author1, first, Map.of("title", "Second")).then().statusCode(200);
-        var page = page(first.getString("permalink"));
-        TestStore.await(() -> contains(page, "Second"), 30);
-        var id = first.getLong("id");
-        var revisions =
-                as(author1)
-            .get("/admin/api/items/" + id + "/revisions")
-            .then()
-            .statusCode(200)
-            .extract()
-            .jsonPath();
-        assertThat(revisions.getList("id")).hasSize(2);
-        var oldest = revisions.getLong("[1].id");
-        as(author1).get("/admin/api/revisions/" + oldest).then().statusCode(200).body("title", equalTo("First"));
-        as(author2).get("/admin/api/revisions/" + oldest).then().statusCode(403);
-        as(author1)
-            .post("/admin/api/items/" + id + "/revisions/" + oldest + "/restore")
-            .then()
-            .statusCode(200)
-            .body("title", equalTo("First"))
-            .body("status", equalTo("publish"))
-            .body("permalink", equalTo(first.getString("permalink")));
-        TestStore.await(() -> contains(page, "First"), 30);
-        assertThat(Files.readString(page)).contains("First");
+    void restoringARevisionReturnsTheSavedItemView() {
+        namedAuthors();
+        var saved = Fixtures.item(5, "post", "publish", 1L);
+        when(service.restoreRevision(5, 7, new ItemService.Actor(1, Role.AUTHOR))).thenReturn(saved);
+        when(terms.forItem(5)).thenReturn(List.of());
+        when(revisions.autosaveOf("item", 5, 1)).thenReturn(Optional.empty());
+        var v = as(1, Role.AUTHOR).restoreRevision(5, 7);
+        assertThat(v.status()).isEqualTo("publish");
+        assertThat(v.permalink()).isEqualTo("/slug-5/");
     }
 
     @Test
-    void newTermIsCreatedOnceAndListed() {
-        as(contributor).body(Map.of("taxonomy", "post_tag", "name", "Java")).post("/admin/api/terms").then().statusCode(
-                403
+    void aRefusalIsItsStatusWithTheFullBody() {
+        var refused = new ItemService.Refused(400, "unsafe_html", "body", List.of("onclick attribute on <p>"));
+        try (var r = as(1, Role.AUTHOR).refused(refused)) {
+            assertThat(r.getStatus()).isEqualTo(400);
+            assertThat(r.getEntity())
+                .isEqualTo(Map.of(
+                        "error",
+                        "unsafe_html",
+                        "field",
+                        "body",
+                        "violations",
+                        List.of("onclick attribute on <p>")
+                ));
+        }
+        try (var r = as(1, Role.AUTHOR).refused(new ItemService.Refused(409, "conflict", null))) {
+            assertThat(r.getStatus()).isEqualTo(409);
+            assertThat(r.getEntity()).isEqualTo(Map.of("error", "conflict"));
+        }
+    }
+
+    @Test
+    void theActorIsTheSessionsUserIdAndRole() {
+        assertThat(ItemsResource.actor(user(8, "x", Role.CONTRIBUTOR))).isEqualTo(
+                new ItemService.Actor(8, Role.CONTRIBUTOR)
         );
-        var id = as(author1)
-            .body(Map.of("taxonomy", "post_tag", "name", "Java"))
-            .post("/admin/api/terms")
-            .then()
-            .statusCode(201)
-            .body("slug", equalTo("java"))
-            .extract()
-            .jsonPath()
-            .getLong("id");
-        as(author1)
-            .body(Map.of("taxonomy", "post_tag", "name", "JAVA"))
-            .post("/admin/api/terms")
-            .then()
-            .statusCode(201)
-            .body("slug", equalTo("java-2"));
-        var item = create(author1, "post");
-        update(author1, item, Map.of("title", "Tagged", "tags", List.of(id)))
-            .then()
-            .statusCode(200)
-            .body("tags", equalTo(List.of((int) id)));
-        assertThat(as(author1).get("/admin/api/terms?taxonomy=post_tag").jsonPath().getList("name"))
-            .containsExactlyInAnyOrder("Java", "JAVA");
-    }
-
-    @Test
-    void parallelAutosavesLeaveOneAutosave() throws Exception {
-        var id = create(author1, "post").getLong("id");
-        try (var pool = Executors.newFixedThreadPool(4)) {
-            var saves = IntStream
-                .range(0, 8)
-                .mapToObj(i -> pool.submit(() -> as(author1)
-                    .body(Map.of("title", "t" + i, "body", "b", "excerpt", ""))
-                    .put("/admin/api/items/" + id + "/autosave")
-                    .statusCode()))
-                .toList();
-            for (var f : saves) {
-                assertThat(f.get(30, TimeUnit.SECONDS)).isEqualTo(204);
-            }
-        }
-        as(author1).get("/admin/api/items/" + id).then().statusCode(200);
-        assertThat(db.fetchCount(REVISION, REVISION.OBJECT_ID.eq(id), REVISION.AUTOSAVE.isTrue())).isEqualTo(1);
-    }
-
-    @Test
-    void concurrentSavesOfOneItemGiveOne200AndOne409() throws Exception {
-        var item = create(author1, "post");
-        var id = item.getLong("id");
-        var held = new CountDownLatch(1);
-        var release = new CountDownLatch(1);
-        try (var pool = Executors.newFixedThreadPool(3)) {
-            // the row stays locked until both saves are waiting on it
-            var holder = pool.submit(() -> QuarkusTransaction.requiringNew().run(() -> {
-                items.lock(id).orElseThrow();
-                held.countDown();
-                try {
-                    release.await(30, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    throw new IllegalStateException(e);
-                }
-            }));
-            held.await(10, TimeUnit.SECONDS);
-            var saves = List
-                .of("one", "two")
-                .stream()
-                .map(t -> pool.submit(() -> update(author1, item, Map.of("title", t)).statusCode()))
-                .toList();
-            Thread.sleep(1000);
-            release.countDown();
-            holder.get(30, TimeUnit.SECONDS);
-            var codes = new ArrayList<Integer>();
-            for (var f : saves) {
-                codes.add(f.get(30, TimeUnit.SECONDS));
-            }
-            assertThat(codes).containsExactlyInAnyOrder(200, 409);
-        }
-    }
-
-    @Test
-    void categoryChangeMovesCategoryPermalink() {
-        settings.put("permalink_structure", "/%category%/%postname%/");
-        var travel = term(editor, "category", "Travel");
-        var food = term(editor, "category", "Food");
-        var published = update(
-                author1,
-                create(author1, "post"),
-                Map.of("title", "Trip", "status", "publish", "categories", List.of(travel))
-        )
-            .then()
-            .statusCode(200)
-            .body("permalink", equalTo("/travel/trip/"))
-            .extract()
-            .jsonPath();
-        update(author1, published, Map.of("categories", List.of(food)))
-            .then()
-            .statusCode(200)
-            .body("permalink", equalTo("/food/trip/"));
-        assertThat(redirects.find("/travel/trip/").orElseThrow().to()).isEqualTo("/food/trip/");
-    }
-
-    @Test
-    void authorChangeMovesAuthorPermalink() {
-        settings.put("permalink_structure", "/%author%/%postname%/");
-        var a1 = users.findByLogin("author1").orElseThrow().slug();
-        var a2 = users.findByLogin("author2").orElseThrow().slug();
-        var published = update(author1, create(author1, "post"), Map.of("title", "Byline", "status", "publish"))
-            .then()
-            .statusCode(200)
-            .body("permalink", equalTo("/" + a1 + "/byline/"))
-            .extract()
-            .jsonPath();
-        update(editor, published, Map.of("authorId", author2Id))
-            .then()
-            .statusCode(200)
-            .body("permalink", equalTo("/" + a2 + "/byline/"));
-        assertThat(redirects.find("/" + a1 + "/byline/").orElseThrow().to()).isEqualTo("/" + a2 + "/byline/");
-    }
-
-    private static long term(String cookie, String taxonomy, String name) {
-        return as(cookie)
-            .body(Map.of("taxonomy", taxonomy, "name", name))
-            .post("/admin/api/terms")
-            .then()
-            .statusCode(201)
-            .extract()
-            .jsonPath()
-            .getLong("id");
-    }
-
-    private Path page(String permalink) {
-        return dataDir.current().resolve(permalink.substring(1)).resolve("index.html");
-    }
-
-    private static boolean contains(Path page, String text) {
-        try {
-            return Files.exists(page) && Files.readString(page).contains(text);
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    private String cookie(String login, Role role) {
-        var id = users.create(login, login + "@example.org", login, role).id();
-        users.setPassword(id, TestStore.PASSWORD_HASH);
-        return sessions.create(id);
-    }
-
-    private static RequestSpecification as(String cookie) {
-        return csrf().contentType(JSON).cookie("sp_session", cookie);
-    }
-
-    static JsonPath create(String cookie, String type) {
-        return as(cookie)
-            .body(Map.of("type", type))
-            .post("/admin/api/items")
-            .then()
-            .statusCode(201)
-            .extract()
-            .jsonPath();
-    }
-
-    static JsonPath get(String cookie, long id) {
-        return as(cookie).get("/admin/api/items/" + id).then().statusCode(200).extract().jsonPath();
-    }
-
-    /**
-     * PUT with the item's own {@code modifiedAt} as {@code expectedModifiedAt}.
-     */
-    static Response update(String cookie, JsonPath item, Map<String, Object> fields) {
-        var body = new HashMap<String, Object>(fields);
-        body.put("expectedModifiedAt", item.getString("modifiedAt"));
-        return as(cookie).body(body).put("/admin/api/items/" + item.getLong("id"));
     }
 }

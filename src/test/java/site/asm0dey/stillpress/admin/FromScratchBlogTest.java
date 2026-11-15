@@ -55,8 +55,8 @@ class FromScratchBlogTest {
             .rangeClosed(1, 100)
             .mapToObj(i -> "слово" + i)
             .collect(Collectors.joining(" "));
-        var item = ItemsResourceTest.create(cookie, "post");
-        var saved = ItemsResourceTest
+        var item = ItemsResourceQuarkusTest.create(cookie, "post");
+        var saved = ItemsResourceQuarkusTest
             .update(
                     cookie,
                     item,
@@ -113,8 +113,10 @@ class FromScratchBlogTest {
     @Test
     void firstPostClosesImport() {
         var cookie = setup();
-        var item = ItemsResourceTest.create(cookie, "post");
-        ItemsResourceTest.update(cookie, item, Map.of("title", "First", "status", "publish")).then().statusCode(200);
+        var item = ItemsResourceQuarkusTest.create(cookie, "post");
+        ItemsResourceQuarkusTest.update(cookie, item, Map.of("title", "First", "status", "publish")).then().statusCode(
+                200
+        );
         upload(cookie).then().statusCode(409);
         csrf().cookie("sp_session", cookie).get("/admin/api/site").then().body("importAllowed", is(false));
     }
@@ -122,8 +124,10 @@ class FromScratchBlogTest {
     @Test
     void englishSiteGetsUncategorized() {
         var cookie = setup("en-GB");
-        var item = ItemsResourceTest.create(cookie, "post");
-        ItemsResourceTest.update(cookie, item, Map.of("title", "First", "status", "publish")).then().statusCode(200);
+        var item = ItemsResourceQuarkusTest.create(cookie, "post");
+        ItemsResourceQuarkusTest.update(cookie, item, Map.of("title", "First", "status", "publish")).then().statusCode(
+                200
+        );
         assertThat(terms.findBySlug("category", "uncategorized")).isPresent();
     }
 
@@ -140,8 +144,8 @@ class FromScratchBlogTest {
             .extract()
             .jsonPath()
             .getLong("id");
-        var item = ItemsResourceTest.create(cookie, "post");
-        ItemsResourceTest
+        var item = ItemsResourceQuarkusTest.create(cookie, "post");
+        ItemsResourceQuarkusTest
             .update(cookie, item, Map.of("title", "First", "status", "publish", "categories", List.of(cat)))
             .then()
             .statusCode(200);
@@ -153,11 +157,15 @@ class FromScratchBlogTest {
         var cookie = setup("en-GB");
         // validation refuses this structure; a store written by hand or an older version may still hold it
         settings.put("permalink_structure", "/fixed/");
-        var first = ItemsResourceTest.create(cookie, "post");
-        ItemsResourceTest.update(cookie, first, Map.of("title", "One", "status", "publish")).then().statusCode(200);
-        var second = ItemsResourceTest.create(cookie, "post");
-        ItemsResourceTest.update(cookie, second, Map.of("title", "Two", "status", "publish")).then().statusCode(500);
-        assertThat(ItemsResourceTest.get(cookie, second.getLong("id")).getString("status")).isEqualTo("draft");
+        var first = ItemsResourceQuarkusTest.create(cookie, "post");
+        ItemsResourceQuarkusTest.update(cookie, first, Map.of("title", "One", "status", "publish")).then().statusCode(
+                200
+        );
+        var second = ItemsResourceQuarkusTest.create(cookie, "post");
+        ItemsResourceQuarkusTest.update(cookie, second, Map.of("title", "Two", "status", "publish")).then().statusCode(
+                500
+        );
+        assertThat(ItemsResourceQuarkusTest.get(cookie, second.getLong("id")).getString("status")).isEqualTo("draft");
     }
 
     private String setup() {
