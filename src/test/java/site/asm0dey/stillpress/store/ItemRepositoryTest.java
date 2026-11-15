@@ -97,14 +97,24 @@ class ItemRepositoryTest {
         var page = draft("page", author1, "Three", "draft");
         items.setPath(post.id(), "same", "/2024/01/01/same/");
         items.setPath(page.id(), "page-slug", "/page-slug/");
-        assertThat(items.slugTaken("post", "same", null)).isTrue();
+        var answers = new LinkedHashMap<String, Boolean>();
+        answers.put("any item", items.slugTaken("post", "same", null));
         // an item never collides with itself
-        assertThat(items.slugTaken("post", "same", post.id())).isFalse();
-        assertThat(items.slugTaken("post", "same", other.id())).isTrue();
+        answers.put("the item itself", items.slugTaken("post", "same", post.id()));
+        answers.put("another post", items.slugTaken("post", "same", other.id()));
         // the slug is unique per type, whatever the date
-        assertThat(items.slugTaken("page", "same", null)).isFalse();
-        assertThat(items.slugTaken("post", "page-slug", null)).isFalse();
-        assertThat(items.slugTaken("post", "unused", null)).isFalse();
+        answers.put("other type", items.slugTaken("page", "same", null));
+        answers.put("a page's slug as post", items.slugTaken("post", "page-slug", null));
+        answers.put("unused", items.slugTaken("post", "unused", null));
+        assertThat(answers)
+            .containsExactly(
+                    Map.entry("any item", true),
+                    Map.entry("the item itself", false),
+                    Map.entry("another post", true),
+                    Map.entry("other type", false),
+                    Map.entry("a page's slug as post", false),
+                    Map.entry("unused", false)
+            );
     }
 
     @Test
@@ -112,10 +122,18 @@ class ItemRepositoryTest {
         var post = draft("post", author1, "One", "draft");
         var page = draft("page", author1, "Two", "draft");
         items.setPath(post.id(), "same", "/same/");
-        assertThat(items.permalinkTaken("/same/", null)).isTrue();
-        assertThat(items.permalinkTaken("/same/", post.id())).isFalse();
-        assertThat(items.permalinkTaken("/same/", page.id())).isTrue();
-        assertThat(items.permalinkTaken("/other/", null)).isFalse();
+        var answers = new LinkedHashMap<String, Boolean>();
+        answers.put("any item", items.permalinkTaken("/same/", null));
+        answers.put("the item itself", items.permalinkTaken("/same/", post.id()));
+        answers.put("a page", items.permalinkTaken("/same/", page.id()));
+        answers.put("unused", items.permalinkTaken("/other/", null));
+        assertThat(answers)
+            .containsExactly(
+                    Map.entry("any item", true),
+                    Map.entry("the item itself", false),
+                    Map.entry("a page", true),
+                    Map.entry("unused", false)
+            );
     }
 
     @Test

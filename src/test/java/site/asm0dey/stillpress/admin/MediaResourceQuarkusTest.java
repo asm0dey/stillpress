@@ -134,7 +134,8 @@ class MediaResourceQuarkusTest {
             var urls = new HashSet<String>();
             for (var f : futures) {
                 var parts = f.get(60, TimeUnit.SECONDS).split("\\|");
-                assertThat(urls.add(parts[0])).as(parts[0]).isEqualTo(true);
+                assertThat(urls).as("each upload gets its own name").doesNotContain(parts[0]);
+                urls.add(parts[0]);
                 assertThat(Files.readString(dataDir.root().resolve(parts[0].substring(1)))).isEqualTo(parts[1]);
             }
             assertThat(urls).hasSize(n);
