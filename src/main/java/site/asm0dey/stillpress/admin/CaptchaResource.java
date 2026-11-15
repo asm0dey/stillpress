@@ -22,9 +22,9 @@ public class CaptchaResource {
     public record Settings(String provider, String turnstileSiteKey, boolean secretSet, boolean locked) {}
 
     /**
-     * {@code turnstileSecret}: {@code null} keeps the stored one.
+     * {@code turnstileSecret}: {@code null} keeps the stored one. {@code turnstileToken}: solved with the new site key.
      */
-    public record Update(String provider, String turnstileSiteKey, String turnstileSecret) {}
+    public record Update(String provider, String turnstileSiteKey, String turnstileSecret, String turnstileToken) {}
 
     @ServerExceptionMapper
     public Response refused(ItemService.Refused e) {
@@ -46,7 +46,7 @@ public class CaptchaResource {
         if (u == null) {
             throw new ItemService.Refused(400, "invalid", "provider");
         }
-        captcha.save(u.provider(), u.turnstileSiteKey(), u.turnstileSecret());
+        captcha.save(u.provider(), u.turnstileSiteKey(), u.turnstileSecret(), u.turnstileToken());
         return get();
     }
 }

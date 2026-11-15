@@ -7,6 +7,7 @@ import static io.restassured.matcher.RestAssuredMatchers.detailedCookie;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
 import jakarta.inject.Inject;
@@ -38,6 +39,19 @@ class AuthResourceTest {
         Limiters.reset();
         adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
         users.setPassword(adminId, TestStore.PASSWORD_HASH);
+    }
+
+    @Test
+    void loginOptionsHasNoStaleSiteKey() {
+        settings.put("turnstile_site_key", "old-key");
+        settings.put("captcha_provider", "turnstile");
+        given().get("/admin/api/login-options").then().body("turnstileSiteKey", equalTo("old-key"));
+        settings.put("captcha_provider", "altcha");
+        given()
+            .get("/admin/api/login-options")
+            .then()
+            .body("captcha", equalTo("altcha"))
+            .body("turnstileSiteKey", nullValue());
     }
 
     @Test

@@ -22,8 +22,6 @@ import site.asm0dey.stillpress.store.SettingRepository;
 public class Captcha {
     public static final Set<String> PROVIDERS = Set.of("none", "turnstile", "altcha");
     static final String SECRET = "turnstile_secret";
-    // answered by Cloudflare as a bad response, not a bad secret: enough to tell whether the secret is real
-    private static final String KEY_CHECK = "stillpress-key-check";
     private static final Pattern SUCCESS = Pattern.compile("\"success\"\\s*:\\s*true");
     private static final Pattern BAD_SECRET =
             Pattern.compile("\"error-codes\"\\s*:\\s*\\[[^\\]]*\"invalid-input-secret\"");
@@ -156,10 +154,11 @@ public class Captcha {
     }
 
     /**
-     * Saves the provider, checking a Turnstile secret with Cloudflare first; {@code secret} {@code null} keeps the
+     * Saves the provider. A Turnstile pair is proved by siteverifying {@code testToken}, a token the browser solved
+     * with the new site key, using the secret; {@code secret} {@code null} keeps the
      * stored one.
      */
-    public void save(String provider, String siteKey, String secret) {
+    public void save(String provider, String siteKey, String secret, String testToken) {
         if (locked()) {
             throw new Refused(409, "captcha_locked", null);
         }
@@ -175,9 +174,12 @@ public class Captcha {
             if (newSecret.isEmpty()) {
                 throw new Refused(400, "invalid", "turnstileSecret");
             }
+            if (testToken == null || testToken.isBlank()) {
+                throw new Refused(400, "invalid", "turnstileToken");
+            }
             String answer;
             try {
-                answer = siteverify(newSecret, KEY_CHECK, null);
+                answer = siteverify(newSecret, testToken.strip(), null);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new Refused(502, "turnstile_unreachable", null);
@@ -186,6 +188,9 @@ public class Captcha {
             }
             if (BAD_SECRET.matcher(answer).find()) {
                 throw new Refused(400, "invalid_turnstile_secret", null);
+            }
+            if (!SUCCESS.matcher(answer).find()) {
+                throw new Refused(400, "turnstile_key_mismatch", null);
             }
         }
         QuarkusTransaction.requiringNew().run(() -> {

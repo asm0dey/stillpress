@@ -136,7 +136,9 @@ public class AuthResource {
     @GET
     @Path("login-options")
     public LoginOptions loginOptions() {
-        return new LoginOptions(mail.configured(), captcha.provider(), captcha.turnstileSiteKey().orElse(null));
+        var provider = captcha.provider();
+        var siteKey = provider.equals("turnstile") ? captcha.turnstileSiteKey().orElse(null) : null;
+        return new LoginOptions(mail.configured(), provider, siteKey);
     }
 
     /**
