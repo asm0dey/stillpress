@@ -58,6 +58,12 @@ class SecretsTest {
     }
 
     @Test
+    void totpCiphertextIsNameBound() {
+        assertThat(secrets.decrypt("totp:2", secrets.encrypt("totp:1", "x"))).isEmpty();
+        assertThat(secrets.decrypt("totp:1", secrets.encrypt("totp:1", "x"))).contains("x");
+    }
+
+    @Test
     void deriveIsStableAndPurposeBound() {
         var x = secrets.derive("x", 32);
         assertThat(x).hasSize(32).isEqualTo(secrets.derive("x", 32)).isNotEqualTo(secrets.derive("y", 32));

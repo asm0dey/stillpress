@@ -27,6 +27,8 @@ import site.asm0dey.stillpress.store.RevisionRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TokenRepository;
+import site.asm0dey.stillpress.store.TwoFactorRepository;
+import io.quarkus.security.webauthn.WebAuthnCredentialRecord.RequiredPersistedData;
 
 @QuarkusTest
 class SiteResetTest {
@@ -50,6 +52,8 @@ class SiteResetTest {
     TokenRepository tokens;
     @Inject
     Secrets secrets;
+    @Inject
+    TwoFactorRepository factors;
     @Inject
     ReusableBlockRepository blocks;
     @Inject
@@ -107,6 +111,12 @@ class SiteResetTest {
         lock.holding(() -> publisher.publishAll());
         queue.item(item);
         secrets.put("smtp_password", "x");
+        factors.putTotp(editor, secrets.encrypt("totp:" + editor, "seed"));
+        factors.addPasskey(
+                editor,
+                "key",
+                new RequiredPersistedData("editor", "cred", UUID.randomUUID(), new byte[] {1}, -7, 0)
+        );
         Files.writeString(Files.createDirectories(dataDir.root().resolve("import")).resolve("left.xml"), "x");
     }
 

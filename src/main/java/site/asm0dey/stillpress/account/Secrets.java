@@ -11,6 +11,7 @@ import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.config.Keys;
 import site.asm0dey.stillpress.store.SecretRepository;
+import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 /**
  * Named values stored encrypted under the AEAD keyset, with the name as associated data, and keys derived from the
@@ -20,16 +21,19 @@ import site.asm0dey.stillpress.store.SecretRepository;
 public class Secrets {
     private static final Logger LOG = Logger.getLogger(Secrets.class);
     private final SecretRepository repository;
+    private final TwoFactorRepository totp;
     private final Aead aead;
     private final PrfSet prf;
     private final Set<String> warned = ConcurrentHashMap.newKeySet();
 
     public Secrets(
             SecretRepository repository,
+            TwoFactorRepository totp,
             DataDir dataDir,
             @ConfigProperty(name = "stillpress.keys-dir") Optional<Path> keysDir
     ) throws GeneralSecurityException {
         this.repository = repository;
+        this.totp = totp;
         var keys = Keys.get(dataDir.root(), keysDir);
         this.aead = aead(keys);
         this.prf = keys.prf().getPrimitive(RegistryConfiguration.get(), PrfSet.class);
@@ -49,14 +53,22 @@ public class Secrets {
     }
 
     /**
-     * True when nothing is stored or a stored secret decrypts under {@code keys}: false means the secrets belong to
-     * another keyset.
+     * True when nothing is stored or a stored secret or TOTP seed decrypts under {@code keys}: false means they belong
+     * to another keyset.
      */
     public boolean readableWith(Keys keys) {
+        var aead = aead(keys);
         return repository
             .first()
-            .map(r -> decrypt(aead(keys), r.getName(), r.getCiphertext()).isPresent())
+            .map(r -> decrypt(aead, r.getName(), r.getCiphertext()).isPresent())
+            .or(() -> totp
+                .firstTotp()
+                .map(t -> decrypt(aead, totpName(t.getUserId()), t.getCiphertext()).isPresent()))
             .orElse(true);
+    }
+
+    private static String totpName(long userId) {
+        return "totp:" + userId;
     }
 
     private static Aead aead(Keys keys) {
@@ -65,6 +77,13 @@ public class Secrets {
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /**
+     * Empty when {@code ciphertext} does not decrypt for {@code name}.
+     */
+    public Optional<String> decrypt(String name, String ciphertext) {
+        return decrypt(aead, name, ciphertext);
     }
 
     private static Optional<String> decrypt(Aead aead, String name, String ciphertext) {
@@ -77,13 +96,19 @@ public class Secrets {
         }
     }
 
-    public void put(String name, String value) {
+    /**
+     * Base64 AEAD output with {@code name} as associated data.
+     */
+    public String encrypt(String name, String value) {
         try {
-            var ciphertext = aead.encrypt(value.getBytes(UTF_8), name.getBytes(UTF_8));
-            repository.put(name, Base64.getEncoder().encodeToString(ciphertext));
+            return Base64.getEncoder().encodeToString(aead.encrypt(value.getBytes(UTF_8), name.getBytes(UTF_8)));
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    public void put(String name, String value) {
+        repository.put(name, encrypt(name, value));
         warned.remove(name);
     }
 
@@ -92,7 +117,7 @@ public class Secrets {
     }
 
     public boolean any() {
-        return repository.any();
+        return repository.any() || totp.firstTotp().isPresent();
     }
 
     /**

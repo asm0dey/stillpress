@@ -6,6 +6,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Spec;
 import site.asm0dey.stillpress.store.SecretRepository;
+import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 @Command(name = "secrets", description = "Manage encrypted secrets", subcommands = SecretsCommand.Reset.class)
 public class SecretsCommand {
@@ -17,15 +18,23 @@ public class SecretsCommand {
         SecretRepository secrets;
         @Inject
         Captcha captcha;
+        @Inject
+        TwoFactorRepository factors;
 
         @Override
         public Integer call() {
             var deleted = secrets.deleteAll();
+            var apps = factors.deleteAllTotp();
             spec
                 .commandLine()
                 .getOut()
                 .println(
-                        "Deleted " + deleted + " stored secrets. Re-enter the SMTP password and CAPTCHA secret in the admin."
+                        "Deleted "
+                        + deleted
+                        + " stored secrets and "
+                        + apps
+                        + " authenticator apps. Re-enter the SMTP password and CAPTCHA secret in the admin; "
+                        + "users with an authenticator app must add it again. Passkeys are kept."
                 );
             if (captcha.provider().equals("turnstile")) {
                 // without its secret every verification fails closed, which would lock everyone out of the admin

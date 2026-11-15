@@ -59,6 +59,8 @@ public class TestStore {
         db.deleteFrom(SESSION).execute();
         db.deleteFrom(USER_TOKEN).execute();
         db.deleteFrom(REUSABLE_BLOCK).execute();
+        db.deleteFrom(TOTP_FACTOR).execute();
+        db.deleteFrom(PASSKEY).execute();
         db.deleteFrom(AUTHOR).execute();
         db.deleteFrom(REDIRECT).execute();
         db.deleteFrom(SECRET).execute();

@@ -65,6 +65,9 @@ public class SiteReset {
                 .deleteFrom(SESSION)
                 .where(keepSession == null ? DSL.noCondition() : SESSION.ID.ne(SessionRepository.hash(keepSession)))
                 .execute();
+            // factors reference the users, and the TOTP seeds are stored secrets, so they go with them
+            db.deleteFrom(TOTP_FACTOR).execute();
+            db.deleteFrom(PASSKEY).execute();
             db.deleteFrom(AUTHOR).where(AUTHOR.ID.ne(keepAdministratorId)).execute();
             db.update(AUTHOR).setNull(AUTHOR.SOURCE_ID).execute();
             db.deleteFrom(SETTING).where(SETTING.KEY.notIn(KEPT)).execute();
@@ -94,6 +97,8 @@ public class SiteReset {
     public boolean wipe(boolean force) {
         return run(force, () -> {
             clearContent();
+            db.deleteFrom(TOTP_FACTOR).execute();
+            db.deleteFrom(PASSKEY).execute();
             db.deleteFrom(SESSION).execute();
             db.deleteFrom(AUTHOR).execute();
             db.deleteFrom(SETTING).where(SETTING.KEY.notIn(LOCK_ROW, ImportGuard.STATE)).execute();

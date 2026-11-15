@@ -11,7 +11,10 @@ import picocli.CommandLine;
 import site.asm0dey.stillpress.account.Secrets;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.config.Keys;
+import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SecretRepository;
+import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 @QuarkusTest
 class KeysetGuardTest {
@@ -23,6 +26,10 @@ class KeysetGuardTest {
     Secrets secrets;
     @Inject
     SecretRepository repository;
+    @Inject
+    TwoFactorRepository factors;
+    @Inject
+    AuthorRepository users;
     @Inject
     DataDir dataDir;
     @TempDir
@@ -45,6 +52,15 @@ class KeysetGuardTest {
         assertThat(err.toString())
             .contains("stillpress secrets reset")
             .contains("Stillpress created a new encryption keyset in " + fresh.dir() + ",");
+        assertThat(files(fresh.dir())).isEmpty();
+    }
+
+    @Test
+    void refusesFreshKeysWithOnlyTotpSeeds() throws IOException {
+        var id = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        factors.putTotp(id, secrets.encrypt("totp:" + id, "seed"));
+        var fresh = Keys.get(data, Optional.empty());
+        assertThat(KeysetGuard.check(fresh, secrets, new PrintWriter(err, true))).isOne();
         assertThat(files(fresh.dir())).isEmpty();
     }
 
