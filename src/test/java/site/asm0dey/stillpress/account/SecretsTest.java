@@ -51,7 +51,7 @@ class SecretsTest {
         when(repository.ciphertext("smtp_password")).thenReturn(Optional.of(ciphertext));
         assertThat(secrets.get("smtp_password")).contains("correct horse battery staple");
         when(repository.any()).thenReturn(true);
-        assertThat(secrets.any()).isTrue();
+        assertThat(Map.of("any", secrets.any())).containsExactly(Map.entry("any", true));
         secrets.delete("smtp_password");
         verify(repository).delete("smtp_password");
         when(repository.ciphertext("smtp_password")).thenReturn(Optional.empty());

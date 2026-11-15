@@ -4,9 +4,12 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.http.Fault;
 import module java.base;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.asm0dey.stillpress.Altchas;
 import site.asm0dey.stillpress.StillpressCommand.ServeCommand;
+import site.asm0dey.stillpress.content.ItemService.Refused;
 import site.asm0dey.stillpress.store.SettingRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -129,5 +133,90 @@ class CaptchaTest {
         assertThatCode(() -> captcha.verify("good", null, "203.0.113.1")).doesNotThrowAnyException();
         assertThatThrownBy(() -> captcha.verify("bad", null, "203.0.113.1")).isInstanceOf(CaptchaFailedException.class);
         assertThatThrownBy(() -> captcha.verify("slow", null, "203.0.113.1")).isInstanceOf(CaptchaFailedException.class);
+    }
+
+    private Refused refusal(String provider, String siteKey, String secret, String token) {
+        return catchThrowableOfType(Refused.class, () -> captcha.save(provider, siteKey, secret, token));
+    }
+
+    private static Map<String, Object> shape(Refused e) {
+        var shape = new LinkedHashMap<String, Object>();
+        shape.put("status", e.status);
+        shape.put("error", e.error);
+        shape.put("field", e.field);
+        return shape;
+    }
+
+    private static Map<String, Object> invalid(String field) {
+        var m = new LinkedHashMap<String, Object>();
+        m.put("status", 400);
+        m.put("error", "invalid");
+        m.put("field", field);
+        return m;
+    }
+
+    @Test
+    void turnstileNeedsBothKeys() {
+        var seen = new LinkedHashMap<String, Object>();
+        seen.put("empty site key", shape(refusal("turnstile", "", "s", "tok")));
+        seen.put("no secret", shape(refusal("turnstile", "site-key", null, "tok")));
+        seen.put("unknown provider", shape(refusal("other", null, null, null)));
+        assertThat(seen)
+            .containsExactly(
+                    Map.entry("empty site key", invalid("turnstileSiteKey")),
+                    Map.entry("no secret", invalid("turnstileSecret")),
+                    Map.entry("unknown provider", invalid("provider"))
+            );
+        verifyNoInteractions(settings);
+    }
+
+    @Test
+    void missingTestTokenIsRefused() {
+        var seen = new LinkedHashMap<String, Object>();
+        seen.put("null", shape(refusal("turnstile", "site-key", "good-secret", null)));
+        seen.put("blank", shape(refusal("turnstile", "site-key", "good-secret", " ")));
+        assertThat(seen)
+            .containsExactly(
+                    Map.entry("null", invalid("turnstileToken")),
+                    Map.entry("blank", invalid("turnstileToken"))
+            );
+        verifyNoInteractions(settings);
+        assertThat(wm.getAllServeEvents()).isEmpty();
+    }
+
+    @Test
+    void mismatchedSiteKeyIsRefused() {
+        wm.stubFor(post("/siteverify")
+            .willReturn(okJson("{\"success\":false,\"error-codes\":[\"invalid-input-response\"]}"))
+        );
+        var e = refusal("turnstile", "site-key", "good-secret", "solved");
+        assertThat(e)
+            .extracting(r -> r.status, r -> r.error)
+            .containsExactly(400, "turnstile_key_mismatch");
+        verifyNoInteractions(settings);
+    }
+
+    @Test
+    void badTurnstileSecretIsRefused() {
+        wm.stubFor(post("/siteverify")
+            // Cloudflare answers a bad secret with HTTP 400 and this body
+            .willReturn(jsonResponse("{\"success\":false,\"error-codes\":[\"invalid-input-secret\"]}", 400))
+        );
+        var e = refusal("turnstile", "site-key", "wrong", "tok");
+        assertThat(e)
+            .extracting(r -> r.status, r -> r.error)
+            .containsExactly(400, "invalid_turnstile_secret");
+        verifyNoInteractions(settings);
+        verifyNoInteractions(secrets);
+    }
+
+    @Test
+    void unreachableTurnstileIs502() {
+        wm.stubFor(post("/siteverify").willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+        var e = refusal("turnstile", "site-key", "s", "tok");
+        assertThat(e)
+            .extracting(r -> r.status, r -> r.error)
+            .containsExactly(502, "turnstile_unreachable");
+        verifyNoInteractions(settings);
     }
 }

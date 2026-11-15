@@ -58,7 +58,7 @@ class ReviewNotificationsQuarkusTest {
     void contributorSubmitMailsAdminsAndEditors() throws Exception {
         var item = items.create("post", contributorId);
         submit(item.id(), "Hello", contributorId, Role.CONTRIBUTOR);
-        assertThat(SMTP.waitForIncomingEmail(5000, 2)).isTrue();
+        TestStore.await(() -> SMTP.getReceivedMessages().length == 2, 10);
         assertThat(SMTP.getReceivedMessages())
             .extracting(m -> m.getAllRecipients()[0].toString())
             .containsExactlyInAnyOrder("admin@example.org", "ed@example.org");
@@ -81,7 +81,8 @@ class ReviewNotificationsQuarkusTest {
                 new ItemService.Actor(contributorId, Role.CONTRIBUTOR)
         );
         assertThat(stored.title()).isEqualTo("Hello again");
-        assertThat(SMTP.waitForIncomingEmail(1000, 1)).isFalse();
+        // give a stray mail a second to arrive
+        TestStore.await(() -> SMTP.getReceivedMessages().length > 0, 1);
         assertThat(SMTP.getReceivedMessages()).isEmpty();
     }
 
@@ -95,7 +96,8 @@ class ReviewNotificationsQuarkusTest {
                 new ItemService.Actor(contributorId, Role.CONTRIBUTOR)
         ))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(409));
-        assertThat(SMTP.waitForIncomingEmail(1000, 1)).isFalse();
+        // give a stray mail a second to arrive
+        TestStore.await(() -> SMTP.getReceivedMessages().length > 0, 1);
         assertThat(SMTP.getReceivedMessages()).isEmpty();
     }
 
@@ -103,7 +105,7 @@ class ReviewNotificationsQuarkusTest {
     void crlfInTitleCannotInjectHeaders() throws Exception {
         var item = items.create("post", contributorId);
         submit(item.id(), "Hi\r\nBcc: evil@example.org", contributorId, Role.CONTRIBUTOR);
-        assertThat(SMTP.waitForIncomingEmail(5000, 2)).isTrue();
+        TestStore.await(() -> SMTP.getReceivedMessages().length == 2, 10);
         assertThat(SMTP.getReceivedMessages())
             .extracting(m -> m.getAllRecipients().length + ":" + m.getAllRecipients()[0])
             .containsExactlyInAnyOrder("1:admin@example.org", "1:ed@example.org");

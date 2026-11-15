@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.db.tables.pojos.TotpFactor;
 
 @QuarkusTest
 class TwoFactorRepositoryTest {
@@ -29,21 +30,37 @@ class TwoFactorRepositoryTest {
     @Test
     void advanceTotpIsMonotonic() {
         factors.putTotp(id, "c");
-        assertThat(factors.advanceTotp(id, 10)).isFalse();
+        var answers = new LinkedHashMap<String, Boolean>();
+        answers.put("unconfirmed", factors.advanceTotp(id, 10));
         factors.confirmTotp(id, "c", 0);
-        assertThat(factors.advanceTotp(id, 10)).isTrue();
-        assertThat(factors.advanceTotp(id, 10)).isFalse();
-        assertThat(factors.advanceTotp(id, 9)).isFalse();
-        assertThat(factors.advanceTotp(id, 11)).isTrue();
+        answers.put("first 10", factors.advanceTotp(id, 10));
+        answers.put("repeat 10", factors.advanceTotp(id, 10));
+        answers.put("back to 9", factors.advanceTotp(id, 9));
+        answers.put("forward to 11", factors.advanceTotp(id, 11));
+        assertThat(answers)
+            .containsExactly(
+                    Map.entry("unconfirmed", false),
+                    Map.entry("first 10", true),
+                    Map.entry("repeat 10", false),
+                    Map.entry("back to 9", false),
+                    Map.entry("forward to 11", true)
+            );
         assertThat(factors.totp(id)).hasValueSatisfying(t -> assertThat(t.lastStep()).isEqualTo(11));
     }
 
     @Test
     void confirmingAStepSpendsItForAdvance() {
         factors.putTotp(id, "c");
-        assertThat(factors.confirmTotp(id, "c", 7)).isTrue();
-        assertThat(factors.advanceTotp(id, 7)).isFalse();
-        assertThat(factors.advanceTotp(id, 8)).isTrue();
+        var answers = new LinkedHashMap<String, Boolean>();
+        answers.put("confirm at 7", factors.confirmTotp(id, "c", 7));
+        answers.put("advance to 7", factors.advanceTotp(id, 7));
+        answers.put("advance to 8", factors.advanceTotp(id, 8));
+        assertThat(answers)
+            .containsExactly(
+                    Map.entry("confirm at 7", true),
+                    Map.entry("advance to 7", false),
+                    Map.entry("advance to 8", true)
+            );
     }
 
     @Test
@@ -70,13 +87,14 @@ class TwoFactorRepositoryTest {
 
     @Test
     void putTotpReplacesAndUnconfirms() {
-        assertThat(factors.putTotp(id, "one")).isTrue();
-        assertThat(factors.putTotp(id, "two")).isTrue();
-        assertThat(factors.totp(id)).hasValueSatisfying(t -> {
-            assertThat(t.ciphertext()).isEqualTo("two");
-            assertThat(t.confirmed()).isFalse();
-            assertThat(t.lastStep()).isZero();
-        });
+        var answers = new LinkedHashMap<String, Boolean>();
+        answers.put("first put", factors.putTotp(id, "one"));
+        answers.put("second put", factors.putTotp(id, "two"));
+        assertThat(answers).containsExactly(Map.entry("first put", true), Map.entry("second put", true));
+        assertThat(factors.totp(id))
+            .hasValueSatisfying(t -> assertThat(t)
+                .extracting(TotpFactor::ciphertext, TotpFactor::confirmed, TotpFactor::lastStep)
+                .containsExactly("two", false, 0L));
     }
 
     @Test
@@ -91,36 +109,49 @@ class TwoFactorRepositoryTest {
                 }))
                 .toList();
             start.countDown();
+            var results = new ArrayList<Boolean>();
             for (var f : futures) {
-                assertThat(f.get()).isTrue();
+                results.add(f.get());
             }
+            assertThat(results).containsExactly(true, true);
         }
-        assertThat(factors.totp(id)).hasValueSatisfying(t -> assertThat(t.confirmed()).isFalse());
+        assertThat(factors.totp(id))
+            .hasValueSatisfying(t -> assertThat(t)
+                .extracting(TotpFactor::confirmed, TotpFactor::lastStep)
+                .containsExactly(false, 0L));
         assertThat(factors.firstTotp()).isPresent();
     }
 
     @Test
     void putTotpNeverReplacesAConfirmedFactor() {
         factors.putTotp(id, "one");
-        assertThat(factors.confirmTotp(id, "one", 5)).isTrue();
-        assertThat(factors.putTotp(id, "two")).isFalse();
-        assertThat(factors.totp(id)).hasValueSatisfying(t -> {
-            assertThat(t.ciphertext()).isEqualTo("one");
-            assertThat(t.confirmed()).isTrue();
-            assertThat(t.lastStep()).isEqualTo(5);
-        });
+        var answers = new LinkedHashMap<String, Boolean>();
+        answers.put("confirm", factors.confirmTotp(id, "one", 5));
+        answers.put("replace", factors.putTotp(id, "two"));
+        assertThat(answers).containsExactly(Map.entry("confirm", true), Map.entry("replace", false));
+        assertThat(factors.totp(id))
+            .hasValueSatisfying(t -> assertThat(t)
+                .extracting(TotpFactor::ciphertext, TotpFactor::confirmed, TotpFactor::lastStep)
+                .containsExactly("one", true, 5L));
     }
 
     @Test
     void confirmIsBoundToTheVerifiedCiphertext() {
         factors.putTotp(id, "two");
-        assertThat(factors.confirmTotp(id, "one", 5)).isFalse();
-        assertThat(factors.totp(id)).hasValueSatisfying(t -> {
-            assertThat(t.confirmed()).isFalse();
-            assertThat(t.lastStep()).isZero();
-        });
-        assertThat(factors.confirmTotp(id, "two", 5)).isTrue();
-        assertThat(factors.confirmTotp(id, "two", 6)).isFalse();
+        var answers = new LinkedHashMap<String, Boolean>();
+        answers.put("wrong ciphertext", factors.confirmTotp(id, "one", 5));
+        assertThat(factors.totp(id))
+            .hasValueSatisfying(t -> assertThat(t)
+                .extracting(TotpFactor::confirmed, TotpFactor::lastStep)
+                .containsExactly(false, 0L));
+        answers.put("right ciphertext", factors.confirmTotp(id, "two", 5));
+        answers.put("confirmed already", factors.confirmTotp(id, "two", 6));
+        assertThat(answers)
+            .containsExactly(
+                    Map.entry("wrong ciphertext", false),
+                    Map.entry("right ciphertext", true),
+                    Map.entry("confirmed already", false)
+            );
     }
 
     @Test
@@ -131,7 +162,7 @@ class TwoFactorRepositoryTest {
         assertThat(factors.factorCount(id)).isEqualTo(2);
         factors.confirmTotp(id, "c", 0);
         assertThat(factors.factorCount(id)).isEqualTo(3);
-        assertThat(factors.hasFactor(id)).isTrue();
+        assertThat(Map.of("hasFactor", factors.hasFactor(id))).containsExactly(Map.entry("hasFactor", true));
     }
 
     @Test
@@ -167,7 +198,7 @@ class TwoFactorRepositoryTest {
         assertThat(factors.clear(id)).isEqualTo(2);
         assertThat(factors.totp(id)).isEmpty();
         assertThat(factors.passkeys(id)).isEmpty();
-        assertThat(factors.hasFactor(id)).isFalse();
+        assertThat(Map.of("hasFactor", factors.hasFactor(id))).containsExactly(Map.entry("hasFactor", false));
     }
 
     private static RequiredPersistedData data(String credentialId) {

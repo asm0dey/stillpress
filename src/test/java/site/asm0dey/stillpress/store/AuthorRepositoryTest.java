@@ -106,10 +106,9 @@ class AuthorRepositoryTest {
     void createWithEmailDifferingOnlyInCaseIsAnEmailConflict() {
         users.create("six", "Case@example.org", "Six", Role.AUTHOR);
         assertThatThrownBy(() -> users.create("seven", "case@example.org", "Seven", Role.AUTHOR))
-            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e)
-                .extracting(t -> t.email)
+            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e.email ? "email" : "login")
                 .as(e.getMessage())
-                .isEqualTo(true));
+                .isEqualTo("email"));
     }
 
     @Test
@@ -117,15 +116,13 @@ class AuthorRepositoryTest {
         users.create("eight", "taken@example.org", "Eight", Role.AUTHOR);
         var nine = users.create("nine", "free@example.org", "Nine", Role.AUTHOR);
         assertThatThrownBy(() -> users.setProfile(nine.id(), "Nine", "TAKEN@example.org"))
-            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e)
-                .extracting(t -> t.email)
+            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e.email ? "email" : "login")
                 .as(e.getMessage())
-                .isEqualTo(true));
+                .isEqualTo("email"));
         assertThatThrownBy(() -> users.create("eight", "other@example.org", "Dup", Role.AUTHOR))
-            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e)
-                .extracting(t -> t.email)
+            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e.email ? "email" : "login")
                 .as(e.getMessage())
-                .isEqualTo(false));
+                .isEqualTo("login"));
     }
 
     @Test
@@ -133,10 +130,9 @@ class AuthorRepositoryTest {
         users.create("first", "A@x.org", "First", Role.AUTHOR);
         // the unit-tested resources map exactly this exception to 409 email_taken
         assertThatThrownBy(() -> users.create("second", "a@x.org", "Second", Role.AUTHOR))
-            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e)
-                .extracting(t -> t.email)
+            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e.email ? "email" : "login")
                 .as(e.getMessage())
-                .isEqualTo(true));
+                .isEqualTo("email"));
         assertThat(users.findByLoginOrEmail("a@X.ORG"))
             .map(a -> a.login())
             .contains("first");

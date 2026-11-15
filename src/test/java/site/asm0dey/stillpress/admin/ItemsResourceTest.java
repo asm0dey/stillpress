@@ -119,7 +119,7 @@ class ItemsResourceTest {
             assertThat(r.getStatus()).isEqualTo(201);
             assertThat(r.getEntity()).isInstanceOfSatisfying(ItemsResource.ItemView.class, v -> {
                 assertThat(v.id()).isEqualTo(5);
-                assertThat(v.canEdit()).isTrue();
+                assertThat(Map.of("canEdit", v.canEdit())).containsExactly(Map.entry("canEdit", true));
             });
         }
     }
@@ -150,7 +150,7 @@ class ItemsResourceTest {
         assertThat(v.author()).isEqualTo("Author One");
         assertThat(v.date()).isEqualTo(T0.plusHours(3));
         assertThat(v.autosave()).isEqualTo(new ItemsResource.AutosaveRef(T0.plusMinutes(1)));
-        assertThat(v.canEdit()).isTrue();
+        assertThat(Map.of("canEdit", v.canEdit())).containsExactly(Map.entry("canEdit", true));
     }
 
     @Test

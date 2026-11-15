@@ -132,7 +132,11 @@
 
 ## Results
 
-Measured on `main` after Task 6 (baseline `396dc1c`).
+Measured on `main` after the final-review fix wave (baseline `396dc1c`).
+
+**What changed.** Quarkus-annotated test classes went from 71 to 67 because classes were split: their logic cases moved to plain JUnit/Mockito classes and their HTTP, authorization and database cases stayed. The app still starts the same number of times per full run, since no new `@TestProfile` was added. The plain classes run without a boot. In the final surefire run, 536 of 955 cases (107 s of 135 s summed class time) are in Quarkus classes; 419 cases (27 s) run in plain classes, with no application start. Time is the sum of per-class "Time elapsed", so it includes each Quarkus class's share of the app boot.
+
+Provenance of the "before" numbers: the 71 comes from the plan baseline, and `git grep -lE "@QuarkusTest|@QuarkusMainTest" 396dc1c -- src/test/java` confirms 71 classes. The other "before" counts come from the same `git` queries at `396dc1c`. Surefire tests and time were not measured at the baseline (no CI run found for that commit). `PublishCostBench` is env-gated: it is a Quarkus class but runs no cases in the default build, so it is not in the 66 Quarkus classes that ran.
 
 | | Before (`396dc1c`) | After |
 |---|---|---|
@@ -141,12 +145,12 @@ Measured on `main` after Task 6 (baseline `396dc1c`).
 | Plain JUnit/Mockito test classes (has a test annotation, no Quarkus annotation) | 29 | 63 |
 | Test files under `src/test/java` | 110 | 144 |
 | Surefire tests run | not measured | 955 (0 failures, 0 errors, 0 skipped) |
-| Surefire time, sum of per-class "Time elapsed" | not measured (no CI run found for the commit) | 132 s |
-| `mvn -B -o verify` wall time, fresh classes | not measured | 3:05 min |
+| ...in Quarkus classes | not measured | 536 cases, 107 s |
+| ...in plain classes | not measured | 419 cases, 27 s |
+| Surefire time, sum of per-class "Time elapsed" | not measured | 135 s |
+| `mvn -B -o verify` wall time, fresh classes | not measured | 2:52 min |
 
 No component tests were written: plain JUnit sufficed, so the `quarkus-junit-component` dependency in `pom.xml` is unused. It was left in place.
-
-Most migrated classes keep their HTTP, authorization and database cases on Quarkus; the logic cases moved to new plain tests.
 
 ### Classes that stay on Quarkus
 

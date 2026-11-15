@@ -122,7 +122,7 @@ class ReusableBlocksResourceTest {
             assertThat(r.getStatus()).isEqualTo(201);
             assertThat(r.getEntity()).isInstanceOfSatisfying(ReusableBlocksResource.BlockView.class, v -> {
                 assertThat(v.id()).isEqualTo(3);
-                assertThat(v.canEdit()).isTrue();
+                assertThat(Map.of("canEdit", v.canEdit())).containsExactly(Map.entry("canEdit", true));
                 assertThat(v.republished()).isNull();
             });
         }

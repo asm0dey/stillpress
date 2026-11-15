@@ -275,7 +275,7 @@ class MandatoryTwoFactorTest {
 
     @Test
     void anUnconfirmedSeedIsNoFactorWhenRequiring() {
-        assertThat(factors.putTotp(editor, "unconfirmed")).isTrue();
+        assertThat(Map.of("put", factors.putTotp(editor, "unconfirmed"))).containsExactly(Map.entry("put", true));
         var editorSession = sessions.create(editor);
         require();
         as(editorSession).get("/admin/api/session").then().statusCode(401);
@@ -283,8 +283,10 @@ class MandatoryTwoFactorTest {
 
     @Test
     void aConfirmedAuthenticatorAsTheLastFactorStays() {
-        assertThat(factors.putTotp(editor, "seed")).isTrue();
-        assertThat(factors.confirmTotp(editor, "seed", 1)).isTrue();
+        var answers = new LinkedHashMap<String, Boolean>();
+        answers.put("put", factors.putTotp(editor, "seed"));
+        answers.put("confirm", factors.confirmTotp(editor, "seed", 1));
+        assertThat(answers).containsExactly(Map.entry("put", true), Map.entry("confirm", true));
         var editorSession = sessions.create(editor);
         require();
         as(editorSession).delete("/admin/api/2fa/totp").then().statusCode(409).body("error", equalTo("last_factor"));

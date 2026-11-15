@@ -8,7 +8,6 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.nullValue;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.github.tomakehurst.wiremock.http.Fault;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
@@ -66,34 +65,6 @@ class CaptchaResourceQuarkusTest {
     }
 
     @Test
-    void badTurnstileSecretIsRefused() {
-        wm.stubFor(post("/siteverify")
-            // Cloudflare answers a bad secret with HTTP 400 and this body
-            .willReturn(jsonResponse("{\"success\":false,\"error-codes\":[\"invalid-input-secret\"]}", 400))
-        );
-        put("turnstile", "site-key", "wrong", "tok")
-            .then()
-            .statusCode(400)
-            .body("error", equalTo("invalid_turnstile_secret"));
-        assertThat(settings.get("captcha_provider")).isEmpty();
-        assertThat(secrets.get("turnstile_secret")).isEmpty();
-    }
-
-    @Test
-    void unreachableTurnstileIs502() {
-        wm.stubFor(post("/siteverify").willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
-        put("turnstile", "site-key", "s", "tok").then().statusCode(502).body("error", equalTo("turnstile_unreachable"));
-        assertThat(settings.get("captcha_provider")).isEmpty();
-    }
-
-    @Test
-    void turnstileNeedsBothKeys() {
-        put("turnstile", "", "s", "tok").then().statusCode(400).body("field", equalTo("turnstileSiteKey"));
-        put("turnstile", "site-key", null, "tok").then().statusCode(400).body("field", equalTo("turnstileSecret"));
-        put("other", null, null, null).then().statusCode(400).body("field", equalTo("provider"));
-    }
-
-    @Test
     void matchingPairIsSaved() {
         wm.stubFor(post("/siteverify")
             .withRequestBody(containing("secret=good-secret"))
@@ -121,30 +92,6 @@ class CaptchaResourceQuarkusTest {
         );
         wm.verify(2, postRequestedFor(urlEqualTo("/siteverify")).withRequestBody(containing("secret=good-secret")));
         put("none", null, null, null).then().statusCode(200).body("provider", equalTo("none"));
-    }
-
-    @Test
-    void mismatchedSiteKeyIsRefused() {
-        wm.stubFor(post("/siteverify")
-            .willReturn(okJson("{\"success\":false,\"error-codes\":[\"invalid-input-response\"]}"))
-        );
-        put("turnstile", "site-key", "good-secret", "solved")
-            .then()
-            .statusCode(400)
-            .body("error", equalTo("turnstile_key_mismatch"));
-        assertThat(settings.get("captcha_provider")).isEmpty();
-        assertThat(secrets.get("turnstile_secret")).isEmpty();
-    }
-
-    @Test
-    void missingTestTokenIsRefused() {
-        put("turnstile", "site-key", "good-secret", null)
-            .then()
-            .statusCode(400)
-            .body("error", equalTo("invalid"))
-            .body("field", equalTo("turnstileToken"));
-        put("turnstile", "site-key", "good-secret", " ").then().statusCode(400).body("field", equalTo("turnstileToken"));
-        assertThat(settings.get("captcha_provider")).isEmpty();
     }
 
     @Test

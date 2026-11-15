@@ -33,8 +33,10 @@ class SiteMailTest {
     @Test
     void configuredFollowsTheHost() {
         when(settings.get("smtp_host")).thenReturn(Optional.of("localhost"));
-        assertThat(mail.configured()).isTrue();
+        var answers = new LinkedHashMap<String, Boolean>();
+        answers.put("with host", mail.configured());
         when(settings.get("smtp_host")).thenReturn(Optional.empty());
-        assertThat(mail.configured()).isFalse();
+        answers.put("without host", mail.configured());
+        assertThat(answers).containsExactly(Map.entry("with host", true), Map.entry("without host", false));
     }
 }

@@ -43,7 +43,8 @@ class TwoStepLoginTest {
         adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
         users.setPassword(adminId, TestStore.PASSWORD_HASH);
         secret = totp.start(adminId, "admin").secret();
-        assertThat(totp.confirm(adminId, TwoFactorResourceQuarkusTest.code(secret, clock.instant()))).isTrue();
+        assertThat(Map.of("confirm", totp.confirm(adminId, TwoFactorResourceQuarkusTest.code(secret, clock.instant()))))
+            .containsExactly(Map.entry("confirm", true));
         // confirming spent the current step
         clock.advance(Duration.ofSeconds(30));
     }

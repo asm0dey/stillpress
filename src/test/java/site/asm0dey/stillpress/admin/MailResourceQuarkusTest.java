@@ -159,7 +159,9 @@ class MailResourceQuarkusTest {
 
     @Test
     void writeWithoutCsrfTokenIs400() {
-        AuthMatrix.missingCsrfIs400(admin, "PUT", "/admin/api/mail");
+        // with a token this body answers 200 (see nullKeepsEmptyClearsPassword), so only the CSRF filter can refuse it
+        AuthMatrix.missingCsrfIs400(admin, "PUT", "/admin/api/mail", local(null));
+        assertThat(settings.get("smtp_host")).isEmpty();
         AuthMatrix.missingCsrfIs400(admin, "POST", "/admin/api/mail/test");
     }
 }
