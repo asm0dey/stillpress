@@ -37,7 +37,7 @@ class TwoFactorResourceTest {
     @BeforeEach
     void login() {
         store.reset();
-        user = users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        user = users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).id();
         session = sessions.create(user);
     }
 
@@ -95,7 +95,7 @@ class TwoFactorResourceTest {
                 "required",
                 equalTo(false)
         );
-        assertThat(factors.totp(user)).hasValueSatisfying(t -> assertThat(t.getCiphertext()).doesNotContain(secret));
+        assertThat(factors.totp(user)).hasValueSatisfying(t -> assertThat(t.ciphertext()).doesNotContain(secret));
     }
 
     @Test
@@ -134,11 +134,11 @@ class TwoFactorResourceTest {
     void enrollingAfterConfirmKeepsTheFactor() throws Exception {
         var secret = asAdmin().post("/admin/api/2fa/totp").then().extract().path("secret").toString();
         asAdmin().contentType(JSON).body(Map.of("code", codeFor(secret))).post("/admin/api/2fa/totp/confirm");
-        var stored = factors.totp(user).orElseThrow().getCiphertext();
+        var stored = factors.totp(user).orElseThrow().ciphertext();
         asAdmin().post("/admin/api/2fa/totp").then().statusCode(409);
         assertThat(factors.totp(user)).hasValueSatisfying(t -> {
-            assertThat(t.getConfirmed()).isTrue();
-            assertThat(t.getCiphertext()).isEqualTo(stored);
+            assertThat(t.confirmed()).isTrue();
+            assertThat(t.ciphertext()).isEqualTo(stored);
         });
     }
 

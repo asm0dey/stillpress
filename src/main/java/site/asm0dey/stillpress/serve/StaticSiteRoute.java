@@ -97,13 +97,10 @@ public class StaticSiteRoute {
             notFound(ctx, root);
             return;
         }
-        var to = hit.get().getToPath();
+        var to = hit.get().to();
         if (absoluteUrl(to)) {
             // an administrator's deliberate redirect off the site
-            ctx.response().setStatusCode(hit.get().getStatusCode()).putHeader(
-                    "Location",
-                    URI.create(to).toASCIIString()
-            ).end();
+            ctx.response().setStatusCode(hit.get().status()).putHeader("Location", URI.create(to).toASCIIString()).end();
             return;
         }
         // only a site-local, single-slash absolute path; anything else could send visitors off-site
@@ -112,7 +109,7 @@ public class StaticSiteRoute {
             notFound(ctx, root);
             return;
         }
-        redirect(ctx, hit.get().getStatusCode(), Permalinks.encode(to));
+        redirect(ctx, hit.get().status(), Permalinks.encode(to));
     }
 
     /**

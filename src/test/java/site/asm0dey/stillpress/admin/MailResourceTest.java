@@ -169,7 +169,7 @@ class MailResourceTest {
     }
 
     private String cookie(String login, String email, Role role) {
-        var id = users.create(login, email, login, role).getId();
+        var id = users.create(login, email, login, role).id();
         users.setPassword(id, TestStore.PASSWORD_HASH);
         return sessions.create(id);
     }

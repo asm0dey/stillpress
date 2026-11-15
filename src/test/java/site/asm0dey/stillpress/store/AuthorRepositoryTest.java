@@ -6,7 +6,6 @@ import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.jooq.DSLContext;
-import org.jooq.exception.DataAccessException;
 import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,15 +30,15 @@ class AuthorRepositoryTest {
     void createsUniqueSlugsAndFindsByLoginOrEmail() {
         var a = users.create("John.Doe", "john@example.org", "John", Role.EDITOR);
         var b = users.create("john doe", "other@example.org", "John 2", Role.AUTHOR);
-        assertThat(a.getSlug()).isEqualTo("john-doe");
-        assertThat(b.getSlug()).isEqualTo("john-doe-2");
-        assertThat(Role.of(a.getRole())).isEqualTo(Role.EDITOR);
+        assertThat(a.slug()).isEqualTo("john-doe");
+        assertThat(b.slug()).isEqualTo("john-doe-2");
+        assertThat(Role.of(a.role())).isEqualTo(Role.EDITOR);
         assertThat(users.findByLoginOrEmail("John.Doe"))
-            .map(r -> r.getId())
-            .contains(a.getId());
+            .map(r -> r.id())
+            .contains(a.id());
         assertThat(users.findByLoginOrEmail("JOHN@example.org"))
-            .map(r -> r.getId())
-            .contains(a.getId());
+            .map(r -> r.id())
+            .contains(a.id());
         assertThat(users.findByLoginOrEmail("john.doe")).isEmpty();
     }
 
@@ -80,11 +79,16 @@ class AuthorRepositoryTest {
     @Test
     void emailLowerTracksCreateAndProfileChange() {
         var a = users.create("five", "Mixed@Example.org", "Five", Role.AUTHOR);
-        assertThat(users.findById(a.getId()).orElseThrow().getEmailLower()).isEqualTo("mixed@example.org");
-        users.setProfile(a.getId(), "Five", "Other@Example.org");
+        assertThat(db
+            .select(AUTHOR.EMAIL_LOWER)
+            .from(AUTHOR)
+            .where(AUTHOR.ID.eq(a.id()))
+            .fetchOne(AUTHOR.EMAIL_LOWER))
+            .isEqualTo("mixed@example.org");
+        users.setProfile(a.id(), "Five", "Other@Example.org");
         assertThat(users.findByLoginOrEmail("OTHER@example.org"))
-            .map(r -> r.getId())
-            .contains(a.getId());
+            .map(r -> r.id())
+            .contains(a.id());
     }
 
     private void legacy(String login, String email) {
@@ -101,21 +105,17 @@ class AuthorRepositoryTest {
     void createWithEmailDifferingOnlyInCaseIsAnEmailConflict() {
         users.create("six", "Case@example.org", "Six", Role.AUTHOR);
         assertThatThrownBy(() -> users.create("seven", "case@example.org", "Seven", Role.AUTHOR))
-            .isInstanceOfSatisfying(DataAccessException.class, e -> assertThat(AuthorRepository.isEmailConflict(e))
-                .as(e.getMessage())
-                .isTrue());
+            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e.email).as(e.getMessage()).isTrue());
     }
 
     @Test
     void setProfileOntoAnExistingEmailIsAnEmailConflictButALoginClashIsNot() {
         users.create("eight", "taken@example.org", "Eight", Role.AUTHOR);
         var nine = users.create("nine", "free@example.org", "Nine", Role.AUTHOR);
-        assertThatThrownBy(() -> users.setProfile(nine.getId(), "Nine", "TAKEN@example.org"))
-            .isInstanceOfSatisfying(DataAccessException.class, e -> assertThat(AuthorRepository.isEmailConflict(e))
-                .as(e.getMessage())
-                .isTrue());
+        assertThatThrownBy(() -> users.setProfile(nine.id(), "Nine", "TAKEN@example.org"))
+            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e.email).as(e.getMessage()).isTrue());
         assertThatThrownBy(() -> users.create("eight", "other@example.org", "Dup", Role.AUTHOR))
-            .isInstanceOfSatisfying(DataAccessException.class, e -> assertThat(AuthorRepository.isEmailConflict(e))
+            .isInstanceOfSatisfying(AuthorRepository.Taken.class, e -> assertThat(e.email)
                 .as(e.getMessage())
                 .isFalse());
     }
@@ -125,9 +125,9 @@ class AuthorRepositoryTest {
         var a = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
         assertThat(users.countAdministrators()).isEqualTo(1);
         assertThat(users.anyAdministratorWithPassword()).isFalse();
-        users.setPassword(a.getId(), TestStore.PASSWORD_HASH);
+        users.setPassword(a.id(), TestStore.PASSWORD_HASH);
         assertThat(users.anyAdministratorWithPassword()).isTrue();
-        users.setRole(a.getId(), Role.EDITOR);
+        users.setRole(a.id(), Role.EDITOR);
         assertThat(users.countAdministrators()).isZero();
         assertThat(users.anyAdministratorWithPassword()).isFalse();
     }
@@ -137,17 +137,17 @@ class AuthorRepositoryTest {
         var byLogin = users.create("shared@example.org", "own@example.org", "Login", Role.AUTHOR);
         users.create("other", "Shared@example.org", "Email", Role.AUTHOR);
         assertThat(users.findByLoginOrEmail("shared@example.org"))
-            .map(r -> r.getId())
-            .contains(byLogin.getId());
+            .map(r -> r.id())
+            .contains(byLogin.id());
     }
 
     @Test
     void slugSkipsTakenSuffixes() {
         users.create("john", "x@example.org", "X", Role.AUTHOR);
         users.create("john-2", "y@example.org", "Y", Role.AUTHOR);
-        assertThat(users.create("John", "z@example.org", "Z", Role.AUTHOR).getSlug()).isEqualTo("john-3");
+        assertThat(users.create("John", "z@example.org", "Z", Role.AUTHOR).slug()).isEqualTo("john-3");
         // "_" in the base is a literal, not a LIKE wildcard
         users.create("axb 2", "w@example.org", "W", Role.AUTHOR);
-        assertThat(users.create("a_b", "v@example.org", "V", Role.AUTHOR).getSlug()).isEqualTo("a_b");
+        assertThat(users.create("a_b", "v@example.org", "V", Role.AUTHOR).slug()).isEqualTo("a_b");
     }
 }

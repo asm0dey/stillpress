@@ -214,7 +214,7 @@ class IncrementalPublishTest {
             "block save"
     })
     void incrementalEqualsFullAfterServiceSave(String change) {
-        var admin = users.create("boss", "boss@example.org", "Boss", Role.ADMINISTRATOR).getId();
+        var admin = users.create("boss", "boss@example.org", "Boss", Role.ADMINISTRATOR).id();
         var cookie = sessions.create(admin);
         var actor = new ItemService.Actor(admin, Role.ADMINISTRATOR);
         var post = itemId(5994);

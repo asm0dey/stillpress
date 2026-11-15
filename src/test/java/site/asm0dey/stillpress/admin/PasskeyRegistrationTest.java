@@ -45,7 +45,7 @@ class PasskeyRegistrationTest {
     @BeforeEach
     void login() {
         store.reset();
-        user = users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        user = users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).id();
         session = sessions.create(user);
     }
 
@@ -107,9 +107,9 @@ class PasskeyRegistrationTest {
 
     @Test
     void passkeyIsStoredForTheSessionUser() {
-        var other = users.create("other", "other@example.org", "Other", Role.ADMINISTRATOR).getId();
+        var other = users.create("other", "other@example.org", "Other", Role.ADMINISTRATOR).id();
         String id = register(challengeFor("other"), "Key").statusCode(201).extract().path("id");
-        assertThat(factors.passkey(id)).hasValueSatisfying(p -> assertThat(p.getUserId()).isEqualTo(user));
+        assertThat(factors.passkey(id)).hasValueSatisfying(p -> assertThat(p.userId()).isEqualTo(user));
         assertThat(factors.passkeys(other)).isEmpty();
     }
 

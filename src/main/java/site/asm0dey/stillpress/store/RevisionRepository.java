@@ -5,6 +5,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
+import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
 
 /**
@@ -63,6 +64,20 @@ public class RevisionRepository {
 
     public void deleteAutosave(String objectType, long objectId, long userId) {
         db.deleteFrom(REVISION).where(autosaveOf(objectType, objectId, userId)).execute();
+    }
+
+    /**
+     * Lays {@code userId}'s autosave of the item over its title, body and excerpt when the autosave is newer. The
+     * record is changed in memory only and never stored.
+     */
+    public void overlayAutosave(ItemRecord item, long userId) {
+        autosave("item", item.getId(), userId)
+            .filter(s -> item.getModifiedAt() == null || s.getCreatedAt().isAfter(item.getModifiedAt()))
+            .ifPresent(s -> {
+                item.setTitle(s.getTitle());
+                item.setBody(s.getBody());
+                item.setExcerpt(s.getExcerpt());
+            });
     }
 
     public Optional<RevisionRecord> autosave(String objectType, long objectId, long userId) {

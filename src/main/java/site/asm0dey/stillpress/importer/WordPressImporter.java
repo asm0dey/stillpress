@@ -160,12 +160,16 @@ public class WordPressImporter {
         @Override
         public void author(WxrAuthor a) {
             // an existing user with this login (the wizard's administrator) is the same person: keep role and password
-            var r = authors.findByLogin(a.login()).orElseGet(() -> {
-                var n = db.newRecord(AUTHOR);
-                n.setLogin(a.login());
-                n.setSlug(uniqueAuthorSlug(a));
-                return n;
-            });
+            var r = db
+                .selectFrom(AUTHOR)
+                .where(AUTHOR.LOGIN.eq(a.login()))
+                .fetchOptional()
+                .orElseGet(() -> {
+                    var n = db.newRecord(AUTHOR);
+                    n.setLogin(a.login());
+                    n.setSlug(uniqueAuthorSlug(a));
+                    return n;
+                });
             if (r.getDisplayName() == null) {
                 r.setDisplayName(a.displayName());
             }
@@ -448,7 +452,7 @@ public class WordPressImporter {
         private String ensureMedia(String original) {
             var existing = media.findBySource(original);
             if (existing.isPresent()) {
-                return existing.get().getPath() == null ? null : Permalinks.encode(existing.get().getPath());
+                return existing.get().path() == null ? null : Permalinks.encode(existing.get().path());
             }
             if (mediaCount >= mediaLimit) {
                 skippedMedia.add(original);

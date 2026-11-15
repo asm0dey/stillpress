@@ -55,7 +55,7 @@ class ImportClosedTest {
         settings.put("title", "Blog");
         settings.put("timezone", "UTC");
         settings.put("home_url", "http://localhost:8081");
-        adminId = users.create("admin", "admin@example.org", "admin", Role.ADMINISTRATOR).getId();
+        adminId = users.create("admin", "admin@example.org", "admin", Role.ADMINISTRATOR).id();
         users.setPassword(adminId, TestStore.PASSWORD_HASH);
         admin = sessions.create(adminId);
     }
@@ -263,7 +263,7 @@ class ImportClosedTest {
 
     @Test
     void writeRefusedByExceptionLeavesImportOpen() {
-        var contributor = sessions.create(users.create("c", "c@example.org", "C", Role.CONTRIBUTOR).getId());
+        var contributor = sessions.create(users.create("c", "c@example.org", "C", Role.CONTRIBUTOR).id());
         as(contributor).body(Map.of("taxonomy", "category", "name", "News")).post("/admin/api/terms").then().statusCode(
                 403
         );

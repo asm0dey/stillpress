@@ -74,7 +74,7 @@ class PublishResourceTest {
     }
 
     private String cookie(String login, Role role) {
-        return sessions.create(users.create(login, login + "@example.org", login, role).getId());
+        return sessions.create(users.create(login, login + "@example.org", login, role).id());
     }
 
     private static RequestSpecification as(String cookie) {

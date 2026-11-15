@@ -35,13 +35,13 @@ class TotpTest {
     void enroll() {
         store.reset();
         totp = new Totp(clock, secrets, factors, settings);
-        user = users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        user = users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).id();
         factors.putTotp(user, secrets.encrypt("totp:" + user, Base64.getEncoder().encodeToString(SEED)));
         confirm();
     }
 
     void confirm() {
-        var c = factors.totp(user).orElseThrow().getCiphertext();
+        var c = factors.totp(user).orElseThrow().ciphertext();
         assertThat(factors.confirmTotp(user, c, 0)).isTrue();
     }
 
@@ -113,7 +113,7 @@ class TotpTest {
         factors.putTotp(user, secrets.encrypt("totp:" + user, Base64.getEncoder().encodeToString(SEED)));
         assertThat(totp.verify(user, "287082")).isFalse();
         assertThat(totp.confirm(user, "287082")).isTrue();
-        assertThat(factors.totp(user)).hasValueSatisfying(t -> assertThat(t.getConfirmed()).isTrue());
+        assertThat(factors.totp(user)).hasValueSatisfying(t -> assertThat(t.confirmed()).isTrue());
         assertThat(totp.verify(user, "287082")).isFalse();
     }
 }

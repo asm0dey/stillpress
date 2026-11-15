@@ -215,7 +215,7 @@ class ImportResourceTest {
     }
 
     private long user(String login, Role role) {
-        var id = users.create(login, login + "@example.org", login, role).getId();
+        var id = users.create(login, login + "@example.org", login, role).id();
         users.setPassword(id, TestStore.PASSWORD_HASH);
         return id;
     }

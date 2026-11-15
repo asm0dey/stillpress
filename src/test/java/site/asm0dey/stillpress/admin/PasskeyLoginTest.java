@@ -46,7 +46,7 @@ class PasskeyLoginTest {
     }
 
     long user(String login) {
-        var id = users.create(login, login + "@example.org", login, Role.ADMINISTRATOR).getId();
+        var id = users.create(login, login + "@example.org", login, Role.ADMINISTRATOR).id();
         users.setPassword(id, TestStore.PASSWORD_HASH);
         return id;
     }
@@ -116,8 +116,8 @@ class PasskeyLoginTest {
             .statusCode(200)
             .body("login", equalTo("admin"));
         assertThat(factors.passkey(key.id())).hasValueSatisfying(p -> {
-            assertThat(p.getLastUsedAt()).isNotNull();
-            assertThat(p.getSignCount()).isEqualTo(2L);
+            assertThat(p.lastUsedAt()).isNotNull();
+            assertThat(p.signCount()).isEqualTo(2L);
         });
     }
 

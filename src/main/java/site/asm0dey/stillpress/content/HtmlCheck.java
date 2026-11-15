@@ -13,7 +13,7 @@ import site.asm0dey.stillpress.store.ReusableBlockRepository;
  * {@link HtmlPolicy} applied to a save by a role without {@link Capabilities#canPostUnfilteredHtml} (R27). Every
  * fragment such a role writes (item body and excerpt, reusable block content) must pass {@link HtmlPolicy#fragment}
  * on its own, so fragments side by side on a page stay safe; item bodies are also checked as the publish pipeline
- * renders them ({@link ViewFactory#html}), reusable blocks resolved. Callers pass the state as stored after the save.
+ * renders them ({@link ViewFactory#html(String, String, Function)}), reusable blocks resolved. Callers pass the state as stored after the save.
  * A finding is a 400 {@code unsafe_html}; {@code field} names the first offending part.
  */
 @ApplicationScoped
@@ -52,10 +52,10 @@ public class HtmlCheck {
             return;
         }
         Function<Long, Optional<String>> lookup =
-                id -> ref != null && id.equals(ref) && content != null ? Optional.of(content) : blocks.content(id);
+                id -> id.equals(ref) && content != null ? Optional.of(content) : blocks.content(id);
         var body = new ArrayList<>(body(content, "blocks", lookup));
         if (content != null && body.isEmpty()) {
-            for (var i : items.findByIds(uses.get().stream().map(u -> u.itemId()).toList())) {
+            for (var i : items.findByIds(uses.get().stream().map(ReusableBlockRepository.Use::itemId).toList())) {
                 var where = "in \"" + Objects.requireNonNullElse(i.getTitle(), "") + "\": ";
                 var owner = editorOwned(i.getAuthorId()) ? EDITORS_ITEM : "";
                 rendered(i.getBody(), i.getBodyFormat(), lookup).forEach(v -> body.add(where + v + owner));
@@ -132,7 +132,7 @@ public class HtmlCheck {
         return Optional
             .ofNullable(authorId)
             .flatMap(authors::findById)
-            .map(a -> Capabilities.canPostUnfilteredHtml(Role.of(a.getRole())))
+            .map(a -> Capabilities.canPostUnfilteredHtml(Role.of(a.role())))
             .orElse(false);
     }
 

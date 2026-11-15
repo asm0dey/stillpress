@@ -20,7 +20,6 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import module java.base;
 import org.jboss.logging.Logger;
-import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.account.Captcha;
 import site.asm0dey.stillpress.account.CaptchaFailedException;
 import site.asm0dey.stillpress.account.LoginLimiter;
@@ -34,6 +33,7 @@ import site.asm0dey.stillpress.account.Totp;
 import site.asm0dey.stillpress.account.TwoFactorPolicy;
 import site.asm0dey.stillpress.mail.Mail;
 import site.asm0dey.stillpress.mail.SiteMail;
+import site.asm0dey.stillpress.store.Author;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
@@ -165,28 +165,24 @@ public class AuthResource {
         var user = users.findByLoginOrEmail(c.login());
         // the account bucket follows the user, so login and email share it; unknown names get their own
         var account = user
-            .map(u -> "user:" + u.getId())
+            .map(u -> "user:" + u.id())
             .orElse("login:" + c.login());
         wait = limiter.blockedAccount(account);
         if (wait.isPresent()) {
             return rateLimited(wait.get());
         }
-        var hash = user.map(AuthorRecord::getPasswordHash).orElse(null);
+        var hash = user.map(Author::passwordHash).orElse(null);
         // a user without a password (imported) also pays the full hash cost, and never succeeds
         var ok = Passwords.verify(c.password(), hash == null ? DUMMY_HASH : hash) && hash != null;
         if (!ok) {
             limiter.failure(account, ip);
             return Response.status(401).entity(INVALID_CREDENTIALS).build();
         }
-        var id = user.get().getId();
+        var id = user.get().id();
         var second =
-                new SecondStep(
-                        factors
-                            .totp(id)
-                            .filter(t -> t.getConfirmed())
-                            .isPresent(),
-                        !factors.passkeys(id).isEmpty()
-        );
+                new SecondStep(factors.totp(id).filter(t -> t.confirmed()).isPresent(), !factors
+            .passkeys(id)
+            .isEmpty());
         if (second.totp() || second.passkey()) {
             // half-way: the account bucket is reset only once the second step succeeds
             var raw = tokens.create(id, TokenRepository.SECOND_FACTOR, TokenRepository.SECOND_FACTOR_TTL);
@@ -213,7 +209,7 @@ public class AuthResource {
             RoutingContext ctx
     ) {
         return secondStep(raw, "invalid_passkey", id -> {
-            var login = users.findById(id).map(AuthorRecord::getLogin);
+            var login = users.findById(id).map(Author::login);
             return verifyPasskey(credential, ctx, r -> login.filter(r.getUsername()::equals).isPresent()).isPresent();
         });
     }
@@ -235,7 +231,7 @@ public class AuthResource {
             limiter.ipFailure(ip);
             return Response.status(401).entity(Map.of("error", "invalid_passkey")).build();
         }
-        return signedIn(user.get().getId()).build();
+        return signedIn(user.get().id()).build();
     }
 
     /**
@@ -354,21 +350,21 @@ public class AuthResource {
         }
         users
             .findByLoginOrEmail(login)
-            .filter(u -> u.getEmail() != null && !u.getEmail().isBlank())
+            .filter(u -> u.email() != null && !u.email().isBlank())
             .ifPresent(u -> links
                 .issueUnlessIssuedSince(
-                        u.getId(),
+                        u.id(),
                         TokenRepository.SET_PASSWORD,
                         SetPasswordLink.RESET_TTL,
                         Instant.now().minus(RESET_INTERVAL)
                 )
                 .ifPresent(link -> {
                     var site = settings.get("title").orElse("Stillpress");
-                    var texts = SiteMail.texts(adminLocale(u.getLocale(), settings.get("language")));
+                    var texts = SiteMail.texts(adminLocale(u.locale(), settings.get("language")));
                     var minutes = (int) SetPasswordLink.RESET_TTL.toMinutes();
                     mail.sendAfterCommit(
                             new Mail(
-                                    u.getEmail(),
+                                    u.email(),
                                     texts.resetSubject(site),
                                     texts.resetBody(UsersResource.displayName(u), site, link, minutes)
                             )
@@ -393,18 +389,18 @@ public class AuthResource {
         long id = identity.getAttribute(SessionIdentityProvider.USER_ID);
         var u = users.findById(id).orElseThrow();
         // after an upgrade the first administrator in fills the address links are built from
-        if (Role.ADMINISTRATOR.id().equals(u.getRole())) {
+        if (Role.ADMINISTRATOR.id().equals(u.role())) {
             Origins
                 .of(request)
                 .ifPresent(o -> settings.compareAndSet("admin_url", null, o));
         }
-        var locale = adminLocale(u.getLocale(), settings.get("language"));
+        var locale = adminLocale(u.locale(), settings.get("language"));
         return new SessionUser(
-                u.getId(),
-                u.getLogin(),
-                u.getDisplayName(),
-                u.getEmail(),
-                u.getRole(),
+                u.id(),
+                u.login(),
+                u.displayName(),
+                u.email(),
+                u.role(),
                 locale,
                 Boolean.TRUE.equals(identity.getAttribute(SessionIdentityProvider.ENROLL_REQUIRED))
         );

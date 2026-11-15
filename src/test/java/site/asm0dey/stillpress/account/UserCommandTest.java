@@ -37,7 +37,7 @@ class UserCommandTest {
     @BeforeEach
     void reset() {
         store.reset();
-        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
     }
 
     @Test

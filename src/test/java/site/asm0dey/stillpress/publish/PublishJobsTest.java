@@ -125,7 +125,7 @@ class PublishJobsTest {
         jobs.goLive(id + "@0");
         var moved = db.select(ITEM.PERMALINK).from(ITEM).where(ITEM.ID.eq(id)).fetchOne(ITEM.PERMALINK);
         assertThat(moved).isEqualTo("/2025/05/06/месяц-ноябрь-год-2022/");
-        assertThat(redirects.find(old).orElseThrow().getToPath()).isEqualTo(moved);
+        assertThat(redirects.find(old).orElseThrow().to()).isEqualTo(moved);
     }
 
     @Test

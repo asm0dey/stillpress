@@ -49,8 +49,8 @@ class HtmlCompositionTest {
     @BeforeEach
     void reset() {
         store.reset();
-        author = sessions.create(users.create("author", "a@example.org", "Author", Role.AUTHOR).getId());
-        editor = sessions.create(users.create("editor", "e@example.org", "Editor", Role.EDITOR).getId());
+        author = sessions.create(users.create("author", "a@example.org", "Author", Role.AUTHOR).id());
+        editor = sessions.create(users.create("editor", "e@example.org", "Editor", Role.EDITOR).id());
     }
 
     @AfterEach
@@ -188,7 +188,7 @@ class HtmlCompositionTest {
             .getClassLoader()
             .getResourceAsStream("wxr/sample-blog.xml")
         );
-        var authorId = users.findByLogin("author").orElseThrow().getId();
+        var authorId = users.findByLogin("author").orElseThrow().id();
         var posts = doc
             .items()
             .stream()

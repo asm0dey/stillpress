@@ -305,7 +305,7 @@ public class ItemService {
         r.setModifiedAt(now);
         r.update();
         if ("pending".equals(status) && !wasPending) {
-            reviewNotifications.pendingReview(r, a.userId());
+            reviewNotifications.pendingReview(r.getId(), r.getTitle(), a.userId());
         }
         revisions.saved("item", id, r.getTitle(), r.getBody(), r.getBodyFormat(), r.getExcerpt(), a.userId());
         revisions.deleteAutosave("item", id, a.userId());

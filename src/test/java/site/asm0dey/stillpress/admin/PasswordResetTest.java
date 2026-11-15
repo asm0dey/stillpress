@@ -55,7 +55,7 @@ class PasswordResetTest {
         settings.put("smtp_security", "none");
         settings.put("smtp_from", "blog@example.org");
         mail.reload();
-        adaId = users.create("ada", "ada@example.org", "Ada", Role.AUTHOR).getId();
+        adaId = users.create("ada", "ada@example.org", "Ada", Role.AUTHOR).id();
         users.setPassword(adaId, TestStore.PASSWORD_HASH);
     }
 

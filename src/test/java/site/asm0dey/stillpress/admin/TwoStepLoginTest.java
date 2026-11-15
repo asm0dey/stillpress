@@ -40,7 +40,7 @@ class TwoStepLoginTest {
     void reset() throws Exception {
         store.reset();
         Limiters.reset();
-        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
         users.setPassword(adminId, TestStore.PASSWORD_HASH);
         secret = totp.start(adminId, "admin").secret();
         assertThat(totp.confirm(adminId, TwoFactorResourceTest.code(secret, clock.instant()))).isTrue();
@@ -133,7 +133,7 @@ class TwoStepLoginTest {
 
     @Test
     void userWithoutFactorsStill204() {
-        var plain = users.create("plain", "p@example.org", "Plain", Role.ADMINISTRATOR).getId();
+        var plain = users.create("plain", "p@example.org", "Plain", Role.ADMINISTRATOR).id();
         users.setPassword(plain, TestStore.PASSWORD_HASH);
         var r = login("plain", "correct horse battery").then().statusCode(204).extract();
         assertThat(r.cookies()).containsKey("sp_session").doesNotContainKey("sp_2fa");

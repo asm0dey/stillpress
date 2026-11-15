@@ -47,7 +47,7 @@ public class UserCommand {
             spec
                 .commandLine()
                 .getOut()
-                .println(link.issue(user.get().getId(), TokenRepository.SET_PASSWORD, SetPasswordLink.MANUAL_TTL));
+                .println(link.issue(user.get().id(), TokenRepository.SET_PASSWORD, SetPasswordLink.MANUAL_TTL));
             return 0;
         }
     }
@@ -83,7 +83,7 @@ public class UserCommand {
                 spec.commandLine().getErr().println("No such user: " + login);
                 return 1;
             }
-            var id = user.get().getId();
+            var id = user.get().id();
             var removed = factors.clear(id);
             sessions.deleteAllFor(id);
             spec

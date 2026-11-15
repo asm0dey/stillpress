@@ -35,16 +35,16 @@ class MediaServiceTest {
     @BeforeEach
     void reset() {
         store.reset();
-        userId = users.create("a", "a@example.org", "A", Role.AUTHOR).getId();
+        userId = users.create("a", "a@example.org", "A", Role.AUTHOR).id();
     }
 
     @Test
     void nameIsReducedSluggedAndLowerCased() throws IOException {
         var r = service.store("../../Some Dir\\My Photo.PNG", tmp(), userId);
-        assertThat(r.getPath()).endsWith("/my-photo.png");
-        assertThat(r.getMimeType()).isEqualTo("image/png");
-        assertThat(r.getUploadedBy()).isEqualTo(userId);
-        assertThat(r.getSizeBytes()).isEqualTo(3L);
+        assertThat(r.path()).endsWith("/my-photo.png");
+        assertThat(r.mimeType()).isEqualTo("image/png");
+        assertThat(r.uploadedBy()).isEqualTo(userId);
+        assertThat(r.sizeBytes()).isEqualTo(3L);
         assertThat(db.fetchCount(PUBLISH_QUEUE, PUBLISH_QUEUE.KIND.eq("media"))).isEqualTo(1);
     }
 
@@ -53,8 +53,8 @@ class MediaServiceTest {
         settings.put("timezone", "Pacific/Kiritimati");
         var month = YearMonth.now(ZoneId.of("Pacific/Kiritimati"));
         var r = service.store("a.jpg", tmp(), userId);
-        assertThat(r.getPath()).isEqualTo("/media/%d/%02d/a.jpg".formatted(month.getYear(), month.getMonthValue()));
-        assertThat(r.getWidth()).isNull();
+        assertThat(r.path()).isEqualTo("/media/%d/%02d/a.jpg".formatted(month.getYear(), month.getMonthValue()));
+        assertThat(r.width()).isNull();
     }
 
     @Test

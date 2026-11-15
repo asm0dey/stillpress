@@ -150,7 +150,7 @@ class CaptchaEnforcementTest {
     }
 
     private void ada() {
-        users.setPassword(users.create("ada", "ada@example.org", "Ada", Role.AUTHOR).getId(), TestStore.PASSWORD_HASH);
+        users.setPassword(users.create("ada", "ada@example.org", "Ada", Role.AUTHOR).id(), TestStore.PASSWORD_HASH);
     }
 
     private static Map<String, String> with(Map<String, String> body) {

@@ -70,12 +70,12 @@ class WordPressImporterTest {
         assertThat(report.unknownShortcodes()).isEmpty();
         assertThat(items.findByPermalink(MONTH)).isPresent();
         assertThat(items.findByPermalink(MONTH).orElseThrow().getBody()).doesNotContain("wp-content/uploads");
-        assertThat(redirects.find("?p=5994").orElseThrow().getToPath()).isEqualTo(MONTH);
+        assertThat(redirects.find("?p=5994").orElseThrow().to()).isEqualTo(MONTH);
         assertThat(redirects.find("?p=102")).as("password-protected target").isEmpty();
         assertThat(redirects.find("?p=101")).as("draft").isEmpty();
-        assertThat(redirects.find("?page_id=2").orElseThrow().getToPath()).isEqualTo("/about/");
-        assertThat(redirects.find("/2020/05/10/qa/c/").orElseThrow().getToPath()).isEqualTo("/2020/05/10/qa/");
-        assertThat(redirects.find("?attachment_id=7").orElseThrow().getToPath()).isEqualTo("/2020/05/10/qa/");
+        assertThat(redirects.find("?page_id=2").orElseThrow().to()).isEqualTo("/about/");
+        assertThat(redirects.find("/2020/05/10/qa/c/").orElseThrow().to()).isEqualTo("/2020/05/10/qa/");
+        assertThat(redirects.find("?attachment_id=7").orElseThrow().to()).isEqualTo("/2020/05/10/qa/");
         try (var files = Files.list(dataDir.media().resolve("2023/01"))) {
             assertThat(files).isNotEmpty();
         }
@@ -96,7 +96,7 @@ class WordPressImporterTest {
         assertThat(comments.approvedFor(month.getId()).get(1).getParentId())
             .isEqualTo(comments.approvedFor(month.getId()).get(0).getId());
         assertThat(terms.forItem(month.getId()))
-            .extracting(r -> r.getSlug())
+            .extracting(r -> r.slug())
             .containsExactlyInAnyOrder("travel", "europe", "kids");
         assertThat(db.fetchValue(TERM.PARENT_ID, TERM.SLUG.eq("europe")))
             .isEqualTo(db.fetchValue(TERM.ID, TERM.SLUG.eq("travel")));
@@ -137,7 +137,7 @@ class WordPressImporterTest {
             .fetchMap(AUTHOR.LOGIN, AUTHOR.EMAIL_LOWER))
             .containsEntry("mama", "mama@example.ru")
             .containsEntry("papa", null);
-        assertThat(users.findById(users.findByLogin("papa").orElseThrow().getId()).orElseThrow().getEmail())
+        assertThat(users.findById(users.findByLogin("papa").orElseThrow().id()).orElseThrow().email())
             .isEqualTo("MAMA@example.ru");
     }
 
@@ -150,17 +150,17 @@ class WordPressImporterTest {
     @Test
     void existingAdministratorIsMergedByLogin() throws Exception {
         var admin = users.create("mama", "m@example.org", null, Role.ADMINISTRATOR);
-        users.setPassword(admin.getId(), TestStore.PASSWORD_HASH);
+        users.setPassword(admin.id(), TestStore.PASSWORD_HASH);
         store.importSample();
         var mama = users.findByLoginOrEmail("mama").orElseThrow();
-        assertThat(mama.getId()).isEqualTo(admin.getId());
-        assertThat(mama.getRole()).isEqualTo("administrator");
-        assertThat(mama.getPasswordHash()).isEqualTo(users.findById(admin.getId()).orElseThrow().getPasswordHash());
-        assertThat(mama.getSlug()).isEqualTo("mama");
-        assertThat(mama.getEmail()).as("kept").isEqualTo("m@example.org");
-        assertThat(mama.getDisplayName()).as("filled where null").isEqualTo("Мама");
-        assertThat(mama.getSourceId()).isEqualTo(1L);
-        assertThat(users.findByLoginOrEmail("papa").orElseThrow().getRole()).isEqualTo("author");
+        assertThat(mama.id()).isEqualTo(admin.id());
+        assertThat(mama.role()).isEqualTo("administrator");
+        assertThat(mama.passwordHash()).isEqualTo(users.findById(admin.id()).orElseThrow().passwordHash());
+        assertThat(mama.slug()).isEqualTo("mama");
+        assertThat(mama.email()).as("kept").isEqualTo("m@example.org");
+        assertThat(mama.displayName()).as("filled where null").isEqualTo("Мама");
+        assertThat(mama.sourceId()).isEqualTo(1L);
+        assertThat(users.findByLoginOrEmail("papa").orElseThrow().role()).isEqualTo("author");
         assertThat(items.findByPermalink(MONTH).orElseThrow().getAuthorId()).isNotNull();
     }
 
@@ -174,14 +174,14 @@ class WordPressImporterTest {
     void reusableBlockGetsItsCreatorAsOwner() throws Exception {
         store.importSample();
         assertThat(db.select(REUSABLE_BLOCK.AUTHOR_ID).from(REUSABLE_BLOCK).fetchOne(REUSABLE_BLOCK.AUTHOR_ID))
-            .isEqualTo(users.findByLoginOrEmail("mama").orElseThrow().getId());
+            .isEqualTo(users.findByLoginOrEmail("mama").orElseThrow().id());
     }
 
     @Test
     void newAuthorSlugsAvoidExistingUsers() throws Exception {
         users.create("Papa", "other@example.org", "Other", Role.EDITOR);
         store.importSample();
-        assertThat(users.findByLoginOrEmail("papa").orElseThrow().getSlug()).isEqualTo("papa-2");
+        assertThat(users.findByLoginOrEmail("papa").orElseThrow().slug()).isEqualTo("papa-2");
     }
 
     @Test

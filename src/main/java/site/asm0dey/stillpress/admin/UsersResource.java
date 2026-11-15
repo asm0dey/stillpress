@@ -1,6 +1,5 @@
 package site.asm0dey.stillpress.admin;
 
-import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
@@ -14,16 +13,15 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import module java.base;
-import org.jooq.exception.DataAccessException;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SetPasswordLink;
 import site.asm0dey.stillpress.account.UserFields;
-import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.mail.Mail;
 import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;
+import site.asm0dey.stillpress.store.Author;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.FragmentRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
@@ -101,15 +99,15 @@ public class UsersResource {
         return users
             .allWithTwoFactor()
             .stream()
-            .sorted(Comparator.comparing(r -> r.get(AUTHOR.LOGIN)))
+            .sorted(Comparator.comparing(r -> r.author().login()))
             .map(r -> new UserView(
-                    r.get(AUTHOR.ID),
-                    r.get(AUTHOR.LOGIN),
-                    r.get(AUTHOR.DISPLAY_NAME),
-                    r.get(AUTHOR.EMAIL),
-                    r.get(AUTHOR.ROLE),
-                    r.get(AUTHOR.PASSWORD_HASH) != null,
-                    r.get(AuthorRepository.TWO_FACTOR)
+                    r.author().id(),
+                    r.author().login(),
+                    r.author().displayName(),
+                    r.author().email(),
+                    r.author().role(),
+                    r.author().passwordHash() != null,
+                    r.twoFactor()
             ))
             .toList();
     }
@@ -155,22 +153,17 @@ public class UsersResource {
             return error(409, "email_taken");
         }
         guard.close();
-        AuthorRecord created;
+        Author created;
         try {
             created = users.create(login, email, name, role);
-        } catch (DataAccessException e) {
-            if (!"23505".equals(e.sqlState())) {
-                throw e;
-            }
+        } catch (AuthorRepository.Taken e) {
             // a concurrent create took the login or the email; thrown, so the transaction rolls back
-            throw new WebApplicationException(
-                    error(409, AuthorRepository.isEmailConflict(e) ? "email_taken" : "login_taken")
-            );
+            throw new WebApplicationException(error(409, e.email ? "email_taken" : "login_taken"));
         }
         // a full publish renders every author's archive, the new user's empty one too
-        queue.base("/author/" + created.getSlug() + "/");
+        queue.base("/author/" + created.slug() + "/");
         jobs.requestPublish();
-        var id = created.getId();
+        var id = created.id();
         if (mail.configured()) {
             invite(created);
             return Response.status(201).entity(Map.of("id", id, "mailed", true)).build();
@@ -202,7 +195,7 @@ public class UsersResource {
         if (!mail.configured()) {
             return error(409, "mail_not_configured");
         }
-        if (u.getEmail() == null || u.getEmail().isBlank()) {
+        if (u.email() == null || u.email().isBlank()) {
             return error(400, "no_email");
         }
         guard.close();
@@ -210,22 +203,22 @@ public class UsersResource {
         return Response.noContent().build();
     }
 
-    private void invite(AuthorRecord u) {
+    private void invite(Author u) {
         var site = settings.get("title").orElse("Stillpress");
-        var texts = SiteMail.texts(AuthResource.adminLocale(u.getLocale(), settings.get("language")));
-        var link = links.issue(u.getId(), TokenRepository.INVITE, SetPasswordLink.INVITE_TTL);
+        var texts = SiteMail.texts(AuthResource.adminLocale(u.locale(), settings.get("language")));
+        var link = links.issue(u.id(), TokenRepository.INVITE, SetPasswordLink.INVITE_TTL);
         var days = (int) SetPasswordLink.INVITE_TTL.toDays();
         mail.sendAfterCommit(
-                new Mail(u.getEmail(), texts.inviteSubject(site), texts.inviteBody(displayName(u), site, link, days))
+                new Mail(u.email(), texts.inviteSubject(site), texts.inviteBody(displayName(u), site, link, days))
         );
     }
 
     /**
      * How a mail greets the user: the display name, or the login when an imported author has none.
      */
-    public static String displayName(AuthorRecord u) {
-        var name = u.getDisplayName();
-        return name == null || name.isBlank() ? u.getLogin() : name;
+    public static String displayName(Author u) {
+        var name = u.displayName();
+        return name == null || name.isBlank() ? u.login() : name;
     }
 
     /**
@@ -259,18 +252,15 @@ public class UsersResource {
         guard.close();
         try {
             users.setProfile(id, name, email);
-        } catch (DataAccessException e) {
-            if (!AuthorRepository.isEmailConflict(e)) {
-                throw e;
-            }
+        } catch (AuthorRepository.Taken e) {
             // a concurrent change took the email; thrown, so the transaction rolls back
             throw new WebApplicationException(error(409, "email_taken"));
         }
-        if (!name.equals(u.getDisplayName())) {
+        if (!name.equals(u.displayName())) {
             var written = items.publishedIdsBy(id);
             fragments.delete(written);
             queue.items(written);
-            queue.base("/author/" + u.getSlug() + "/");
+            queue.base("/author/" + u.slug() + "/");
             jobs.requestPublish();
         }
         return Response.noContent().build();

@@ -30,6 +30,6 @@ class PostgresImportPublishTest {
         assertThat(rel.resolve("feed/index.html"))
             .content()
             .contains("<guid isPermaLink=\"false\">https://blog.example.ru/?p=5994</guid>");
-        assertThat(redirects.find("?p=5994").orElseThrow().getToPath()).isEqualTo("/2023/01/14/месяц-ноябрь-год-2022/");
+        assertThat(redirects.find("?p=5994").orElseThrow().to()).isEqualTo("/2023/01/14/месяц-ноябрь-год-2022/");
     }
 }

@@ -71,7 +71,7 @@ public class ResetResource {
         var password = c.password();
         var ok = password != null
                 && password.codePointCount(0, password.length()) <= Passwords.MAX_LENGTH
-                && Passwords.verify(password, users.findById(id).orElseThrow().getPasswordHash());
+                && Passwords.verify(password, users.findById(id).orElseThrow().passwordHash());
         if (!ok) {
             limiter.failure(account, ip);
             return Response.status(403).entity(Map.of("error", "invalid_credentials")).build();

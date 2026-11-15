@@ -71,11 +71,11 @@ public class Totp {
      * Checks {@code code} against the unconfirmed seed; on a match confirms the factor and spends the step.
      */
     public boolean confirm(long userId, String code) {
-        var row = factors.totp(userId).filter(t -> !t.getConfirmed());
+        var row = factors.totp(userId).filter(t -> !t.confirmed());
         if (row.isEmpty() || !CODE.matcher(code == null ? "" : code).matches()) {
             return false;
         }
-        var ciphertext = row.get().getCiphertext();
+        var ciphertext = row.get().ciphertext();
         var seed = seed(userId, ciphertext);
         var now = currentStep();
         for (long step = now - 1; seed.isPresent() && step <= now + 1; step++) {
@@ -94,8 +94,8 @@ public class Totp {
         if (code == null || !CODE.matcher(code).matches()) {
             return false;
         }
-        var row = factors.totp(userId).filter(t -> t.getConfirmed());
-        var seed = row.flatMap(t -> seed(userId, t.getCiphertext()));
+        var row = factors.totp(userId).filter(t -> t.confirmed());
+        var seed = row.flatMap(t -> seed(userId, t.ciphertext()));
         var now = currentStep();
         for (long step = now - 1; seed.isPresent() && step <= now + 1; step++) {
             if (matches(seed.get(), step, code) && factors.advanceTotp(userId, step)) {

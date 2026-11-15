@@ -153,9 +153,9 @@ public class Permalinker {
             .get("default_category")
             .map(Long::valueOf)
             .flatMap(terms::findById)
-            .filter(t -> "category".equals(t.getTaxonomy()));
+            .filter(t -> "category".equals(t.taxonomy()));
         if (chosen.isPresent()) {
-            return chosen.get().getId();
+            return chosen.get().id();
         }
         var name = settings.get("language").orElse("en").startsWith("ru") ? "Без рубрики" : "Uncategorized";
         var term = terms
@@ -166,8 +166,8 @@ public class Permalinker {
                     null,
                     new ItemService.Actor(0, Role.ADMINISTRATOR)
             ));
-        settings.put("default_category", String.valueOf(term.getId()));
-        return term.getId();
+        settings.put("default_category", String.valueOf(term.id()));
+        return term.id();
     }
 
     public String uniqueSlug(ItemRecord r, String base) {

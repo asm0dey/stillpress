@@ -30,11 +30,11 @@ class TokenRepositoryTest {
     @Test
     void tokensAreSingleUseAndPurposeBound() {
         var u = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
-        var raw = tokens.create(u.getId(), "set_password", Duration.ofHours(24));
+        var raw = tokens.create(u.id(), "set_password", Duration.ofHours(24));
         assertThat(tokens.consume(raw, "other")).isEmpty();
-        assertThat(tokens.consume(raw, "set_password")).contains(u.getId());
+        assertThat(tokens.consume(raw, "set_password")).contains(u.id());
         assertThat(tokens.consume(raw, "set_password")).isEmpty();
-        var expired = tokens.create(u.getId(), "set_password", Duration.ofSeconds(-1));
+        var expired = tokens.create(u.id(), "set_password", Duration.ofSeconds(-1));
         assertThat(tokens.consume(expired, "set_password")).isEmpty();
         assertThat(db.fetchCount(USER_TOKEN)).isZero();
         assertThat(tokens.consume("unknown", "set_password")).isEmpty();
@@ -43,7 +43,7 @@ class TokenRepositoryTest {
     @Test
     void concurrentCreatesLeaveOneToken() throws Exception {
         var u = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
-        var raws = race(() -> tokens.create(u.getId(), "set_password", Duration.ofHours(1)));
+        var raws = race(() -> tokens.create(u.id(), "set_password", Duration.ofHours(1)));
         assertThat(db.fetchCount(USER_TOKEN)).isEqualTo(1);
         var consumed = raws
             .stream()
@@ -57,30 +57,30 @@ class TokenRepositoryTest {
     void throttleIsAtomic() throws Exception {
         var u = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
         var since = Instant.now().minus(Duration.ofMinutes(5));
-        var issued = race(() -> tokens.createUnlessIssuedSince(u.getId(), "set_password", Duration.ofHours(1), since));
+        var issued = race(() -> tokens.createUnlessIssuedSince(u.id(), "set_password", Duration.ofHours(1), since));
         assertThat(issued.stream().filter(Optional::isPresent).count()).isEqualTo(1);
     }
 
     @Test
     void anOlderTokenIsReplacedAndANewerOneKept() {
         var u = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
-        var first = tokens.create(u.getId(), "set_password", Duration.ofHours(1));
+        var first = tokens.create(u.id(), "set_password", Duration.ofHours(1));
         assertThat(tokens.createUnlessIssuedSince(
-                u.getId(),
+                u.id(),
                 "set_password",
                 Duration.ofHours(1),
                 Instant.now().minus(Duration.ofMinutes(5))
         ))
             .isEmpty();
         var second = tokens.createUnlessIssuedSince(
-                u.getId(),
+                u.id(),
                 "set_password",
                 Duration.ofHours(1),
                 Instant.now().plus(Duration.ofMinutes(1))
         );
         assertThat(second).isPresent();
         assertThat(tokens.consume(first, "set_password")).isEmpty();
-        assertThat(tokens.consume(second.get(), "set_password")).contains(u.getId());
+        assertThat(tokens.consume(second.get(), "set_password")).contains(u.id());
     }
 
     private static <T> List<T> race(Callable<T> call) throws Exception {

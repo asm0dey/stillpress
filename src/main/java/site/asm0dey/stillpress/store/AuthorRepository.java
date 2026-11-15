@@ -9,8 +9,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.Field;
-import org.jooq.Record;
-import org.jooq.Result;
 import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.account.Role;
@@ -24,30 +22,36 @@ import site.asm0dey.stillpress.importer.Nicename;
 public class AuthorRepository {
     private final DSLContext db;
 
-    public Optional<AuthorRecord> findById(long id) {
-        return db.selectFrom(AUTHOR).where(AUTHOR.ID.eq(id)).fetchOptional();
+    public Optional<Author> findById(long id) {
+        return db.selectFrom(AUTHOR).where(AUTHOR.ID.eq(id)).fetchOptional(AuthorRepository::author);
     }
 
-    public Optional<AuthorRecord> findByLogin(String login) {
-        return db.selectFrom(AUTHOR).where(AUTHOR.LOGIN.eq(login)).fetchOptional();
+    public Optional<Author> findByLogin(String login) {
+        return db.selectFrom(AUTHOR).where(AUTHOR.LOGIN.eq(login)).fetchOptional(AuthorRepository::author);
     }
 
     public Set<String> slugs() {
         return new HashSet<>(db.select(AUTHOR.SLUG).from(AUTHOR).fetch(AUTHOR.SLUG));
     }
 
-    public List<AuthorRecord> all() {
-        return db.selectFrom(AUTHOR).fetch();
+    public List<Author> all() {
+        return db.selectFrom(AUTHOR).fetch(AuthorRepository::author);
     }
 
     /**
-     * Every user's row plus {@link #TWO_FACTOR}: whether they have a passkey or a confirmed authenticator.
+     * A user and whether they have a passkey or a confirmed authenticator.
      */
-    public Result<Record> allWithTwoFactor() {
-        return db.select(AUTHOR.fields()).select(TWO_FACTOR).from(AUTHOR).fetch();
+    public record WithTwoFactor(Author author, boolean twoFactor) {}
+
+    public List<WithTwoFactor> allWithTwoFactor() {
+        return db
+            .select(AUTHOR.fields())
+            .select(TWO_FACTOR)
+            .from(AUTHOR)
+            .fetch(r -> new WithTwoFactor(author(r.into(AUTHOR)), r.get(TWO_FACTOR)));
     }
 
-    public static final Field<Boolean> TWO_FACTOR = DSL
+    private static final Field<Boolean> TWO_FACTOR = DSL
         .field(DSL
             .exists(DSL.selectOne().from(PASSKEY).where(PASSKEY.USER_ID.eq(AUTHOR.ID)))
             .or(DSL.exists(DSL
@@ -65,33 +69,36 @@ public class AuthorRepository {
     /**
      * Administrators and editors with an email: who reviews what contributors submit.
      */
-    public List<AuthorRecord> reviewers() {
+    public List<Author> reviewers() {
         return db
             .selectFrom(AUTHOR)
             .where(AUTHOR.ROLE.in(Role.ADMINISTRATOR.id(), Role.EDITOR.id()))
             .and(AUTHOR.EMAIL.isNotNull())
             .and(AUTHOR.EMAIL.ne(""))
-            .fetch();
+            .fetch(AuthorRepository::author);
     }
 
     /**
      * The exact login, else the email (case-insensitive) when exactly one user has it.
      */
-    public Optional<AuthorRecord> findByLoginOrEmail(String s) {
+    public Optional<Author> findByLoginOrEmail(String s) {
         // the login match (at most one: login is unique) sorts first, so the limit never cuts it off
         var rows = db
             .selectFrom(AUTHOR)
             .where(AUTHOR.LOGIN.eq(s).or(AUTHOR.EMAIL_LOWER.eq(lowerEmail(s))))
             .orderBy(when(AUTHOR.LOGIN.eq(s), 0).otherwise(1))
             .limit(3)
-            .fetch();
-        if (!rows.isEmpty() && rows.getFirst().getLogin().equals(s)) {
+            .fetch(AuthorRepository::author);
+        if (!rows.isEmpty() && rows.getFirst().login().equals(s)) {
             return Optional.of(rows.getFirst());
         }
         return rows.size() == 1 ? Optional.of(rows.getFirst()) : Optional.empty();
     }
 
-    public AuthorRecord create(String login, String email, String displayName, Role role) {
+    /**
+     * @throws Taken when a unique index refuses the login or the email, as a concurrent create can
+     */
+    public Author create(String login, String email, String displayName, Role role) {
         var r = db.newRecord(AUTHOR);
         r.setLogin(login);
         r.setEmail(email);
@@ -99,8 +106,41 @@ public class AuthorRepository {
         r.setDisplayName(displayName);
         r.setRole(role.id());
         r.setSlug(uniqueSlug(login));
-        r.store();
-        return r;
+        try {
+            r.store();
+        } catch (DataAccessException e) {
+            if (!"23505".equals(e.sqlState())) {
+                throw e;
+            }
+            throw new Taken(isEmailConflict(e), e);
+        }
+        return author(r);
+    }
+
+    /**
+     * A unique index refused a second user with the same login, or the same email when {@code email}.
+     */
+    public static class Taken extends RuntimeException {
+        public final boolean email;
+
+        Taken(boolean email, Throwable cause) {
+            super(cause);
+            this.email = email;
+        }
+    }
+
+    static Author author(AuthorRecord r) {
+        return new Author(
+                r.getId(),
+                r.getLogin(),
+                r.getDisplayName(),
+                r.getEmail(),
+                r.getSlug(),
+                r.getRole(),
+                r.getPasswordHash(),
+                r.getLocale(),
+                r.getSourceId()
+        );
     }
 
     /**
@@ -125,14 +165,24 @@ public class AuthorRepository {
                 && String.valueOf(e.getMessage()).toLowerCase(Locale.ROOT).contains("uq_author_email_lower");
     }
 
+    /**
+     * @throws Taken when the unique index refuses the email, as a concurrent change can
+     */
     public void setProfile(long id, String displayName, String email) {
-        db
-            .update(AUTHOR)
-            .set(AUTHOR.DISPLAY_NAME, displayName)
-            .set(AUTHOR.EMAIL, email)
-            .set(AUTHOR.EMAIL_LOWER, lowerEmail(email))
-            .where(AUTHOR.ID.eq(id))
-            .execute();
+        try {
+            db
+                .update(AUTHOR)
+                .set(AUTHOR.DISPLAY_NAME, displayName)
+                .set(AUTHOR.EMAIL, email)
+                .set(AUTHOR.EMAIL_LOWER, lowerEmail(email))
+                .where(AUTHOR.ID.eq(id))
+                .execute();
+        } catch (DataAccessException e) {
+            if (!isEmailConflict(e)) {
+                throw e;
+            }
+            throw new Taken(true, e);
+        }
     }
 
     public void setLocale(long id, String locale) {

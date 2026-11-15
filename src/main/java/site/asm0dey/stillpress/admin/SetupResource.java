@@ -110,10 +110,7 @@ public class SetupResource {
                 return error(400, Map.of("error", "invalid", "field", field));
             }
             // an upgraded imported author keeps its row; anyone else's email is taken
-            var upgraded = users
-                .findByLogin(s.login())
-                .map(u -> u.getId())
-                .orElse(-1L);
+            var upgraded = users.findByLogin(s.login()).map(u -> u.id()).orElse(-1L);
             if (users.emailTaken(s.email(), upgraded)) {
                 return error(409, Map.of("error", "email_taken"));
             }
@@ -175,13 +172,13 @@ public class SetupResource {
         // an imported author with this login becomes the administrator instead of colliding with it
         var id = users
             .findByLoginOrEmail(s.login())
-            .filter(u -> u.getLogin().equals(s.login()))
+            .filter(u -> u.login().equals(s.login()))
             .map(u -> {
-                users.setRole(u.getId(), Role.ADMINISTRATOR);
-                users.setProfile(u.getId(), s.displayName(), s.email());
-                return u.getId();
+                users.setRole(u.id(), Role.ADMINISTRATOR);
+                users.setProfile(u.id(), s.displayName(), s.email());
+                return u.id();
             })
-            .orElseGet(() -> users.create(s.login(), s.email(), s.displayName(), Role.ADMINISTRATOR).getId());
+            .orElseGet(() -> users.create(s.login(), s.email(), s.displayName(), Role.ADMINISTRATOR).id());
         users.setPassword(id, hash);
         return sessions.create(id);
     }

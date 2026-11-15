@@ -75,10 +75,8 @@ class TermsResourceTest {
         TestStore.await(() -> Files.exists(moved) && !Files.exists(dataDir.current().resolve("category/travel")), 30);
         assertThat(moved).exists();
         assertThat(dataDir.current().resolve("category/travel")).doesNotExist();
-        assertThat(redirects.find("/category/travel/").orElseThrow().getToPath()).isEqualTo("/category/trips/");
-        assertThat(redirects.find("/category/travel/europe/").orElseThrow().getToPath()).isEqualTo(
-                "/category/trips/europe/"
-        );
+        assertThat(redirects.find("/category/travel/").orElseThrow().to()).isEqualTo("/category/trips/");
+        assertThat(redirects.find("/category/travel/europe/").orElseThrow().to()).isEqualTo("/category/trips/europe/");
     }
 
     @Test
@@ -115,9 +113,9 @@ class TermsResourceTest {
         var post = publish("Rome", travel);
         as(admin).delete("/admin/api/terms/" + travel).then().statusCode(204);
         assertThat(terms.findById(travel)).isEmpty();
-        assertThat(terms.findById(europe).orElseThrow().getParentId()).isNull();
+        assertThat(terms.findById(europe).orElseThrow().parentId()).isNull();
         assertThat(terms.idsForItem(post, "category")).containsExactly(news);
-        assertThat(redirects.find("/category/travel/europe/").orElseThrow().getToPath()).isEqualTo("/category/europe/");
+        assertThat(redirects.find("/category/travel/europe/").orElseThrow().to()).isEqualTo("/category/europe/");
         var europePage = dataDir.current().resolve("category/europe/index.html");
         TestStore.await(() -> Files.exists(europePage), 30);
         assertThat(europePage).exists();
@@ -134,7 +132,7 @@ class TermsResourceTest {
             .body("field", equalTo("name"));
         var news = term(admin, "category", "News", null);
         put(admin, news, Map.of("name", longName, "slug", "news")).then().statusCode(400).body("field", equalTo("name"));
-        assertThat(terms.findById(news).orElseThrow().getName()).isEqualTo("News");
+        assertThat(terms.findById(news).orElseThrow().name()).isEqualTo("News");
         term(admin, "category", "n".repeat(200), null);
     }
 
@@ -154,7 +152,7 @@ class TermsResourceTest {
         put(admin, travel, body).then().statusCode(400).body("field", equalTo("parentId"));
         body.put("parentId", travel);
         put(admin, travel, body).then().statusCode(400).body("field", equalTo("parentId"));
-        assertThat(terms.findById(travel).orElseThrow().getParentId()).isNull();
+        assertThat(terms.findById(travel).orElseThrow().parentId()).isNull();
     }
 
     @Test
@@ -162,7 +160,7 @@ class TermsResourceTest {
         var tag = term(author, "post_tag", "Kids", null);
         put(author, tag, Map.of("name", "Children", "slug", "children")).then().statusCode(403);
         as(author).delete("/admin/api/terms/" + tag).then().statusCode(403);
-        assertThat(terms.findById(tag).orElseThrow().getSlug()).isEqualTo("kids");
+        assertThat(terms.findById(tag).orElseThrow().slug()).isEqualTo("kids");
     }
 
     private long publish(String title, long category) {
@@ -194,7 +192,7 @@ class TermsResourceTest {
     }
 
     private String cookie(String login, Role role) {
-        var id = users.create(login, login + "@example.org", login, role).getId();
+        var id = users.create(login, login + "@example.org", login, role).id();
         users.setPassword(id, TestStore.PASSWORD_HASH);
         return sessions.create(id);
     }

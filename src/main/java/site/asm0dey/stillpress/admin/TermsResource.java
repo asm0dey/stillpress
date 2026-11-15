@@ -15,7 +15,7 @@ import module java.base;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.content.TermService;
-import site.asm0dey.stillpress.db.tables.records.TermRecord;
+import site.asm0dey.stillpress.store.Term;
 import site.asm0dey.stillpress.store.TermRepository;
 
 /**
@@ -76,8 +76,8 @@ public class TermsResource {
         return Response.noContent().build();
     }
 
-    private static TermView view(TermRecord t) {
-        return new TermView(t.getId(), t.getName(), t.getSlug(), t.getParentId(), t.getDescription());
+    private static TermView view(Term t) {
+        return new TermView(t.id(), t.name(), t.slug(), t.parentId(), t.description());
     }
 
     private ItemService.Actor actor() {

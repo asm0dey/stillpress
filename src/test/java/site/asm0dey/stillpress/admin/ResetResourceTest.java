@@ -46,9 +46,9 @@ class ResetResourceTest {
     void clean() {
         store.reset();
         settings.put("title", "My Site");
-        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
         users.setPassword(adminId, TestStore.PASSWORD_HASH);
-        var editorId = users.create("editor", "e@example.org", "Editor", Role.EDITOR).getId();
+        var editorId = users.create("editor", "e@example.org", "Editor", Role.EDITOR).id();
         users.setPassword(editorId, TestStore.PASSWORD_HASH);
         adminCookie = sessions.create(adminId);
         editorCookie = sessions.create(editorId);
@@ -109,7 +109,7 @@ class ResetResourceTest {
             .statusCode(200)
             .body("importAllowed", equalTo(true));
         assertThat(users.all())
-            .extracting(u -> u.getLogin())
+            .extracting(u -> u.login())
             .containsExactly("admin");
     }
 

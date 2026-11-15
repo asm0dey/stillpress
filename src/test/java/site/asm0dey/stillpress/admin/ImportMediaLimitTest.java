@@ -37,7 +37,7 @@ class ImportMediaLimitTest {
     @Test
     void configuredLimitCapsAdminImportDownloads() throws Exception {
         store.reset();
-        var id = users.create("admin", "admin@example.org", "admin", Role.ADMINISTRATOR).getId();
+        var id = users.create("admin", "admin@example.org", "admin", Role.ADMINISTRATOR).id();
         users.setPassword(id, TestStore.PASSWORD_HASH);
         var req = csrf().cookie("sp_session", sessions.create(id));
         try (var in = TestStore.sample()) {

@@ -19,9 +19,9 @@ import site.asm0dey.stillpress.content.Capabilities;
 import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.content.Permalinker;
 import site.asm0dey.stillpress.content.Revisions;
-import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
+import site.asm0dey.stillpress.store.Author;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.TermRepository;
@@ -254,10 +254,7 @@ public class ItemsResource {
         var byTaxonomy = terms
             .forItem(r.getId())
             .stream()
-            .collect(Collectors.groupingBy(
-                    t -> t.getTaxonomy(),
-                    Collectors.mapping(t -> t.getId(), Collectors.toList())
-            ));
+            .collect(Collectors.groupingBy(t -> t.taxonomy(), Collectors.mapping(t -> t.id(), Collectors.toList())));
         var autosave = revisions
             .autosaveOf("item", r.getId(), a.userId())
             .map(RevisionRecord::getCreatedAt)
@@ -292,10 +289,7 @@ public class ItemsResource {
         return authors
             .all()
             .stream()
-            .collect(Collectors.toMap(AuthorRecord::getId, u -> Objects.requireNonNullElse(
-                    u.getDisplayName(),
-                    u.getLogin()
-            )));
+            .collect(Collectors.toMap(Author::id, u -> Objects.requireNonNullElse(u.displayName(), u.login())));
     }
 
     private ItemService.Actor actor() {

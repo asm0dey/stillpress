@@ -45,9 +45,9 @@ class ReusableBlocksResourceTest {
     @BeforeEach
     void reset() {
         store.reset();
-        author1Id = users.create("author1", "a1@example.org", "Author One", Role.AUTHOR).getId();
+        author1Id = users.create("author1", "a1@example.org", "Author One", Role.AUTHOR).id();
         author1 = sessions.create(author1Id);
-        author2 = sessions.create(users.create("author2", "a2@example.org", "Author Two", Role.AUTHOR).getId());
+        author2 = sessions.create(users.create("author2", "a2@example.org", "Author Two", Role.AUTHOR).id());
     }
 
     @AfterEach
@@ -58,7 +58,7 @@ class ReusableBlocksResourceTest {
     @Test
     void importedBlockCanBeSavedWithItsModifiedAt() throws Exception {
         importer.importWxr(site.asm0dey.stillpress.TestStore.sample());
-        var admin = sessions.create(users.create("root", "root@example.org", "Root", Role.ADMINISTRATOR).getId());
+        var admin = sessions.create(users.create("root", "root@example.org", "Root", Role.ADMINISTRATOR).id());
         var id = db
             .select(site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK.SOURCE_ID)
             .from(site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK)
@@ -235,7 +235,7 @@ class ReusableBlocksResourceTest {
             .then()
             .statusCode(400);
         as(author1).get("/admin/api/blocks/" + b.getLong("id")).then().body("content", equalTo("one"));
-        var editor = sessions.create(users.create("editor", "e@example.org", "Ed", Role.EDITOR).getId());
+        var editor = sessions.create(users.create("editor", "e@example.org", "Ed", Role.EDITOR).id());
         put(editor, b, "<script>x</script>").then().statusCode(200).body("content", equalTo("<script>x</script>"));
     }
 
@@ -253,7 +253,7 @@ class ReusableBlocksResourceTest {
             .statusCode(400)
             .body("violations", org.hamcrest.Matchers.contains("unclosed markup at the end"));
         // an editor's half is not checked; the post that completes the tag is
-        var editor = sessions.create(users.create("editor", "e@example.org", "Ed", Role.EDITOR).getId());
+        var editor = sessions.create(users.create("editor", "e@example.org", "Ed", Role.EDITOR).id());
         var b = create(editor, half);
         var post = ItemsResourceTest.create(author1, "post");
         var ref = "<!-- wp:block {\"ref\":" + b.getLong("id") + "} /-->";

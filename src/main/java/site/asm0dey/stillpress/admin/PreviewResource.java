@@ -11,9 +11,9 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import module java.base;
 import site.asm0dey.stillpress.content.Capabilities;
-import site.asm0dey.stillpress.content.Revisions;
 import site.asm0dey.stillpress.publish.views.ViewFactory;
 import site.asm0dey.stillpress.store.ItemRepository;
+import site.asm0dey.stillpress.store.RevisionRepository;
 
 /**
  * An item rendered as the site would show it, from this user's autosave when that is newer; never written out.
@@ -22,14 +22,14 @@ import site.asm0dey.stillpress.store.ItemRepository;
 @Authenticated
 public class PreviewResource {
     private final ItemRepository items;
-    private final Revisions revisions;
+    private final RevisionRepository revisions;
     private final ViewFactory views;
     private final Engine engine;
     private final SecurityIdentity identity;
 
     PreviewResource(
             ItemRepository items,
-            Revisions revisions,
+            RevisionRepository revisions,
             ViewFactory views,
             Engine engine,
             SecurityIdentity identity
@@ -54,14 +54,7 @@ public class PreviewResource {
             return Response.status(403).build();
         }
         // the record is changed in memory only and never stored
-        revisions
-            .autosaveOf("item", id, a.userId())
-            .filter(s -> r.getModifiedAt() == null || s.getCreatedAt().isAfter(r.getModifiedAt()))
-            .ifPresent(s -> {
-                r.setTitle(s.getTitle());
-                r.setBody(s.getBody());
-                r.setExcerpt(s.getExcerpt());
-            });
+        revisions.overlayAutosave(r, a.userId());
         var html = engine
             .getTemplate("plain/single")
             .data("site", views.site())

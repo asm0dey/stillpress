@@ -63,7 +63,7 @@ class CaptchaCommandTest {
 
     @Test
     void envProviderLocksTheSetting() {
-        var admin = sessions.create(users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).getId());
+        var admin = sessions.create(users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).id());
         csrf()
             .contentType(JSON)
             .cookie("sp_session", admin)

@@ -6,7 +6,6 @@ import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Records;
 import org.jooq.impl.DSL;
-import site.asm0dey.stillpress.db.tables.records.RedirectRecord;
 import static site.asm0dey.stillpress.db.Tables.REDIRECT;
 
 @ApplicationScoped
@@ -17,8 +16,11 @@ public class RedirectRepository {
         this.db = db;
     }
 
-    public Optional<RedirectRecord> find(String key) {
-        return db.selectFrom(REDIRECT).where(REDIRECT.FROM_PATH.eq(key)).fetchOptional();
+    public Optional<Row> find(String key) {
+        return db
+            .selectFrom(REDIRECT)
+            .where(REDIRECT.FROM_PATH.eq(key))
+            .fetchOptional(r -> new Row(r.getFromPath(), r.getToPath(), r.getStatusCode()));
     }
 
     /**

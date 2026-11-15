@@ -136,7 +136,7 @@ class RedirectsResourceTest {
     }
 
     private String cookie(String login, Role role) {
-        var id = users.create(login, login + "@example.org", login, role).getId();
+        var id = users.create(login, login + "@example.org", login, role).id();
         users.setPassword(id, TestStore.PASSWORD_HASH);
         return sessions.create(id);
     }

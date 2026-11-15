@@ -149,7 +149,7 @@ public class SettingsResource {
         }
         moves.put("/" + from + "/", "/" + to + "/");
         for (var t : terms.byTaxonomy(taxonomy)) {
-            var path = "category".equals(taxonomy) ? permalinks.termPath(t.getId()) : t.getSlug();
+            var path = "category".equals(taxonomy) ? permalinks.termPath(t.id()) : t.slug();
             moves.put("/" + from + "/" + path + "/", "/" + to + "/" + path + "/");
         }
     }
@@ -193,7 +193,7 @@ public class SettingsResource {
             return "tagBase";
         }
         if (s.defaultCategory() != null
-                && terms.findById(s.defaultCategory()).filter(t -> "category".equals(t.getTaxonomy())).isEmpty()) {
+                && terms.findById(s.defaultCategory()).filter(t -> "category".equals(t.taxonomy())).isEmpty()) {
             return "defaultCategory";
         }
         if (!"open".equals(s.defaultCommentStatus()) && !"closed".equals(s.defaultCommentStatus())) {

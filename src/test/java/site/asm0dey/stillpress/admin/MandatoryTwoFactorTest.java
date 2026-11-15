@@ -47,9 +47,9 @@ class MandatoryTwoFactorTest {
     void reset() {
         store.reset();
         Limiters.reset();
-        admin = users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).getId();
-        editor = users.create("editor", "editor@example.org", "Editor", Role.EDITOR).getId();
-        author = users.create("author", "author@example.org", "Author", Role.AUTHOR).getId();
+        admin = users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).id();
+        editor = users.create("editor", "editor@example.org", "Editor", Role.EDITOR).id();
+        author = users.create("author", "author@example.org", "Author", Role.AUTHOR).id();
         users.setPassword(editor, TestStore.PASSWORD_HASH);
         adminSession = sessions.create(admin);
     }
@@ -224,7 +224,7 @@ class MandatoryTwoFactorTest {
             .statusCode(204)
             .extract()
             .cookie("sp_session");
-        var invited = users.create("invited", "invited@example.org", "Invited", Role.AUTHOR).getId();
+        var invited = users.create("invited", "invited@example.org", "Invited", Role.AUTHOR).id();
         var invite = tokens.create(invited, TokenRepository.INVITE, Duration.ofHours(24));
         var issued = as(session)
             .contentType(JSON)
@@ -244,7 +244,7 @@ class MandatoryTwoFactorTest {
     @Test
     void setPasswordGoesToEnrollment() {
         require();
-        var invited = users.create("invited", "invited@example.org", "Invited", Role.AUTHOR).getId();
+        var invited = users.create("invited", "invited@example.org", "Invited", Role.AUTHOR).id();
         var invite = tokens.create(invited, TokenRepository.INVITE, Duration.ofHours(24));
         var session =
                 setPassword(invite)

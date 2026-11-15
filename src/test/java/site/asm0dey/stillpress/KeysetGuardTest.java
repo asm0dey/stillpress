@@ -58,7 +58,7 @@ class KeysetGuardTest {
 
     @Test
     void refusesFreshKeysWithOnlyTotpSeeds() throws IOException {
-        var id = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        var id = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
         factors.putTotp(id, secrets.encrypt("totp:" + id, "seed"));
         var fresh = Keys.get(data, Optional.empty());
         assertThat(KeysetGuard.check(fresh, secrets, new PrintWriter(err, true))).isOne();

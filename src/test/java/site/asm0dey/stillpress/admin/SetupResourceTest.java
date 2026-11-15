@@ -119,28 +119,28 @@ class SetupResourceTest {
 
     @Test
     void upgradesAnExistingRowWithThatLogin() {
-        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).getId();
+        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).id();
         setup(token.current().orElseThrow()).then().statusCode(201);
         var u = users.findById(id).orElseThrow();
-        assertThat(u.getRole()).isEqualTo(Role.ADMINISTRATOR.id());
-        assertThat(Passwords.verify("correct horse battery", u.getPasswordHash())).isTrue();
+        assertThat(u.role()).isEqualTo(Role.ADMINISTRATOR.id());
+        assertThat(Passwords.verify("correct horse battery", u.passwordHash())).isTrue();
         assertThat(users.all()).hasSize(1);
     }
 
     @Test
     void upgradeKeepsTypedEmailAndDisplayName() {
-        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).getId();
+        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).id();
         setup(token.current().orElseThrow()).then().statusCode(201);
         var u = users.findById(id).orElseThrow();
-        assertThat(List.of(u.getEmail(), u.getDisplayName())).containsExactly("admin0@example.org", "Admin");
+        assertThat(List.of(u.email(), u.displayName())).containsExactly("admin0@example.org", "Admin");
     }
 
     @Test
     void upgradeToAnEmailAnotherUserHasIs409() {
-        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).getId();
+        var id = users.create("admin0", "old@example.org", "Imported", Role.AUTHOR).id();
         users.create("other", "ADMIN0@example.org", "Other", Role.AUTHOR);
         setup(token.current().orElseThrow()).then().statusCode(409).body("error", equalTo("email_taken"));
-        assertThat(users.findById(id).orElseThrow().getRole()).isEqualTo(Role.AUTHOR.id());
+        assertThat(users.findById(id).orElseThrow().role()).isEqualTo(Role.AUTHOR.id());
         assertThat(token.current()).isPresent();
     }
 
@@ -154,7 +154,7 @@ class SetupResourceTest {
         body.put("displayName", " Admin ");
         post(body).then().statusCode(201);
         var u = users.findByLogin("admin0").orElseThrow();
-        assertThat(List.of(u.getEmail(), u.getDisplayName())).containsExactly("admin0@example.org", "Admin");
+        assertThat(List.of(u.email(), u.displayName())).containsExactly("admin0@example.org", "Admin");
     }
 
     @Test

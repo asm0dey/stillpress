@@ -15,9 +15,9 @@ import site.asm0dey.stillpress.content.Capabilities;
 import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.content.ReusableBlockService;
 import site.asm0dey.stillpress.content.Revisions;
-import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.db.tables.records.ReusableBlockRecord;
 import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
+import site.asm0dey.stillpress.store.Author;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.ReusableBlockRepository;
 
@@ -240,10 +240,7 @@ public class ReusableBlocksResource {
         return authors
             .all()
             .stream()
-            .collect(Collectors.toMap(AuthorRecord::getId, u -> Objects.requireNonNullElse(
-                    u.getDisplayName(),
-                    u.getLogin()
-            )));
+            .collect(Collectors.toMap(Author::id, u -> Objects.requireNonNullElse(u.displayName(), u.login())));
     }
 
     private ItemService.Actor actor() {

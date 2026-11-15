@@ -17,7 +17,7 @@ import io.quarkus.security.identity.SecurityIdentity;
 import site.asm0dey.stillpress.content.Capabilities;
 import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.content.MediaService;
-import site.asm0dey.stillpress.db.tables.records.MediaRecord;
+import site.asm0dey.stillpress.store.Media;
 import site.asm0dey.stillpress.store.MediaRepository;
 import site.asm0dey.stillpress.wpapi.OEmbedProxy;
 
@@ -112,16 +112,8 @@ public class MediaResource {
         return view(service.updateMeta(id, meta.title(), meta.alt()));
     }
 
-    private static MediaView view(MediaRecord r) {
-        return new MediaView(
-                r.getId(),
-                r.getPath(),
-                r.getMimeType(),
-                r.getWidth(),
-                r.getHeight(),
-                r.getTitle(),
-                r.getAltText()
-        );
+    private static MediaView view(Media r) {
+        return new MediaView(r.id(), r.path(), r.mimeType(), r.width(), r.height(), r.title(), r.altText());
     }
 
     @GET

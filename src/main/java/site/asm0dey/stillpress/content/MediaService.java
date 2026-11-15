@@ -9,10 +9,10 @@ import org.jboss.logging.Logger;
 import javax.imageio.ImageIO;
 import module java.base;
 import site.asm0dey.stillpress.config.DataDir;
-import site.asm0dey.stillpress.db.tables.records.MediaRecord;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;
+import site.asm0dey.stillpress.store.Media;
 import site.asm0dey.stillpress.store.MediaRepository;
 
 /**
@@ -71,7 +71,7 @@ public class MediaService {
      * @throws IllegalArgumentException {@code type_not_allowed} for an extension outside the allow list
      */
     @Transactional
-    public MediaRecord store(String fileName, Path upload, long userId) {
+    public Media store(String fileName, Path upload, long userId) {
         guard.close();
         var last = fileName.substring(Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\')) + 1);
         int dot = last.lastIndexOf('.');
@@ -135,7 +135,7 @@ public class MediaService {
     }
 
     @Transactional
-    public MediaRecord updateMeta(long id, String title, String altText) {
+    public Media updateMeta(long id, String title, String altText) {
         guard.close();
         media
             .findById(id)

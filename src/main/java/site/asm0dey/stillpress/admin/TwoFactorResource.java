@@ -16,12 +16,11 @@ import jakarta.ws.rs.core.Response;
 import module java.base;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
-import org.jooq.exception.DataAccessException;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
 import site.asm0dey.stillpress.account.Totp;
 import site.asm0dey.stillpress.account.TwoFactorPolicy;
 import site.asm0dey.stillpress.content.ItemService;
-import site.asm0dey.stillpress.db.tables.records.PasskeyRecord;
+import site.asm0dey.stillpress.store.Passkey;
 import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 /**
@@ -67,10 +66,7 @@ public class TwoFactorResource {
     @GET
     public Factors list() {
         var id = userId();
-        var confirmed = factors
-            .totp(id)
-            .filter(t -> t.getConfirmed())
-            .isPresent();
+        var confirmed = factors.totp(id).filter(t -> t.confirmed()).isPresent();
         return new Factors(
                 confirmed,
                 factors.passkeys(id).stream().map(TwoFactorResource::view).toList(),
@@ -82,10 +78,7 @@ public class TwoFactorResource {
     @Path("/totp")
     public Totp.Enrollment enroll() {
         var id = userId();
-        if (factors
-            .totp(id)
-            .filter(t -> t.getConfirmed())
-            .isPresent()) {
+        if (factors.totp(id).filter(t -> t.confirmed()).isPresent()) {
             throw new ItemService.Refused(409, "totp_exists", null);
         }
         return totp.start(id, identity.getPrincipal().getName());
@@ -111,7 +104,7 @@ public class TwoFactorResource {
             if (row.isEmpty()) {
                 throw new ItemService.Refused(404, "not_found", null);
             }
-            boolean confirmed = row.get().getConfirmed();
+            boolean confirmed = row.get().confirmed();
             if (factors.deleteTotp(userId(), confirmed) == 1) {
                 if (confirmed) {
                     keepOneFactor();
@@ -141,9 +134,7 @@ public class TwoFactorResource {
             throw new ItemService.Refused(400, "invalid_passkey", null);
         }
         var data = passkey.getRequiredPersistedData();
-        try {
-            factors.addPasskey(userId(), name, data);
-        } catch (DataAccessException e) {
+        if (!factors.addPasskey(userId(), name, data)) {
             // a replayed registration (credential already stored) or an id longer than the column holds
             throw new ItemService.Refused(400, "invalid_passkey", null);
         }
@@ -175,12 +166,12 @@ public class TwoFactorResource {
         return identity.getAttribute(SessionIdentityProvider.USER_ID);
     }
 
-    private static PasskeyView view(PasskeyRecord p) {
+    private static PasskeyView view(Passkey p) {
         return new PasskeyView(
-                p.getCredentialId(),
-                p.getName(),
-                p.getCreatedAt().toInstant(ZoneOffset.UTC).toString(),
-                p.getLastUsedAt() == null ? null : p.getLastUsedAt().toInstant(ZoneOffset.UTC).toString()
+                p.credentialId(),
+                p.name(),
+                p.createdAt().toInstant(ZoneOffset.UTC).toString(),
+                p.lastUsedAt() == null ? null : p.lastUsedAt().toInstant(ZoneOffset.UTC).toString()
         );
     }
 }

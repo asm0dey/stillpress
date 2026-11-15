@@ -65,7 +65,7 @@ class ItemsResourceTest {
         editor = cookie("editor", Role.EDITOR);
         author1 = cookie("author1", Role.AUTHOR);
         author2 = cookie("author2", Role.AUTHOR);
-        author2Id = users.findByLogin("author2").orElseThrow().getId();
+        author2Id = users.findByLogin("author2").orElseThrow().id();
         contributor = cookie("contributor", Role.CONTRIBUTOR);
     }
 
@@ -205,7 +205,7 @@ class ItemsResourceTest {
         var cleared = update(editor, child, Map.of("parentId", 0)).then().statusCode(200).extract().jsonPath();
         assertThat(cleared.getString("parentId")).isNull();
         assertThat(cleared.getString("permalink")).isEqualTo("/tips/");
-        assertThat(redirects.find("/guide/tips/").orElseThrow().getToPath()).isEqualTo("/tips/");
+        assertThat(redirects.find("/guide/tips/").orElseThrow().to()).isEqualTo("/tips/");
     }
 
     @Test
@@ -224,11 +224,11 @@ class ItemsResourceTest {
             .jsonPath();
         var newPath = renamed.getString("permalink");
         assertThat(newPath).isEqualTo(oldPath.replace("/old/", "/new-slug/"));
-        assertThat(redirects.find(oldPath).orElseThrow().getToPath()).isEqualTo(newPath);
+        assertThat(redirects.find(oldPath).orElseThrow().to()).isEqualTo(newPath);
         // the shortlink follows the move instead of chaining through the old path
         var sourceId =
                 db.select(ITEM.SOURCE_ID).from(ITEM).where(ITEM.ID.eq(item.getLong("id"))).fetchOne(ITEM.SOURCE_ID);
-        assertThat(redirects.find("?p=" + sourceId).orElseThrow().getToPath()).isEqualTo(newPath);
+        assertThat(redirects.find("?p=" + sourceId).orElseThrow().to()).isEqualTo(newPath);
     }
 
     @Test
@@ -268,10 +268,8 @@ class ItemsResourceTest {
         var home = settings.get("home_url").orElseThrow().replaceAll("/+$", "");
         assertThat(db.select(ITEM.GUID).from(ITEM).where(ITEM.ID.eq(published.getLong("id"))).fetchOne(ITEM.GUID))
             .isEqualTo(home + "/?p=" + (max + 1));
-        assertThat(redirects.find("?p=" + (max + 1)).orElseThrow().getToPath()).isEqualTo(published.getString(
-                "permalink"
-        ));
-        assertThat(redirects.find("?p=5994").orElseThrow().getToPath()).isEqualTo("/2023/01/14/месяц-ноябрь-год-2022/");
+        assertThat(redirects.find("?p=" + (max + 1)).orElseThrow().to()).isEqualTo(published.getString("permalink"));
+        assertThat(redirects.find("?p=5994").orElseThrow().to()).isEqualTo("/2023/01/14/месяц-ноябрь-год-2022/");
     }
 
     @Test
@@ -445,14 +443,14 @@ class ItemsResourceTest {
             .then()
             .statusCode(200)
             .body("permalink", equalTo("/food/trip/"));
-        assertThat(redirects.find("/travel/trip/").orElseThrow().getToPath()).isEqualTo("/food/trip/");
+        assertThat(redirects.find("/travel/trip/").orElseThrow().to()).isEqualTo("/food/trip/");
     }
 
     @Test
     void authorChangeMovesAuthorPermalink() {
         settings.put("permalink_structure", "/%author%/%postname%/");
-        var a1 = users.findByLogin("author1").orElseThrow().getSlug();
-        var a2 = users.findByLogin("author2").orElseThrow().getSlug();
+        var a1 = users.findByLogin("author1").orElseThrow().slug();
+        var a2 = users.findByLogin("author2").orElseThrow().slug();
         var published = update(author1, create(author1, "post"), Map.of("title", "Byline", "status", "publish"))
             .then()
             .statusCode(200)
@@ -463,7 +461,7 @@ class ItemsResourceTest {
             .then()
             .statusCode(200)
             .body("permalink", equalTo("/" + a2 + "/byline/"));
-        assertThat(redirects.find("/" + a1 + "/byline/").orElseThrow().getToPath()).isEqualTo("/" + a2 + "/byline/");
+        assertThat(redirects.find("/" + a1 + "/byline/").orElseThrow().to()).isEqualTo("/" + a2 + "/byline/");
     }
 
     private static long term(String cookie, String taxonomy, String name) {
@@ -490,7 +488,7 @@ class ItemsResourceTest {
     }
 
     private String cookie(String login, Role role) {
-        var id = users.create(login, login + "@example.org", login, role).getId();
+        var id = users.create(login, login + "@example.org", login, role).id();
         users.setPassword(id, TestStore.PASSWORD_HASH);
         return sessions.create(id);
     }

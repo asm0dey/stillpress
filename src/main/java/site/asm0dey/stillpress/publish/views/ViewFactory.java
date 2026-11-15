@@ -7,7 +7,7 @@ import site.asm0dey.stillpress.blocks.ClassicContent;
 import site.asm0dey.stillpress.blocks.RenderContext;
 import site.asm0dey.stillpress.db.tables.records.CommentRecord;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
-import site.asm0dey.stillpress.db.tables.records.TermRecord;
+import site.asm0dey.stillpress.store.Term;
 import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.CommentRepository;
@@ -54,7 +54,7 @@ public class ViewFactory {
         var encoded = Permalinks.encode(permalink);
         var all = terms.forItem(r.getId());
         var author = r.getAuthorId() == null
-                ? Optional.<site.asm0dey.stillpress.db.tables.records.AuthorRecord>empty()
+                ? Optional.<site.asm0dey.stillpress.store.Author>empty()
                 : authors.findById(r.getAuthorId());
         return new ItemView(
                 r.getId(),
@@ -65,10 +65,10 @@ public class ViewFactory {
                 html(r.getExcerpt(), "classic"),
                 instant(r.getPublishedAt()),
                 author
-                    .map(a -> Objects.requireNonNullElse(a.getDisplayName(), a.getLogin()))
+                    .map(a -> Objects.requireNonNullElse(a.displayName(), a.login()))
                     .orElse(""),
                 author
-                    .map(a -> Permalinks.encode("/author/" + a.getSlug() + "/"))
+                    .map(a -> Permalinks.encode("/author/" + a.slug() + "/"))
                     .orElse(null),
                 links(all, "category"),
                 links(all, "post_tag"),
@@ -99,29 +99,29 @@ public class ViewFactory {
                 : blocks.render(content, new RenderContext(reusableBlockContent, 0));
     }
 
-    private List<TermLink> links(List<TermRecord> all, String taxonomy) {
+    private List<TermLink> links(List<Term> all, String taxonomy) {
         var base = settings
             .get(taxonomy.equals("category") ? "category_base" : "tag_base")
             .orElse(taxonomy.equals("category") ? "category" : "tag");
         return all
             .stream()
-            .filter(t -> taxonomy.equals(t.getTaxonomy()))
-            .map(t -> new TermLink(t.getName(), Permalinks.encode("/" + base + "/" + termPath(t) + "/")))
+            .filter(t -> taxonomy.equals(t.taxonomy()))
+            .map(t -> new TermLink(t.name(), Permalinks.encode("/" + base + "/" + termPath(t) + "/")))
             .toList();
     }
 
     /**
      * Hierarchical slug path: parent slugs first, as WordPress category links.
      */
-    private String termPath(TermRecord t) {
+    private String termPath(Term t) {
         var parts = new ArrayDeque<String>();
         var seen = new HashSet<Long>();
         for (
                 var cur = t;
-                cur != null && seen.add(cur.getId());
-                cur = cur.getParentId() == null ? null : terms.findById(cur.getParentId()).orElse(null)) {
-            parts.addFirst(cur.getSlug());
-            if (!"category".equals(t.getTaxonomy())) {
+                cur != null && seen.add(cur.id());
+                cur = cur.parentId() == null ? null : terms.findById(cur.parentId()).orElse(null)) {
+            parts.addFirst(cur.slug());
+            if (!"category".equals(t.taxonomy())) {
                 break;
             }
         }

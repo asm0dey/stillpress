@@ -37,7 +37,7 @@ class AuthResourceTest {
     void reset() {
         store.reset();
         Limiters.reset();
-        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
         users.setPassword(adminId, TestStore.PASSWORD_HASH);
     }
 
@@ -171,7 +171,7 @@ class AuthResourceTest {
 
     @Test
     void firstAdminSessionFillsAdminUrl() {
-        var editor = users.create("ed", "e@example.org", "Ed", Role.EDITOR).getId();
+        var editor = users.create("ed", "e@example.org", "Ed", Role.EDITOR).id();
         users.setPassword(editor, TestStore.PASSWORD_HASH);
         var editorCookie = login("ed", "correct horse battery").cookie("sp_session");
         given().cookie("sp_session", editorCookie).get("/admin/api/session").then().statusCode(200);
@@ -238,7 +238,7 @@ class AuthResourceTest {
         for (var body : List.<Map<String, String>>of(Map.of("locale", "de"), Map.of("locale", "ru-RU"), Map.of())) {
             putLocale(cookie, body).then().statusCode(400).body("error", equalTo("invalid_locale"));
         }
-        assertThat(users.findById(adminId).orElseThrow().getLocale()).isEqualTo("ru");
+        assertThat(users.findById(adminId).orElseThrow().locale()).isEqualTo("ru");
         csrf().contentType(JSON).body(Map.of("locale", "en")).put("/admin/api/session/locale").then().statusCode(401);
     }
 

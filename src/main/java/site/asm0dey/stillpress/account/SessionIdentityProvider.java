@@ -43,10 +43,10 @@ public class SessionIdentityProvider implements IdentityProvider<SessionAuthenti
             .find(request.token())
             .map(u -> (SecurityIdentity) QuarkusSecurityIdentity
                 .builder()
-                .setPrincipal(new QuarkusPrincipal(u.getLogin()))
-                .addRole(u.getRole())
-                .addAttribute(USER_ID, u.getId())
-                .addAttribute(ENROLL_REQUIRED, policy.required() && !factors.hasFactor(u.getId()))
+                .setPrincipal(new QuarkusPrincipal(u.login()))
+                .addRole(u.role())
+                .addAttribute(USER_ID, u.id())
+                .addAttribute(ENROLL_REQUIRED, policy.required() && !factors.hasFactor(u.id()))
                 .build())
             .orElseThrow(AuthenticationFailedException::new));
     }

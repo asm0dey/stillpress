@@ -19,7 +19,7 @@ public class TermRepository {
         this.db = db;
     }
 
-    public List<TermRecord> forItem(long itemId) {
+    public List<Term> forItem(long itemId) {
         return db
             .select(TERM.fields())
             .from(TERM)
@@ -27,22 +27,29 @@ public class TermRepository {
             .on(ITEM_TERM.TERM_ID.eq(TERM.ID))
             .where(ITEM_TERM.ITEM_ID.eq(itemId))
             .orderBy(TERM.TAXONOMY, TERM.NAME)
-            .fetchInto(TERM);
+            .fetch(r -> term(r.into(TERM)));
     }
 
-    public Optional<TermRecord> findById(long id) {
-        return db.selectFrom(TERM).where(TERM.ID.eq(id)).fetchOptional();
+    public Optional<Term> findById(long id) {
+        return db.selectFrom(TERM).where(TERM.ID.eq(id)).fetchOptional(TermRepository::term);
     }
 
-    public Optional<TermRecord> findBySlug(String taxonomy, String slug) {
-        return db.selectFrom(TERM).where(TERM.TAXONOMY.eq(taxonomy), TERM.SLUG.eq(slug)).fetchOptional();
+    public Optional<Term> findBySlug(String taxonomy, String slug) {
+        return db
+            .selectFrom(TERM)
+            .where(TERM.TAXONOMY.eq(taxonomy), TERM.SLUG.eq(slug))
+            .fetchOptional(TermRepository::term);
+    }
+
+    private static Term term(TermRecord r) {
+        return new Term(r.getId(), r.getTaxonomy(), r.getName(), r.getSlug(), r.getParentId(), r.getDescription());
     }
 
     /**
      * A new term; its slug is {@code Slugs.title(name)}, moved on to {@code -2}, {@code -3}... when the taxonomy
      * already has it.
      */
-    public TermRecord create(String taxonomy, String name, Long parentId) {
+    public Term create(String taxonomy, String name, Long parentId) {
         var base = Slugs.title(name);
         var slug = base;
         for (int n = 2; findBySlug(taxonomy, slug).isPresent(); n++) {
@@ -54,11 +61,11 @@ public class TermRepository {
         r.setSlug(slug);
         r.setParentId(parentId);
         r.store();
-        return r;
+        return term(r);
     }
 
-    public List<TermRecord> byTaxonomy(String taxonomy) {
-        return db.selectFrom(TERM).where(TERM.TAXONOMY.eq(taxonomy)).orderBy(TERM.NAME).fetch();
+    public List<Term> byTaxonomy(String taxonomy) {
+        return db.selectFrom(TERM).where(TERM.TAXONOMY.eq(taxonomy)).orderBy(TERM.NAME).fetch(TermRepository::term);
     }
 
     public Set<Long> idsForItem(long itemId, String taxonomy) {
@@ -95,8 +102,8 @@ public class TermRepository {
         }
     }
 
-    public List<TermRecord> all() {
-        return db.selectFrom(TERM).fetch();
+    public List<Term> all() {
+        return db.selectFrom(TERM).fetch(TermRepository::term);
     }
 
     /**

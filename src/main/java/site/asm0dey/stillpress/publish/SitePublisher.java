@@ -5,7 +5,7 @@ import io.quarkus.qute.Engine;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import site.asm0dey.stillpress.config.DataDir;
-import site.asm0dey.stillpress.db.tables.records.TermRecord;
+import site.asm0dey.stillpress.store.Term;
 import site.asm0dey.stillpress.publish.views.ArchiveView;
 import site.asm0dey.stillpress.publish.views.EntryView;
 import site.asm0dey.stillpress.publish.views.ItemView;
@@ -375,16 +375,16 @@ public class SitePublisher {
     }
 
     private void termListings(List<Listing> listings, List<ItemRepository.Summary> posts) {
-        var byId = new HashMap<Long, TermRecord>();
-        terms.all().forEach(t -> byId.put(t.getId(), t));
+        var byId = new HashMap<Long, Term>();
+        terms.all().forEach(t -> byId.put(t.id(), t));
         var termIds = terms.termIdsByItem();
         // posts are newest first, so every bucket is too; a post counts for its categories' ancestors as well
         var buckets = new HashMap<Long, List<ItemRepository.Summary>>();
         for (var post : posts) {
             var hit = new LinkedHashSet<Long>();
             for (var id : termIds.getOrDefault(post.id(), List.of())) {
-                for (var t = byId.get(id); t != null && hit.add(t.getId()); t = parent(byId, t)) {
-                    if (!"category".equals(t.getTaxonomy())) {
+                for (var t = byId.get(id); t != null && hit.add(t.id()); t = parent(byId, t)) {
+                    if (!"category".equals(t.taxonomy())) {
                         break;
                     }
                 }
@@ -395,36 +395,36 @@ public class SitePublisher {
         }
         for (var term : byId.values()) {
             // other taxonomies (nav_menu, post_format, ...) have no archive here; WordPress would 404 them
-            if (!"category".equals(term.getTaxonomy()) && !"post_tag".equals(term.getTaxonomy())) {
+            if (!"category".equals(term.taxonomy()) && !"post_tag".equals(term.taxonomy())) {
                 continue;
             }
-            var isCategory = "category".equals(term.getTaxonomy());
+            var isCategory = "category".equals(term.taxonomy());
             var base = settings.get(isCategory ? "category_base" : "tag_base").orElse(isCategory ? "category" : "tag");
             // WordPress answers an existing term 200 with an empty list, never 404
             listings.add(
                     new Listing(
-                            "term " + term.getTaxonomy() + ":" + term.getSlug(),
+                            "term " + term.taxonomy() + ":" + term.slug(),
                             "/" + base + "/" + termPath(byId, term) + "/",
-                            term.getName(),
-                            buckets.getOrDefault(term.getId(), List.of()),
+                            term.name(),
+                            buckets.getOrDefault(term.id(), List.of()),
                             true
                     )
             );
         }
     }
 
-    private static TermRecord parent(Map<Long, TermRecord> byId, TermRecord t) {
-        return t.getParentId() == null ? null : byId.get(t.getParentId());
+    private static Term parent(Map<Long, Term> byId, Term t) {
+        return t.parentId() == null ? null : byId.get(t.parentId());
     }
 
-    private static String termPath(Map<Long, TermRecord> byId, TermRecord t) {
-        if (!"category".equals(t.getTaxonomy())) {
-            return t.getSlug();
+    private static String termPath(Map<Long, Term> byId, Term t) {
+        if (!"category".equals(t.taxonomy())) {
+            return t.slug();
         }
         var parts = new ArrayDeque<String>();
         var seen = new HashSet<Long>();
-        for (var cur = t; cur != null && seen.add(cur.getId()); cur = parent(byId, cur)) {
-            parts.addFirst(cur.getSlug());
+        for (var cur = t; cur != null && seen.add(cur.id()); cur = parent(byId, cur)) {
+            parts.addFirst(cur.slug());
         }
         return String.join("/", parts);
     }
@@ -441,10 +441,10 @@ public class SitePublisher {
         for (var a : authors.all()) {
             listings.add(
                     new Listing(
-                            "author:" + a.getSlug(),
-                            "/author/" + a.getSlug() + "/",
-                            Objects.requireNonNullElse(a.getDisplayName(), a.getLogin()),
-                            byAuthor.getOrDefault(a.getId(), List.of()),
+                            "author:" + a.slug(),
+                            "/author/" + a.slug() + "/",
+                            Objects.requireNonNullElse(a.displayName(), a.login()),
+                            byAuthor.getOrDefault(a.id(), List.of()),
                             true
                     )
             );

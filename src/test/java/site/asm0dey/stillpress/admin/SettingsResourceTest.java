@@ -177,11 +177,9 @@ class SettingsResourceTest {
         var body = current();
         body.put("categoryBase", "topics");
         put(admin, body).then().statusCode(200);
-        assertThat(redirects.find("/category/travel/").orElseThrow().getToPath()).isEqualTo("/topics/travel/");
-        assertThat(redirects.find("/category/travel/europe/").orElseThrow().getToPath()).isEqualTo(
-                "/topics/travel/europe/"
-        );
-        assertThat(redirects.find("/category/").orElseThrow().getToPath()).isEqualTo("/topics/");
+        assertThat(redirects.find("/category/travel/").orElseThrow().to()).isEqualTo("/topics/travel/");
+        assertThat(redirects.find("/category/travel/europe/").orElseThrow().to()).isEqualTo("/topics/travel/europe/");
+        assertThat(redirects.find("/category/").orElseThrow().to()).isEqualTo("/topics/");
         var index = dataDir.current().resolve("topics/travel/index.html");
         TestStore.await(() -> Files.exists(index), 30);
         assertThat(index).exists();
@@ -253,7 +251,7 @@ class SettingsResourceTest {
     }
 
     private String cookie(String login, Role role) {
-        var id = users.create(login, login + "@example.org", login, role).getId();
+        var id = users.create(login, login + "@example.org", login, role).id();
         users.setPassword(id, TestStore.PASSWORD_HASH);
         return sessions.create(id);
     }

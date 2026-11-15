@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.pg;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import static site.asm0dey.stillpress.db.Tables.SESSION;
 import io.quarkus.security.webauthn.WebAuthnCredentialRecord.RequiredPersistedData;
 import io.quarkus.test.junit.QuarkusTest;
@@ -10,7 +9,6 @@ import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
-import org.jooq.exception.DataAccessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
@@ -50,30 +48,29 @@ class PostgresAccountsTest {
     void accountLifecycle() {
         var mama = users.create("mama", "mama@example.org", "Mama", Role.ADMINISTRATOR);
         users.create("papa", "mama", "Papa", Role.ADMINISTRATOR);
-        assertThat(users.findByLoginOrEmail("mama")).hasValueSatisfying(u -> assertThat(u.getId())
-            .isEqualTo(mama.getId()));
+        assertThat(users.findByLoginOrEmail("mama")).hasValueSatisfying(u -> assertThat(u.id()).isEqualTo(mama.id()));
 
-        assertThat(users.create("a b", "ab1@example.org", "A B", Role.ADMINISTRATOR).getSlug()).isEqualTo("a-b");
-        assertThat(users.create("a-b", "ab2@example.org", "A-B", Role.ADMINISTRATOR).getSlug()).isEqualTo("a-b-2");
+        assertThat(users.create("a b", "ab1@example.org", "A B", Role.ADMINISTRATOR).slug()).isEqualTo("a-b");
+        assertThat(users.create("a-b", "ab2@example.org", "A-B", Role.ADMINISTRATOR).slug()).isEqualTo("a-b-2");
 
-        var raw = sessions.create(mama.getId());
-        assertThat(sessions.find(raw)).hasValueSatisfying(u -> assertThat(u.getId()).isEqualTo(mama.getId()));
+        var raw = sessions.create(mama.id());
+        assertThat(sessions.find(raw)).hasValueSatisfying(u -> assertThat(u.id()).isEqualTo(mama.id()));
         db.update(SESSION).set(SESSION.EXPIRES_AT, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1)).execute();
         assertThat(sessions.find(raw)).isEmpty();
-        var raw2 = sessions.create(mama.getId());
+        var raw2 = sessions.create(mama.id());
         sessions.delete(raw2);
         assertThat(sessions.find(raw2)).isEmpty();
-        var a = sessions.create(mama.getId());
-        var b = sessions.create(mama.getId());
-        sessions.deleteAllFor(mama.getId());
+        var a = sessions.create(mama.id());
+        var b = sessions.create(mama.id());
+        sessions.deleteAllFor(mama.id());
         assertThat(sessions.find(a)).isEmpty();
         assertThat(sessions.find(b)).isEmpty();
 
-        var token = tokens.create(mama.getId(), "set_password", Duration.ofHours(1));
+        var token = tokens.create(mama.id(), "set_password", Duration.ofHours(1));
         assertThat(tokens.consume(token, "other")).isEmpty();
-        assertThat(tokens.consume(token, "set_password")).contains(mama.getId());
+        assertThat(tokens.consume(token, "set_password")).contains(mama.id());
         assertThat(tokens.consume(token, "set_password")).isEmpty();
-        var expired = tokens.create(mama.getId(), "set_password", Duration.ofSeconds(-1));
+        var expired = tokens.create(mama.id(), "set_password", Duration.ofSeconds(-1));
         assertThat(tokens.consume(expired, "set_password")).isEmpty();
     }
 
@@ -90,8 +87,8 @@ class PostgresAccountsTest {
                     try {
                         users.create("mail" + n, emails.get(n), "M", Role.AUTHOR);
                         return true;
-                    } catch (DataAccessException e) {
-                        assertThat(AuthorRepository.isEmailConflict(e)).as(e.getMessage()).isTrue();
+                    } catch (AuthorRepository.Taken e) {
+                        assertThat(e.email).as(e.getMessage()).isTrue();
                         return false;
                     }
                 }));
@@ -108,7 +105,7 @@ class PostgresAccountsTest {
     @Test
     void concurrentTokenConsumeHasOneWinner() throws Exception {
         var user = users.create("racer", "racer@example.org", "Racer", Role.ADMINISTRATOR);
-        var token = tokens.create(user.getId(), "set_password", Duration.ofHours(1));
+        var token = tokens.create(user.id(), "set_password", Duration.ofHours(1));
         try (var pool = Executors.newFixedThreadPool(8)) {
             var start = new CountDownLatch(1);
             var results = new ArrayList<Future<Optional<Long>>>();
@@ -131,9 +128,9 @@ class PostgresAccountsTest {
 
     @Test
     void twoFactorSql() {
-        var totpUser = users.create("totp", "totp@example.org", "Totp", Role.ADMINISTRATOR).getId();
-        var keyUser = users.create("key", "key@example.org", "Key", Role.AUTHOR).getId();
-        var none = users.create("none", "none@example.org", "None", Role.AUTHOR).getId();
+        var totpUser = users.create("totp", "totp@example.org", "Totp", Role.ADMINISTRATOR).id();
+        var keyUser = users.create("key", "key@example.org", "Key", Role.AUTHOR).id();
+        var none = users.create("none", "none@example.org", "None", Role.AUTHOR).id();
 
         assertThat(factors.putTotp(totpUser, "first")).isTrue();
         assertThat(factors.putTotp(totpUser, "second")).isTrue();
@@ -142,7 +139,7 @@ class PostgresAccountsTest {
         assertThat(factors.putTotp(totpUser, "third")).isFalse();
         assertThat(factors.advanceTotp(totpUser, 10)).isFalse();
         assertThat(factors.advanceTotp(totpUser, 11)).isTrue();
-        assertThat(factors.totp(totpUser)).hasValueSatisfying(t -> assertThat(t.getLastStep()).isEqualTo(11L));
+        assertThat(factors.totp(totpUser)).hasValueSatisfying(t -> assertThat(t.lastStep()).isEqualTo(11L));
 
         factors.addPasskey(
                 keyUser,
@@ -165,7 +162,7 @@ class PostgresAccountsTest {
         assertThat(users
             .allWithTwoFactor()
             .stream()
-            .collect(Collectors.toMap(r -> r.get(AUTHOR.LOGIN), r -> r.get(AuthorRepository.TWO_FACTOR)))
+            .collect(Collectors.toMap(r -> r.author().login(), r -> r.twoFactor()))
         )
             .containsExactlyInAnyOrderEntriesOf(Map.of("totp", true, "key", true, "none", false));
 

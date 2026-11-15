@@ -58,7 +58,7 @@ class SecretsCommandTest {
 
     @Test
     void resetDropsTotpKeepsPasskeys() {
-        var id = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        var id = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
         secrets.put("smtp_password", "one");
         factors.putTotp(id, secrets.encrypt("totp:" + id, "seed"));
         factors.addPasskey(

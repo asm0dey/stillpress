@@ -16,17 +16,31 @@ public class MediaRepository {
         this.db = db;
     }
 
-    public Optional<MediaRecord> findBySource(String sourceUrl) {
-        return db.selectFrom(MEDIA).where(MEDIA.SOURCE_URL.eq(sourceUrl)).fetchOptional();
+    public Optional<Media> findBySource(String sourceUrl) {
+        return db.selectFrom(MEDIA).where(MEDIA.SOURCE_URL.eq(sourceUrl)).fetchOptional(MediaRepository::media);
     }
 
-    public Optional<MediaRecord> findById(long id) {
-        return db.selectFrom(MEDIA).where(MEDIA.ID.eq(id)).fetchOptional();
+    public Optional<Media> findById(long id) {
+        return db.selectFrom(MEDIA).where(MEDIA.ID.eq(id)).fetchOptional(MediaRepository::media);
     }
 
-    public record Page(List<MediaRecord> items, int total) {}
+    private static Media media(MediaRecord r) {
+        return new Media(
+                r.getId(),
+                r.getPath(),
+                r.getMimeType(),
+                r.getWidth(),
+                r.getHeight(),
+                r.getTitle(),
+                r.getAltText(),
+                r.getSizeBytes(),
+                r.getUploadedBy()
+        );
+    }
 
-    public MediaRecord insert(
+    public record Page(List<Media> items, int total) {}
+
+    public Media insert(
             String url,
             String mime,
             Integer width,
@@ -46,7 +60,7 @@ public class MediaRepository {
             .set(MEDIA.UPLOADED_BY, uploadedBy)
             .set(MEDIA.CREATED_AT, now)
             .returning()
-            .fetchSingle();
+            .fetchSingle(MediaRepository::media);
     }
 
     /**
@@ -73,7 +87,7 @@ public class MediaRepository {
             .orderBy(MEDIA.ID.desc())
             .limit(perPage)
             .offset((Math.max(page, 1) - 1) * perPage)
-            .fetch();
+            .fetch(MediaRepository::media);
         return new Page(items, total);
     }
 

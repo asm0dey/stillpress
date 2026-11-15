@@ -60,10 +60,10 @@ public class Secrets {
         var aead = aead(keys);
         return repository
             .first()
-            .map(r -> decrypt(aead, r.getName(), r.getCiphertext()).isPresent())
+            .map(r -> decrypt(aead, r.name(), r.ciphertext()).isPresent())
             .or(() -> totp
                 .firstTotp()
-                .map(t -> decrypt(aead, totpName(t.getUserId()), t.getCiphertext()).isPresent()))
+                .map(t -> decrypt(aead, totpName(t.userId()), t.ciphertext()).isPresent()))
             .orElse(true);
     }
 

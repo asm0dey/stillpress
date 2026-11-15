@@ -23,7 +23,7 @@ class TwoFactorRepositoryTest {
     @BeforeEach
     void reset() {
         store.reset();
-        id = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        id = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
     }
 
     @Test
@@ -35,7 +35,7 @@ class TwoFactorRepositoryTest {
         assertThat(factors.advanceTotp(id, 10)).isFalse();
         assertThat(factors.advanceTotp(id, 9)).isFalse();
         assertThat(factors.advanceTotp(id, 11)).isTrue();
-        assertThat(factors.totp(id)).hasValueSatisfying(t -> assertThat(t.getLastStep()).isEqualTo(11));
+        assertThat(factors.totp(id)).hasValueSatisfying(t -> assertThat(t.lastStep()).isEqualTo(11));
     }
 
     @Test
@@ -43,9 +43,9 @@ class TwoFactorRepositoryTest {
         assertThat(factors.putTotp(id, "one")).isTrue();
         assertThat(factors.putTotp(id, "two")).isTrue();
         assertThat(factors.totp(id)).hasValueSatisfying(t -> {
-            assertThat(t.getCiphertext()).isEqualTo("two");
-            assertThat(t.getConfirmed()).isFalse();
-            assertThat(t.getLastStep()).isZero();
+            assertThat(t.ciphertext()).isEqualTo("two");
+            assertThat(t.confirmed()).isFalse();
+            assertThat(t.lastStep()).isZero();
         });
     }
 
@@ -65,7 +65,7 @@ class TwoFactorRepositoryTest {
                 assertThat(f.get()).isTrue();
             }
         }
-        assertThat(factors.totp(id)).hasValueSatisfying(t -> assertThat(t.getConfirmed()).isFalse());
+        assertThat(factors.totp(id)).hasValueSatisfying(t -> assertThat(t.confirmed()).isFalse());
         assertThat(factors.firstTotp()).isPresent();
     }
 
@@ -75,9 +75,9 @@ class TwoFactorRepositoryTest {
         assertThat(factors.confirmTotp(id, "one", 5)).isTrue();
         assertThat(factors.putTotp(id, "two")).isFalse();
         assertThat(factors.totp(id)).hasValueSatisfying(t -> {
-            assertThat(t.getCiphertext()).isEqualTo("one");
-            assertThat(t.getConfirmed()).isTrue();
-            assertThat(t.getLastStep()).isEqualTo(5);
+            assertThat(t.ciphertext()).isEqualTo("one");
+            assertThat(t.confirmed()).isTrue();
+            assertThat(t.lastStep()).isEqualTo(5);
         });
     }
 
@@ -86,8 +86,8 @@ class TwoFactorRepositoryTest {
         factors.putTotp(id, "two");
         assertThat(factors.confirmTotp(id, "one", 5)).isFalse();
         assertThat(factors.totp(id)).hasValueSatisfying(t -> {
-            assertThat(t.getConfirmed()).isFalse();
-            assertThat(t.getLastStep()).isZero();
+            assertThat(t.confirmed()).isFalse();
+            assertThat(t.lastStep()).isZero();
         });
         assertThat(factors.confirmTotp(id, "two", 5)).isTrue();
         assertThat(factors.confirmTotp(id, "two", 6)).isFalse();
@@ -106,25 +106,25 @@ class TwoFactorRepositoryTest {
 
     @Test
     void passkeysRoundTripAndAreUserScoped() {
-        var other = users.create("other", "o@example.org", "Other", Role.ADMINISTRATOR).getId();
+        var other = users.create("other", "o@example.org", "Other", Role.ADMINISTRATOR).id();
         var data = data("a");
         factors.addPasskey(id, "laptop", data);
         assertThat(factors.passkeys(other)).isEmpty();
         assertThat(factors.passkey("a")).hasValueSatisfying(p -> {
-            assertThat(p.getUserId()).isEqualTo(id);
-            assertThat(p.getName()).isEqualTo("laptop");
-            assertThat(p.getAlgorithm()).isEqualTo(-7L);
-            assertThat(p.getAaguid()).isEqualTo(data.aaguid().toString());
-            assertThat(Base64.getDecoder().decode(p.getPublicKey())).isEqualTo(data.publicKey());
-            assertThat(p.getSignCount()).isEqualTo(3);
-            assertThat(p.getLastUsedAt()).isNull();
+            assertThat(p.userId()).isEqualTo(id);
+            assertThat(p.name()).isEqualTo("laptop");
+            assertThat(p.algorithm()).isEqualTo(-7L);
+            assertThat(p.aaguid()).isEqualTo(data.aaguid().toString());
+            assertThat(Base64.getDecoder().decode(p.publicKey())).isEqualTo(data.publicKey());
+            assertThat(p.signCount()).isEqualTo(3);
+            assertThat(p.lastUsedAt()).isNull();
         });
         factors.usePasskey("a", 9);
         assertThat(factors.passkeys(id))
             .singleElement()
             .satisfies(p -> {
-                assertThat(p.getSignCount()).isEqualTo(9);
-                assertThat(p.getLastUsedAt()).isNotNull();
+                assertThat(p.signCount()).isEqualTo(9);
+                assertThat(p.lastUsedAt()).isNotNull();
             });
         assertThat(factors.deletePasskey(other, "a")).isZero();
         assertThat(factors.deletePasskey(id, "a")).isOne();

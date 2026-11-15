@@ -36,7 +36,7 @@ class PostgresJobsTest {
     @Test
     void concurrentCreatesGetDistinctPublicIds() throws Exception {
         store.reset();
-        var author = users.create("writer", "writer@example.org", "Writer", Role.AUTHOR).getId();
+        var author = users.create("writer", "writer@example.org", "Writer", Role.AUTHOR).id();
         var start = new CyclicBarrier(8);
         try (var pool = Executors.newFixedThreadPool(8)) {
             var creates = IntStream

@@ -41,14 +41,14 @@ class SessionAuthTest {
     @Test
     void validSessionAuthenticates() {
         var u = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
-        var raw = sessions.create(u.getId());
+        var raw = sessions.create(u.id());
         given().cookie("sp_session", raw).get("/admin/api/test/whoami").then().statusCode(200).body(equalTo("admin"));
     }
 
     @Test
     void serverStoresOnlyTheHash() {
         var u = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
-        var raw = sessions.create(u.getId());
+        var raw = sessions.create(u.id());
         assertThat(Base64.getUrlDecoder().decode(raw)).hasSize(32);
         assertThat(db.fetchValue(SESSION.ID)).hasSize(64).isNotEqualTo(raw);
     }
@@ -62,7 +62,7 @@ class SessionAuthTest {
     @Test
     void wrongRoleIs403() {
         var u = users.create("writer", "w@example.org", "W", Role.AUTHOR);
-        given().cookie("sp_session", sessions.create(u.getId())).get("/admin/api/test/whoami").then().statusCode(403);
+        given().cookie("sp_session", sessions.create(u.id())).get("/admin/api/test/whoami").then().statusCode(403);
     }
 
     @Test
@@ -72,18 +72,18 @@ class SessionAuthTest {
         var now = LocalDateTime.now(ZoneOffset.UTC);
         db
             .insertInto(SESSION, SESSION.ID, SESSION.USER_ID, SESSION.CREATED_AT, SESSION.EXPIRES_AT)
-            .values(SessionRepository.hash(raw), u.getId(), now.minusDays(15), now.minusDays(1))
+            .values(SessionRepository.hash(raw), u.id(), now.minusDays(15), now.minusDays(1))
             .execute();
         given().cookie("sp_session", raw).get("/admin/api/test/whoami").then().statusCode(401);
         // the next login sweeps expired rows
-        sessions.create(u.getId());
+        sessions.create(u.id());
         assertThat(db.fetchCount(SESSION)).isOne();
     }
 
     @Test
     void deletedSessionIs401() {
         var u = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
-        var raw = sessions.create(u.getId());
+        var raw = sessions.create(u.id());
         sessions.delete(raw);
         given().cookie("sp_session", raw).get("/admin/api/test/whoami").then().statusCode(401);
     }

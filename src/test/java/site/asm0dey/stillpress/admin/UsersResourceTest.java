@@ -157,7 +157,7 @@ class UsersResourceTest {
 
     @Test
     void inviteRevokesEarlierInviteButNotACopiedLink() throws Exception {
-        var pending = users.create("pending", "pending@example.org", "P", Role.AUTHOR).getId();
+        var pending = users.create("pending", "pending@example.org", "P", Role.AUTHOR).id();
         var copied = asAdmin()
             .post("/admin/api/users/" + pending + "/password-link")
             .then()
@@ -178,7 +178,7 @@ class UsersResourceTest {
 
     @Test
     void inviteNeedsMailAnEmailAndTheUser() {
-        var noEmail = users.create("noemail", null, "N", Role.AUTHOR).getId();
+        var noEmail = users.create("noemail", null, "N", Role.AUTHOR).id();
         asAdmin()
             .post("/admin/api/users/" + writerId + "/invite")
             .then()
@@ -281,7 +281,7 @@ class UsersResourceTest {
             .extract()
             .<Integer>path("id");
         var u = users.findById(id).orElseThrow();
-        assertThat(List.of(u.getLogin(), u.getEmail(), u.getDisplayName())).containsExactly("e1", "e1@example.org", "E");
+        assertThat(List.of(u.login(), u.email(), u.displayName())).containsExactly("e1", "e1@example.org", "E");
     }
 
     @Test
@@ -356,7 +356,7 @@ class UsersResourceTest {
             .then()
             .statusCode(409)
             .body("error", equalTo("last_administrator"));
-        assertThat(users.findById(adminId).orElseThrow().getRole()).isEqualTo("administrator");
+        assertThat(users.findById(adminId).orElseThrow().role()).isEqualTo("administrator");
     }
 
     @Test
@@ -367,7 +367,7 @@ class UsersResourceTest {
 
     @Test
     void administratorWithoutPasswordDoesNotCountAsAnotherOne() {
-        var other = users.create("pending", "p@example.org", "P", Role.ADMINISTRATOR).getId();
+        var other = users.create("pending", "p@example.org", "P", Role.ADMINISTRATOR).id();
         asAdmin().body(Map.of("role", "editor")).put("/admin/api/users/" + adminId + "/role").then().statusCode(409);
         // demoting the passwordless one is fine
         asAdmin().body(Map.of("role", "editor")).put("/admin/api/users/" + other + "/role").then().statusCode(204);
@@ -379,7 +379,7 @@ class UsersResourceTest {
                 204
         );
         asAdmin().body(Map.of("role", "editor")).put("/admin/api/users/" + adminId + "/role").then().statusCode(204);
-        assertThat(users.findById(adminId).orElseThrow().getRole()).isEqualTo("editor");
+        assertThat(users.findById(adminId).orElseThrow().role()).isEqualTo("editor");
     }
 
     @Test
@@ -409,9 +409,9 @@ class UsersResourceTest {
             .then()
             .statusCode(204);
         var u = users.findById(writerId).orElseThrow();
-        assertThat(u.getDisplayName()).isEqualTo("Wendy Writer");
-        assertThat(u.getEmail()).isEqualTo("wendy@example.org");
-        assertThat(u.getSlug()).isEqualTo("writer");
+        assertThat(u.displayName()).isEqualTo("Wendy Writer");
+        assertThat(u.email()).isEqualTo("wendy@example.org");
+        assertThat(u.slug()).isEqualTo("writer");
         var archive = dataDir.current().resolve("author/writer/index.html");
         TestStore.await(() -> {
             try {
@@ -430,7 +430,7 @@ class UsersResourceTest {
             .put("/admin/api/users/" + adminId)
             .then()
             .statusCode(403);
-        assertThat(users.findById(adminId).orElseThrow().getDisplayName()).isEqualTo("admin");
+        assertThat(users.findById(adminId).orElseThrow().displayName()).isEqualTo("admin");
     }
 
     @Test
@@ -471,7 +471,7 @@ class UsersResourceTest {
     }
 
     private long user(String login, Role role) {
-        var id = users.create(login, login + "@example.org", login, role).getId();
+        var id = users.create(login, login + "@example.org", login, role).id();
         users.setPassword(id, TestStore.PASSWORD_HASH);
         return id;
     }

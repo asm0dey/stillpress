@@ -7,7 +7,7 @@ import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
-import site.asm0dey.stillpress.db.tables.records.PasskeyRecord;
+import site.asm0dey.stillpress.store.Passkey;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.TwoFactorRepository;
 
@@ -34,7 +34,7 @@ public class Passkeys implements WebAuthnUserProvider {
             .item(() -> users
                 .findByLogin(login)
                 .map(u -> factors
-                    .passkeys(u.getId())
+                    .passkeys(u.id())
                     .stream()
                     .map(p -> record(login, p))
                     .toList())
@@ -47,19 +47,19 @@ public class Passkeys implements WebAuthnUserProvider {
             var p = factors
                 .passkey(credentialId)
                 .orElseThrow(() -> new NoSuchElementException("unknown passkey"));
-            return record(users.findById(p.getUserId()).orElseThrow().getLogin(), p);
+            return record(users.findById(p.userId()).orElseThrow().login(), p);
         });
     }
 
-    private static WebAuthnCredentialRecord record(String login, PasskeyRecord p) {
+    private static WebAuthnCredentialRecord record(String login, Passkey p) {
         return WebAuthnCredentialRecord.fromRequiredPersistedData(
                 new RequiredPersistedData(
                         login,
-                        p.getCredentialId(),
-                        UUID.fromString(p.getAaguid()),
-                        Base64.getDecoder().decode(p.getPublicKey()),
-                        p.getAlgorithm(),
-                        p.getSignCount()
+                        p.credentialId(),
+                        UUID.fromString(p.aaguid()),
+                        Base64.getDecoder().decode(p.publicKey()),
+                        p.algorithm(),
+                        p.signCount()
                 )
         );
     }

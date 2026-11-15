@@ -41,8 +41,8 @@ class PreviewResourceTest {
     @BeforeEach
     void reset() {
         store.reset();
-        author1 = sessions.create(users.create("author1", "a1@example.org", "A1", Role.AUTHOR).getId());
-        author2 = sessions.create(users.create("author2", "a2@example.org", "A2", Role.AUTHOR).getId());
+        author1 = sessions.create(users.create("author1", "a1@example.org", "A1", Role.AUTHOR).id());
+        author2 = sessions.create(users.create("author2", "a2@example.org", "A2", Role.AUTHOR).id());
     }
 
     @AfterEach

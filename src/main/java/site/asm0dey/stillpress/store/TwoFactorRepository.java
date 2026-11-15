@@ -24,8 +24,15 @@ public class TwoFactorRepository {
         this.db = db;
     }
 
-    public Optional<TotpFactorRecord> totp(long userId) {
-        return db.selectFrom(TOTP_FACTOR).where(TOTP_FACTOR.USER_ID.eq(userId)).fetchOptional();
+    public Optional<TotpFactor> totp(long userId) {
+        return db
+            .selectFrom(TOTP_FACTOR)
+            .where(TOTP_FACTOR.USER_ID.eq(userId))
+            .fetchOptional(TwoFactorRepository::totpFactor);
+    }
+
+    private static TotpFactor totpFactor(TotpFactorRecord r) {
+        return new TotpFactor(r.getUserId(), r.getCiphertext(), r.getConfirmed(), r.getLastStep());
     }
 
     /**
@@ -114,30 +121,56 @@ public class TwoFactorRepository {
         return db.deleteFrom(TOTP_FACTOR).execute();
     }
 
-    public List<PasskeyRecord> passkeys(long userId) {
+    public List<Passkey> passkeys(long userId) {
         return db
             .selectFrom(PASSKEY)
             .where(PASSKEY.USER_ID.eq(userId))
             .orderBy(PASSKEY.CREATED_AT, PASSKEY.CREDENTIAL_ID)
-            .fetch();
+            .fetch(TwoFactorRepository::passkeyOf);
     }
 
-    public Optional<PasskeyRecord> passkey(String credentialId) {
-        return db.selectFrom(PASSKEY).where(PASSKEY.CREDENTIAL_ID.eq(credentialId)).fetchOptional();
+    public Optional<Passkey> passkey(String credentialId) {
+        return db
+            .selectFrom(PASSKEY)
+            .where(PASSKEY.CREDENTIAL_ID.eq(credentialId))
+            .fetchOptional(TwoFactorRepository::passkeyOf);
     }
 
-    public void addPasskey(long userId, String name, RequiredPersistedData data) {
-        db
-            .insertInto(PASSKEY)
-            .set(PASSKEY.CREDENTIAL_ID, data.credentialId())
-            .set(PASSKEY.USER_ID, userId)
-            .set(PASSKEY.NAME, name)
-            .set(PASSKEY.PUBLIC_KEY, Base64.getEncoder().encodeToString(data.publicKey()))
-            .set(PASSKEY.ALGORITHM, data.publicKeyAlgorithm())
-            .set(PASSKEY.AAGUID, data.aaguid().toString())
-            .set(PASSKEY.SIGN_COUNT, data.counter())
-            .set(PASSKEY.CREATED_AT, SessionRepository.now())
-            .execute();
+    private static Passkey passkeyOf(PasskeyRecord r) {
+        return new Passkey(
+                r.getCredentialId(),
+                r.getUserId(),
+                r.getName(),
+                r.getPublicKey(),
+                r.getAlgorithm(),
+                r.getAaguid(),
+                r.getSignCount(),
+                r.getCreatedAt(),
+                r.getLastUsedAt()
+        );
+    }
+
+    /**
+     * False when the database refuses the row.
+     */
+    public boolean addPasskey(long userId, String name, RequiredPersistedData data) {
+        try {
+            db
+                .insertInto(PASSKEY)
+                .set(PASSKEY.CREDENTIAL_ID, data.credentialId())
+                .set(PASSKEY.USER_ID, userId)
+                .set(PASSKEY.NAME, name)
+                .set(PASSKEY.PUBLIC_KEY, Base64.getEncoder().encodeToString(data.publicKey()))
+                .set(PASSKEY.ALGORITHM, data.publicKeyAlgorithm())
+                .set(PASSKEY.AAGUID, data.aaguid().toString())
+                .set(PASSKEY.SIGN_COUNT, data.counter())
+                .set(PASSKEY.CREATED_AT, SessionRepository.now())
+                .execute();
+            return true;
+        } catch (DataAccessException e) {
+            // a replayed registration (credential already stored) or an id longer than the column holds
+            return false;
+        }
     }
 
     public void usePasskey(String credentialId, long signCount) {
@@ -185,7 +218,7 @@ public class TwoFactorRepository {
     /**
      * Any stored TOTP seed: enough to tell which keyset the seeds belong to.
      */
-    public Optional<TotpFactorRecord> firstTotp() {
-        return db.selectFrom(TOTP_FACTOR).limit(1).fetchOptional();
+    public Optional<TotpFactor> firstTotp() {
+        return db.selectFrom(TOTP_FACTOR).limit(1).fetchOptional(TwoFactorRepository::totpFactor);
     }
 }

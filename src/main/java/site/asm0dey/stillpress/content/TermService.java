@@ -3,7 +3,7 @@ package site.asm0dey.stillpress.content;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import module java.base;
-import site.asm0dey.stillpress.db.tables.records.TermRecord;
+import site.asm0dey.stillpress.store.Term;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;
@@ -51,7 +51,7 @@ public class TermService {
      * A new category or tag; its empty archive is published.
      */
     @Transactional
-    public TermRecord createTerm(String taxonomy, String name, Long parentId, ItemService.Actor a) {
+    public Term createTerm(String taxonomy, String name, Long parentId, ItemService.Actor a) {
         guard.close();
         if (!Capabilities.canCreateTerm(a.role())) {
             throw new ItemService.Refused(403, "forbidden", null);
@@ -64,12 +64,12 @@ public class TermService {
             throw new ItemService.Refused(400, "invalid", "name");
         }
         if (parentId != null
-                && (!category || terms.findById(parentId).filter(p -> "category".equals(p.getTaxonomy())).isEmpty())) {
+                && (!category || terms.findById(parentId).filter(p -> "category".equals(p.taxonomy())).isEmpty())) {
             throw new ItemService.Refused(400, "invalid", "parentId");
         }
         var t = terms.create(taxonomy, name.strip(), parentId);
         var base = settings.get(category ? "category_base" : "tag_base").orElse(category ? "category" : "tag");
-        queue.base("/" + base + "/" + (category ? permalinks.termPath(t.getId()) : t.getSlug()) + "/");
+        queue.base("/" + base + "/" + (category ? permalinks.termPath(t.id()) : t.slug()) + "/");
         jobs.requestPublish();
         return t;
     }
@@ -85,7 +85,7 @@ public class TermService {
      * term links.
      */
     @Transactional
-    public TermRecord updateTerm(long id, Change c, ItemService.Actor a) {
+    public Term updateTerm(long id, Change c, ItemService.Actor a) {
         if (!Capabilities.canManageTerms(a.role())) {
             throw new ItemService.Refused(403, "forbidden", null);
         }
@@ -99,28 +99,28 @@ public class TermService {
         if (slug.isEmpty() || slug.length() > MAX_LENGTH) {
             throw new ItemService.Refused(400, "invalid", "slug");
         }
-        var tree = tree(t.getTaxonomy());
+        var tree = tree(t.taxonomy());
         var moved = subtree(tree, id);
         if (c.parentId() != null
-                && (!"category".equals(t.getTaxonomy())
+                && (!"category".equals(t.taxonomy())
                 || !tree.containsKey(c.parentId())
                 || moved.contains(c.parentId()))) {
             throw new ItemService.Refused(400, "invalid", "parentId");
         }
         if (terms
-            .findBySlug(t.getTaxonomy(), slug)
-            .filter(o -> o.getId() != id)
+            .findBySlug(t.taxonomy(), slug)
+            .filter(o -> o.id() != id)
             .isPresent()) {
             throw new ItemService.Refused(409, "slug_taken", "slug");
         }
         guard.close();
         var name = c.name().strip();
-        var root = root(t.getTaxonomy());
+        var root = root(t.taxonomy());
         var before = bases(root, tree, moved);
         terms.update(id, name, slug, c.parentId(), c.description() == null ? null : c.description().strip());
-        var after = bases(root, tree(t.getTaxonomy()), moved);
+        var after = bases(root, tree(t.taxonomy()), moved);
         var shown = new HashSet<Long>();
-        if (!t.getName().equals(name)) {
+        if (!t.name().equals(name)) {
             shown.add(id);
         }
         var dirty = new LinkedHashSet<>(List.of(before.get(id), after.get(id)));
@@ -147,19 +147,19 @@ public class TermService {
             throw new ItemService.Refused(409, "default_category", null);
         }
         guard.close();
-        var root = root(t.getTaxonomy());
-        var tree = tree(t.getTaxonomy());
+        var root = root(t.taxonomy());
+        var tree = tree(t.taxonomy());
         var under = subtree(tree, id);
         var before = bases(root, tree, under);
         var had = terms.itemIds(List.of(id), false);
         var published = new HashSet<>(terms.itemIds(under, true));
         under.remove(id);
-        terms.delete(id, t.getParentId());
+        terms.delete(id, t.parentId());
         var dirty = new LinkedHashSet<String>();
         dirty.add(before.remove(id));
-        var now = tree(t.getTaxonomy());
+        var now = tree(t.taxonomy());
         move(before, bases(root, now, under), dirty);
-        if ("category".equals(t.getTaxonomy())) {
+        if ("category".equals(t.taxonomy())) {
             // the default category may be created just now, so it is looked up after
             permalinks
                 .ensureCategory(had)
@@ -203,24 +203,24 @@ public class TermService {
         queue.items(ids);
     }
 
-    private Map<Long, TermRecord> tree(String taxonomy) {
-        var byId = new HashMap<Long, TermRecord>();
+    private Map<Long, Term> tree(String taxonomy) {
+        var byId = new HashMap<Long, Term>();
         terms
             .byTaxonomy(taxonomy)
-            .forEach(r -> byId.put(r.getId(), r));
+            .forEach(r -> byId.put(r.id(), r));
         return byId;
     }
 
     /**
      * {@code id} and all its descendants.
      */
-    private static Set<Long> subtree(Map<Long, TermRecord> tree, long id) {
+    private static Set<Long> subtree(Map<Long, Term> tree, long id) {
         var out = new LinkedHashSet<Long>();
         out.add(id);
         for (boolean grew = true; grew; ) {
             grew = false;
             for (var r : tree.values()) {
-                if (r.getParentId() != null && out.contains(r.getParentId()) && out.add(r.getId())) {
+                if (r.parentId() != null && out.contains(r.parentId()) && out.add(r.id())) {
                     grew = true;
                 }
             }
@@ -228,7 +228,7 @@ public class TermService {
         return out;
     }
 
-    private static Map<Long, String> bases(String root, Map<Long, TermRecord> tree, Set<Long> ids) {
+    private static Map<Long, String> bases(String root, Map<Long, Term> tree, Set<Long> ids) {
         var out = new HashMap<Long, String>();
         ids.forEach(id -> out.put(id, root + path(tree, id) + "/"));
         return out;
@@ -244,14 +244,13 @@ public class TermService {
                 && Slugs.title(name).length() <= MAX_LENGTH;
     }
 
-    private static String path(Map<Long, TermRecord> tree, long id) {
+    private static String path(Map<Long, Term> tree, long id) {
         var parts = new ArrayDeque<String>();
         var seen = new HashSet<Long>();
-        for (
-                var t = tree.get(id);
-                t != null && seen.add(t.getId());
-                t = t.getParentId() == null ? null : tree.get(t.getParentId())) {
-            parts.addFirst(t.getSlug());
+        for (var t = tree.get(id); t != null && seen.add(t.id()); t = t.parentId() == null
+                ? null
+                : tree.get(t.parentId())) {
+            parts.addFirst(t.slug());
         }
         return String.join("/", parts);
     }

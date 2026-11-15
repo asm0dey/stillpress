@@ -48,7 +48,7 @@ class ConcurrentCreatesTest {
     private void assertDistinct(LongFunction<Long> create) throws Exception {
         for (var round = 0; round < 5; round++) {
             store.reset();
-            var author = users.create("writer", "writer@example.org", "Writer", Role.AUTHOR).getId();
+            var author = users.create("writer", "writer@example.org", "Writer", Role.AUTHOR).id();
             var start = new CyclicBarrier(WRITERS);
             try (var pool = Executors.newFixedThreadPool(WRITERS)) {
                 var creates = IntStream

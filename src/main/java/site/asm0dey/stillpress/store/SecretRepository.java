@@ -4,7 +4,6 @@ import static site.asm0dey.stillpress.db.Tables.SECRET;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import org.jooq.DSLContext;
-import site.asm0dey.stillpress.db.tables.records.SecretRecord;
 
 /**
  * Raw access to the {@code secret} table; {@code Secrets} encrypts and decrypts.
@@ -28,9 +27,14 @@ public class SecretRepository {
     /**
      * Any one stored secret: enough to tell which keyset the rows belong to.
      */
-    public Optional<SecretRecord> first() {
-        return db.selectFrom(SECRET).limit(1).fetchOptional();
+    public Optional<Row> first() {
+        return db
+            .selectFrom(SECRET)
+            .limit(1)
+            .fetchOptional(r -> new Row(r.getName(), r.getCiphertext()));
     }
+
+    public record Row(String name, String ciphertext) {}
 
     public void put(String name, String ciphertext) {
         if (db.update(SECRET).set(SECRET.CIPHERTEXT, ciphertext).where(SECRET.NAME.eq(name)).execute() == 0) {

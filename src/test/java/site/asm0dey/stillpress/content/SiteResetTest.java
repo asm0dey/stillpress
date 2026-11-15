@@ -71,7 +71,7 @@ class SiteResetTest {
     void clean() {
         store.reset();
         hash = TestStore.PASSWORD_HASH;
-        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).getId();
+        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
         users.setPassword(adminId, hash);
     }
 
@@ -94,7 +94,7 @@ class SiteResetTest {
         blocks.create("Block", "<p>x</p>", adminId, LocalDateTime.now());
         revisions.insert("item", item, "t", "b", "blocks", "", adminId, false);
         tokens.create(adminId, TokenRepository.SET_PASSWORD, Duration.ofHours(1));
-        var editor = users.create("editor", "e@example.org", "Editor", Role.EDITOR).getId();
+        var editor = users.create("editor", "e@example.org", "Editor", Role.EDITOR).id();
         sessions.create(editor);
         sessions.create(adminId);
         db
@@ -158,10 +158,10 @@ class SiteResetTest {
             .containsOnly(Jobs.PUBLISH_SWEEP);
         var admin = users.all();
         assertThat(admin)
-            .extracting(r -> r.getId())
+            .extracting(r -> r.id())
             .containsExactly(adminId);
-        assertThat(admin.getFirst().getPasswordHash()).isEqualTo(hash);
-        assertThat(admin.getFirst().getSourceId()).isNull();
+        assertThat(admin.getFirst().passwordHash()).isEqualTo(hash);
+        assertThat(admin.getFirst().sourceId()).isNull();
         assertThat(settingKeys())
             .containsExactlyInAnyOrder(
                     "title",
@@ -195,7 +195,7 @@ class SiteResetTest {
         var raw = sessions.create(adminId);
         reset.reset(adminId, raw);
         assertThat(sessions.find(raw))
-            .map(r -> r.getId())
+            .map(r -> r.id())
             .hasValue(adminId);
         assertThat(db.fetchCount(SESSION)).isEqualTo(1);
     }

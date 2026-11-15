@@ -170,6 +170,6 @@ class ReusableBlockServiceTest {
     }
 
     private ItemService.Actor actor(String login, Role role) {
-        return new ItemService.Actor(users.create(login, login + "@example.org", login, role).getId(), role);
+        return new ItemService.Actor(users.create(login, login + "@example.org", login, role).id(), role);
     }
 }

@@ -30,7 +30,7 @@ class RevisionsTest {
     @BeforeEach
     void reset() {
         store.reset();
-        userId = users.create("writer", "writer@example.org", "Writer", Role.AUTHOR).getId();
+        userId = users.create("writer", "writer@example.org", "Writer", Role.AUTHOR).id();
     }
 
     @Test

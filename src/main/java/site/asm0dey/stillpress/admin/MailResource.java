@@ -142,16 +142,16 @@ public class MailResource {
     public Response test() {
         long id = identity.getAttribute(SessionIdentityProvider.USER_ID);
         var me = users.findById(id).orElseThrow();
-        if (me.getEmail() == null || me.getEmail().isBlank()) {
+        if (me.email() == null || me.email().isBlank()) {
             return Response.status(400).entity(Map.of("error", "no_email")).build();
         }
         if (!mail.configured()) {
             return Response.status(409).entity(Map.of("error", "mail_not_configured")).build();
         }
         var site = settings.get("title").orElse("Stillpress");
-        var texts = SiteMail.texts(AuthResource.adminLocale(me.getLocale(), settings.get("language")));
+        var texts = SiteMail.texts(AuthResource.adminLocale(me.locale(), settings.get("language")));
         try {
-            mail.send(new Mail(me.getEmail(), texts.testSubject(site), texts.testBody(site)));
+            mail.send(new Mail(me.email(), texts.testSubject(site), texts.testBody(site)));
         } catch (MailFailedException e) {
             return Response.status(502).entity(Map.of("error", "mail_failed", "message", e.getMessage())).build();
         }

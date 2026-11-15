@@ -48,10 +48,10 @@ class ReviewNotificationsTest {
         settings.put("smtp_from", "blog@example.org");
         mail.reload();
         users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR);
-        editorId = users.create("ed", "ed@example.org", "Ed", Role.EDITOR).getId();
+        editorId = users.create("ed", "ed@example.org", "Ed", Role.EDITOR).id();
         users.create("writer", "writer@example.org", "Writer", Role.AUTHOR);
         users.create("noemail", null, "No Email", Role.EDITOR);
-        contributorId = users.create("newbie", "newbie@example.org", "Newbie", Role.CONTRIBUTOR).getId();
+        contributorId = users.create("newbie", "newbie@example.org", "Newbie", Role.CONTRIBUTOR).id();
     }
 
     @Test

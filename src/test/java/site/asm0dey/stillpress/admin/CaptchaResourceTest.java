@@ -47,7 +47,7 @@ class CaptchaResourceTest {
     void start() {
         store.reset();
         wm.start();
-        admin = sessions.create(users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).getId());
+        admin = sessions.create(users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).id());
     }
 
     @AfterEach
@@ -161,7 +161,7 @@ class CaptchaResourceTest {
 
     @Test
     void needsAnAdministrator() {
-        var author = sessions.create(users.create("w", "w@example.org", "W", Role.AUTHOR).getId());
+        var author = sessions.create(users.create("w", "w@example.org", "W", Role.AUTHOR).id());
         csrf().cookie("sp_session", author).get("/admin/api/captcha").then().statusCode(403);
     }
 

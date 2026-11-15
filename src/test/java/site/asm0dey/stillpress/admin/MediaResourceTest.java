@@ -43,8 +43,8 @@ class MediaResourceTest {
     @BeforeEach
     void reset() {
         store.reset();
-        contributor = sessions.create(users.create("c", "c@example.org", "C", Role.CONTRIBUTOR).getId());
-        author = sessions.create(users.create("a", "a@example.org", "A", Role.AUTHOR).getId());
+        contributor = sessions.create(users.create("c", "c@example.org", "C", Role.CONTRIBUTOR).id());
+        author = sessions.create(users.create("a", "a@example.org", "A", Role.AUTHOR).id());
     }
 
     @Test
@@ -146,7 +146,7 @@ class MediaResourceTest {
     @Test
     void firstConcurrentWritesOnAFreshSiteAllSucceed() throws Exception {
         assertThat(settings.get(ImportGuard.STATE)).isEmpty();
-        long userId = users.create("w", "w@example.org", "W", Role.AUTHOR).getId();
+        long userId = users.create("w", "w@example.org", "W", Role.AUTHOR).id();
         int n = 6;
         var pool = Executors.newFixedThreadPool(n);
         try {
