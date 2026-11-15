@@ -9,6 +9,7 @@ import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.importer.ImportRunningException;
+import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.ReleaseSwitcher;
 import site.asm0dey.stillpress.publish.SitePublisher;
 import site.asm0dey.stillpress.store.PublishLock;
@@ -66,7 +67,13 @@ public class SiteReset {
      * @throws ImportRunningException while an import runs; nothing changes
      */
     public boolean reset(long keepAdministratorId, String keepSession) {
-        return run(false, () -> siteWipe.reset(keepAdministratorId, keepSession, KEPT, SETUP_DEFAULTS));
+        return run(false, () -> siteWipe.reset(
+                keepAdministratorId,
+                keepSession,
+                KEPT,
+                SETUP_DEFAULTS,
+                Jobs.PUBLISH_SWEEP
+        ));
     }
 
     /**
@@ -83,7 +90,7 @@ public class SiteReset {
      *        crash is cleared instead of refusing
      */
     public boolean wipe(boolean force) {
-        return run(force, () -> siteWipe.wipe(Set.of(LOCK_ROW, ImportGuard.STATE)));
+        return run(force, () -> siteWipe.wipe(Set.of(LOCK_ROW, ImportGuard.STATE), Jobs.PUBLISH_SWEEP));
     }
 
     private enum Outcome {

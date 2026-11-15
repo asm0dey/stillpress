@@ -23,7 +23,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
-import site.asm0dey.stillpress.publish.Jobs;
 
 /**
  * The rows a site reset or wipe deletes, across every table. Call inside a transaction.
@@ -40,8 +39,14 @@ public class SiteWipe {
      * Keeps one administrator (password kept, {@code source_id} cleared), the session {@code keepSession} (a raw
      * token, or {@code null} for none) and the settings {@code kept}; then writes {@code defaults}.
      */
-    public void reset(long keepAdministratorId, String keepSession, Set<String> kept, Map<String, String> defaults) {
-        clearContent();
+    public void reset(
+            long keepAdministratorId,
+            String keepSession,
+            Set<String> kept,
+            Map<String, String> defaults,
+            String keepTask
+    ) {
+        clearContent(keepTask);
         db
             .deleteFrom(SESSION)
             .where(keepSession == null ? DSL.noCondition() : SESSION.ID.ne(SessionRepository.hash(keepSession)))
@@ -64,8 +69,8 @@ public class SiteWipe {
     /**
      * Every row goes, users and settings included, except the settings {@code kept}.
      */
-    public void wipe(Set<String> kept) {
-        clearContent();
+    public void wipe(Set<String> kept, String keepTask) {
+        clearContent(keepTask);
         db.deleteFrom(TOTP_FACTOR).execute();
         db.deleteFrom(PASSKEY).execute();
         db.deleteFrom(SESSION).execute();
@@ -77,7 +82,7 @@ public class SiteWipe {
     /**
      * Content and everything hanging off it, in foreign-key order. Leaves authors, sessions and settings to the caller.
      */
-    private void clearContent() {
+    private void clearContent(String keepTask) {
         // self-references first, so whole-table deletes never trip an FK on any database
         db.update(COMMENT).setNull(COMMENT.PARENT_ID).execute();
         db.update(ITEM).setNull(ITEM.PARENT_ID).execute();
@@ -89,7 +94,7 @@ public class SiteWipe {
         // the recurring sweep stays; a picked publish is waiting for the lock this holds, and finds an empty queue
         db
             .deleteFrom(SCHEDULED_TASKS)
-            .where(SCHEDULED_TASKS.TASK_NAME.ne(Jobs.PUBLISH_SWEEP), SCHEDULED_TASKS.PICKED.isFalse())
+            .where(SCHEDULED_TASKS.TASK_NAME.ne(keepTask), SCHEDULED_TASKS.PICKED.isFalse())
             .execute();
         db.deleteFrom(REVISION).execute();
         db.deleteFrom(COMMENT).execute();
