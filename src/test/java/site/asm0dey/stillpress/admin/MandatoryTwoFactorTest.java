@@ -178,6 +178,70 @@ class MandatoryTwoFactorTest {
     }
 
     @Test
+    void signInEndpointsPassTheFence() {
+        require();
+        var session =
+                TwoStepLoginTest
+            .login("editor", TestStore.PASSWORD)
+            .then()
+            .statusCode(204)
+            .extract()
+            .cookie("sp_session");
+        var bad = Map.of("login", "nobody", "password", "wrong password", "code", "000000", "token", "nope");
+        for (var path :
+                List.of(
+                        "/admin/api/login",
+                        "/admin/api/login/totp",
+                        "/admin/api/login/passkey-step",
+                        "/admin/api/login/passkey",
+                        "/admin/api/password-reset",
+                        "/admin/api/set-password"
+        )) {
+            var r = as(session).contentType(JSON).body(bad).post(path);
+            assertThat(r.statusCode()).as(path).isNotEqualTo(403);
+            assertThat(r.body().asString()).as(path).doesNotContain("enroll_2fa");
+        }
+        var challenge = as(session).get("/admin/api/altcha/challenge");
+        assertThat(challenge.statusCode()).isNotEqualTo(403);
+        assertThat(challenge.body().asString()).doesNotContain("enroll_2fa");
+        // setup reads no identity either, but it changes the site; the fence stays on it
+        as(session)
+            .contentType(JSON)
+            .body(Map.of())
+            .post("/admin/api/setup")
+            .then()
+            .statusCode(403)
+            .body("error", equalTo("enroll_2fa"));
+    }
+
+    @Test
+    void setPasswordWithAnEnrollmentSessionSignsInTheTokenUser() {
+        require();
+        var session =
+                TwoStepLoginTest
+            .login("editor", TestStore.PASSWORD)
+            .then()
+            .statusCode(204)
+            .extract()
+            .cookie("sp_session");
+        var invited = users.create("invited", "invited@example.org", "Invited", Role.AUTHOR).getId();
+        var invite = tokens.create(invited, TokenRepository.INVITE, Duration.ofHours(24));
+        var issued = as(session)
+            .contentType(JSON)
+            .body(Map.of("token", invite, "password", "a brand new password"))
+            .post("/admin/api/set-password")
+            .then()
+            .statusCode(200)
+            .body("enroll", equalTo(true))
+            .extract()
+            .cookie("sp_session");
+        assertThat(issued).isNotEqualTo(session);
+        as(issued).get("/admin/api/session").then().statusCode(200).body("login", equalTo("invited"));
+        // the editor's own enrollment session is untouched
+        as(session).get("/admin/api/session").then().statusCode(200).body("login", equalTo("editor"));
+    }
+
+    @Test
     void setPasswordGoesToEnrollment() {
         require();
         var invited = users.create("invited", "invited@example.org", "Invited", Role.AUTHOR).getId();

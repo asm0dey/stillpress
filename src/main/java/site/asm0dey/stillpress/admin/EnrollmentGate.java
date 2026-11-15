@@ -19,7 +19,15 @@ public class EnrollmentGate {
             "PUT /admin/api/session/locale",
             "POST /admin/api/logout",
             "GET /admin/api/login-options",
-            "GET /admin/api/setup"
+            "GET /admin/api/setup",
+            // anonymous: they read no identity, so the cookie must not lock this browser out of them
+            "POST /admin/api/login",
+            "POST /admin/api/login/totp",
+            "POST /admin/api/login/passkey-step",
+            "POST /admin/api/login/passkey",
+            "POST /admin/api/password-reset",
+            "POST /admin/api/set-password",
+            "GET /admin/api/altcha/challenge"
     );
     @Inject
     SecurityIdentity identity;
