@@ -92,6 +92,15 @@ class SiteMailTest {
     }
 
     @Test
+    void successfulSendClearsTheLastError() {
+        settings.put("mail_last_error", "2026-01-01T00:00:00Z old failure");
+        mail.sendAfterCommit(new Mail("reader@example.org", "ok", "ok"));
+        assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
+        TestStore.await(() -> settings.get("mail_last_error").isEmpty(), 10);
+        assertThat(settings.get("mail_last_error")).isEmpty();
+    }
+
+    @Test
     void failureOutsideATransactionIsRecordedNotThrown() {
         closedPort();
         assertThatCode(() -> mail.sendAfterCommit(new Mail("reader@example.org", "lost", "lost"))).doesNotThrowAnyException();

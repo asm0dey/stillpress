@@ -46,7 +46,7 @@ One install runs one site. Several sites means several installs.
   - Submitting an item for review mails every editor and administrator who has an email.
   - Every user edits their own display name and email on **Profile** (`/admin/profile`). Each role sees only the screens it may use: a screen it may not (Users, Settings, Import and Redirects for non-administrators; Pages, Categories and Tags for authors and contributors) sends it to the dashboard. New users (`POST /admin/api/users`) get the same checks as profile edits: login of 1–60 letters, digits, spaces and `_ . - @`, email and name trimmed, 400 with `field` on bad input, 409 `login_taken` or `email_taken`.
   - **Reset site** at the bottom of Settings (administrators, `POST /admin/api/reset` with `{"password","confirm"}`; `confirm` is the site title): deletes all content, media, users other than you, categories, redirects and settings except the title, language, site address and time zone, publishes the empty site and opens import again. This is how to redo a bad import. The password counts towards the login rate limit; it is refused while an import runs.
-  - Password login (Argon2id) with rate limits: 5 failures per account and 20 per client IP in 15 minutes, then 429 with `Retry-After`.
+  - Password login (Argon2id) with rate limits: 5 failures per account and 20 per client IP in 15 minutes, then 429 with `Retry-After`. Login, password reset and set-password share one per-IP limit (20 failures or reset requests per 15 minutes), so many resets from one address can briefly block logins from it.
   - CSRF protection by [quarkus-rest-csrf](https://quarkus.io/guides/security-csrf-prevention): a GET issues the token in the `X-CSRF-TOKEN` response header and its signature (keyed from the keyset) in the HttpOnly `csrf-token` cookie; every state-changing admin API call must send the token back in `X-CSRF-TOKEN`.
   - `/wp-admin` and `/wp-login.php` redirect to `/admin/`, so WordPress bookmarks keep working.
   - The admin in English and Russian, per user: the header's language switch stores it (`PUT /admin/api/session/locale` with `{"locale":"en"|"ru"}`, anything else 400); `GET /admin/api/session` returns the effective `locale` (the user's choice, else `ru` when the site language starts with `ru`, else `en`). Setup and login follow the browser's language. The block editor uses WordPress's own Russian translation, a filtered snapshot in `src/main/webui/src/i18n/wp-ru.json`; refresh it after a Gutenberg upgrade with `mise run i18n:wp`.
@@ -90,7 +90,7 @@ stillpress publish                     # render a full release and make it live;
 stillpress serve                       # serve the live release on :8080 (also the default command)
 stillpress verify-urls --source https://old-blog.example --target http://localhost:8080
 stillpress user reset-password <login>  # print a single-use set-password link (valid 24 h); login or email
-stillpress secrets reset               # delete every stored secret (SMTP password, Turnstile secret) after losing the keyset
+stillpress secrets reset               # delete every stored secret (SMTP password, Turnstile secret) after losing the keyset; switches CAPTCHA off if it was Turnstile
 stillpress captcha none                # turn the login/reset/setup CAPTCHA off (e.g. a broken Turnstile key)
 stillpress reset                       # show what a reset would delete (row counts, data directory); exits 1
 stillpress reset --yes                 # delete everything, users and settings included; the next serve prints a setup token

@@ -1195,8 +1195,14 @@
  "Send invite": [
   "Отправить приглашение"
  ],
- "Invite sent to %s.": [
-  "Приглашение отправлено на %s."
+ "Invite queued for %s. If it does not arrive, check Security → Email.": [
+  "Приглашение для %s поставлено в очередь. Если оно не придёт, проверьте «Безопасность → Email»."
+ ],
+ "Email is not set up. Configure it under Security → Email.": [
+  "Почта не настроена. Настройте её в «Безопасность → Email»."
+ ],
+ "This user has no email address.": [
+  "У пользователя нет адреса почты."
  ],
  "Could not send the invite.": [
   "Не удалось отправить приглашение."

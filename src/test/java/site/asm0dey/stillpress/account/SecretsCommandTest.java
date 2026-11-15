@@ -20,6 +20,10 @@ class SecretsCommandTest {
     Secrets secrets;
     @Inject
     SecretRepository repository;
+    @Inject
+    Captcha captcha;
+    @Inject
+    site.asm0dey.stillpress.store.SettingRepository settings;
     StringWriter out = new StringWriter();
     StringWriter err = new StringWriter();
 
@@ -40,5 +44,17 @@ class SecretsCommandTest {
             .isEqualTo("Deleted 2 stored secrets. Re-enter the SMTP password and CAPTCHA secret in the admin.");
         assertThat(repository.ciphertext("smtp_password")).isEmpty();
         assertThat(repository.ciphertext("turnstile_secret")).isEmpty();
+    }
+
+    @Test
+    void resetSwitchesOffTurnstileWhoseSecretIsGone() {
+        settings.put("captcha_provider", "turnstile");
+        secrets.put("turnstile_secret", "two");
+        var cmd = new CommandLine(SecretsCommand.class, factory);
+        cmd.setOut(new PrintWriter(out, true));
+        cmd.setErr(new PrintWriter(err, true));
+        assertThat(cmd.execute("reset")).isZero();
+        assertThat(captcha.provider()).isEqualTo("none");
+        assertThat(out.toString()).contains("CAPTCHA was switched off because its secret was deleted");
     }
 }

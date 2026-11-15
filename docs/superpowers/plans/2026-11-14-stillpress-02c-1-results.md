@@ -84,14 +84,25 @@ All are in the roadmap: 02c-2 items under "Carried over from 02c-1 (for 02c-2)" 
   - the widget resets on any failed submit;
   - the `loginDisabledUntilToken` test races;
   - `ForgotPassword` treats a failed `login-options` as `mail: true`.
+- **02c-2 additions** (final review): the Turnstile site key is never checked on save (verify the pair with a token solved with the new site key and siteverify it with the new secret); fail fast at startup for an env-locked Turnstile without keys and for an invalid `STILLPRESS_CAPTCHA_PROVIDER`; a failed Turnstile script load is silent; a reset replaces a pending invite; the ALTCHA widget is English-only.
 - **Plan 04** (comments reuse the CAPTCHA): ALTCHA replay within 300 s; no test for ALTCHA expiry or env-sourced Turnstile keys under the lock.
 - **Hardening backlog:**
   - keys: two processes on an empty dir, `Keys.derive` duplication, unset data dir, help paths touching the database, one-row sample, keyset kept after an early startup failure, a root-dependent test;
   - CSRF retry on any 400, and concurrent token bootstrap;
   - a blank `adminUrl` deleting `admin_url`, and a possibly unused TTL;
   - `email_lower` backfill collation, legacy duplicates, the per-author import query, the relative-path test;
-  - mail: CR/LF at write time, a null subject, per-reviewer settings reads, a package dependency on admin REST, the subject pin, `orTimeout`, two Security-screen nits;
+  - mail: CR/LF at write time (hardening only: Vert.x `MailEncoder` rejects it, any user can set their own email), `SiteReset` import order, a null subject, per-reviewer settings reads, a package dependency on admin REST, the subject pin, `orTimeout`, two Security-screen nits;
   - h2c: a `Set.of` per request, and 411 on an empty body;
   - test hygiene: boolean assertions, literals, a fixed WireMock port;
   - the dev-mode host validation note.
 
+
+## Final review
+
+Fixed in the wave after the whole-branch review:
+
+- `stillpress secrets reset` with Turnstile active switches the CAPTCHA off (the deleted secret made every login, reset and set-password fail closed); with an env-locked provider it prints the override warning instead.
+- Users screen: "Invite queued for ..." (the send is async), and `mail_not_configured` / `no_email` get their own messages.
+- Set-password maps 429 to "Too many attempts...".
+- README notes that login, reset and set-password share one per-IP limit.
+- Any successful mail send clears `mail_last_error`, not only the test mail.

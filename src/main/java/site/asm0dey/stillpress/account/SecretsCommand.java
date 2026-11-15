@@ -15,6 +15,8 @@ public class SecretsCommand {
         CommandSpec spec;
         @Inject
         SecretRepository secrets;
+        @Inject
+        Captcha captcha;
 
         @Override
         public Integer call() {
@@ -25,6 +27,22 @@ public class SecretsCommand {
                 .println(
                         "Deleted " + deleted + " stored secrets. Re-enter the SMTP password and CAPTCHA secret in the admin."
                 );
+            if (captcha.provider().equals("turnstile")) {
+                // without its secret every verification fails closed, which would lock everyone out of the admin
+                if (captcha.locked()) {
+                    spec.commandLine().getErr().println(
+                            "STILLPRESS_CAPTCHA_PROVIDER is set and overrides this; unset it and restart."
+                    );
+                } else {
+                    captcha.turnOff();
+                    spec
+                        .commandLine()
+                        .getOut()
+                        .println(
+                                "CAPTCHA was switched off because its secret was deleted; re-enable it in the admin's Security screen."
+                        );
+                }
+            }
             return 0;
         }
     }

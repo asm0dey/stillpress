@@ -81,13 +81,16 @@ export default function Users() {
       showSent(u.email);
     } catch (e) {
       const err = asApiError(e);
-      setMessage(err.error === 'csrf' ? err.message! : __('Could not send the invite.', 'stillpress'));
+      setMessage(err.error === 'csrf' ? err.message!
+        : err.error === 'mail_not_configured' ? __('Email is not set up. Configure it under Security → Email.', 'stillpress')
+        : err.error === 'no_email' ? __('This user has no email address.', 'stillpress')
+        : __('Could not send the invite.', 'stillpress'));
     }
   }
 
   function showSent(email: string) {
     setLink(null);
-    setSent(sprintf(__('Invite sent to %s.', 'stillpress'), email));
+    setSent(sprintf(__('Invite queued for %s. If it does not arrive, check Security → Email.', 'stillpress'), email));
   }
 
   async function copy(login: string, url: string) {

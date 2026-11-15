@@ -11,7 +11,7 @@ export default function SetPassword() {
   const [confirm, setConfirm] = useState('');
   const [errors, setErrors] = useState<{ password?: string; confirm?: string; captcha?: string }>({});
   const captcha = useCaptcha();
-  const [state, setState] = useState<'form' | 'done' | 'expired' | 'failed' | 'csrf'>('form');
+  const [state, setState] = useState<'form' | 'done' | 'expired' | 'failed' | 'csrf' | 'limited'>('form');
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -28,6 +28,7 @@ export default function SetPassword() {
       captcha.reset();
       if (err.error === 'csrf') setState('csrf');
       else if (err.error === 'captcha_failed') setErrors({ captcha: CAPTCHA_FAILED() });
+      else if (err.status === 429) setState('limited');
       else if (err.status === 400) setErrors({ password: __('Use 12 to 1024 characters.', 'stillpress') });
       else setState(err.status === 410 ? 'expired' : 'failed');
     }
@@ -41,6 +42,7 @@ export default function SetPassword() {
       <h1>{__('Set your password', 'stillpress')}</h1>
       {state === 'expired' && <p role="alert" className="error">{__('This link is invalid or has expired. Ask an administrator for a new one.', 'stillpress')}</p>}
       {state === 'csrf' && <p role="alert" className="error">{CSRF_MESSAGE()}</p>}
+      {state === 'limited' && <p role="alert" className="error">{__('Too many attempts. Wait a few minutes and try again.', 'stillpress')}</p>}
       {state === 'failed' && <p role="alert" className="error">{__('Could not set the password. Try again.', 'stillpress')}</p>}
       <form onSubmit={submit} noValidate>
         <Field label={__('New password', 'stillpress')} type="password" autoComplete="new-password" required minLength={12}

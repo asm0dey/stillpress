@@ -120,8 +120,18 @@ test('sendInviteButtonOnlyWithMail', async () => {
   view = page();
   await t.user.click(await view.findByRole('button', { name: 'Send invite' }));
   expect(view.getAllByRole('button', { name: 'Send invite' })).toHaveLength(1);
-  expect((await view.findByRole('status')).textContent).toBe('Invite sent to bob@example.com.');
+  expect((await view.findByRole('status')).textContent).toBe('Invite queued for bob@example.com. If it does not arrive, check Security → Email.');
   expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual(['/users/2/invite']);
+});
+
+test('invite errors get their own messages', async () => {
+  fakeApi({
+    ...SESSION, 'GET /login-options': { body: { mail: true } }, 'GET /users': { body: [BOB] },
+    'POST /users/2/invite': { status: 409, body: { error: 'mail_not_configured' } },
+  });
+  const view = page();
+  await t.user.click(await view.findByRole('button', { name: 'Send invite' }));
+  expect((await view.findByRole('alert')).textContent).toBe('Email is not set up. Configure it under Security → Email.');
 });
 
 test('adding a user with mail on says the invite went out', async () => {
@@ -134,5 +144,5 @@ test('adding a user with mail on says the invite went out', async () => {
   await t.user.type(view.getByLabelText('Email', { selector: '[name="email"]' }), 'carol@example.com');
   await t.user.type(view.getByLabelText('Display name', { selector: '[name="displayName"]' }), 'Carol');
   await t.user.click(view.getByRole('button', { name: 'Add user' }));
-  expect((await view.findByRole('status')).textContent).toBe('Invite sent to carol@example.com.');
+  expect((await view.findByRole('status')).textContent).toBe('Invite queued for carol@example.com. If it does not arrive, check Security → Email.');
 });

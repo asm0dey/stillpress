@@ -85,13 +85,15 @@ public class SiteMail {
         try {
             start(m)
                 .whenComplete((ok, e) -> {
-                    if (e != null) {
-                        // completes on the event loop (or the timeout thread): the database write goes to a worker
-                        vertx.executeBlocking(() -> {
+                    // completes on the event loop (or the timeout thread): the database write goes to a worker
+                    vertx.executeBlocking(() -> {
+                        if (e != null) {
                             failed(m, reason(e));
-                            return null;
-                        });
-                    }
+                        } else {
+                            succeeded();
+                        }
+                        return null;
+                    });
                 });
         } catch (RuntimeException e) {
             // also a database or client error: outside a transaction this runs on the caller's thread
@@ -125,6 +127,16 @@ public class SiteMail {
             return "No answer from the SMTP server in " + TIMEOUT.toSeconds() + " s";
         }
         return Objects.requireNonNullElse(cause.getMessage(), cause.getClass().getSimpleName());
+    }
+
+    private void succeeded() {
+        try {
+            QuarkusTransaction
+                .requiringNew()
+                .run(() -> settings.delete(LAST_ERROR));
+        } catch (RuntimeException e) {
+            LOG.warnf("Could not clear the mail error: %s", reason(e));
+        }
     }
 
     private void failed(Mail m, String reason) {
