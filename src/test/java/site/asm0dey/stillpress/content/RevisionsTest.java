@@ -1,83 +1,78 @@
 package site.asm0dey.stillpress.content;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static site.asm0dey.stillpress.db.Tables.REVISION;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 import module java.base;
-import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.account.Role;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import site.asm0dey.stillpress.db.tables.pojos.Revision;
-import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.RevisionRepository;
+import site.asm0dey.stillpress.store.SettingRepository;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class RevisionsTest {
-    @Inject
+    private static final long USER = 7;
+    @Mock
+    RevisionRepository repo;
+    @Mock
+    SettingRepository settings;
     Revisions revisions;
-    @Inject
-    ItemService items;
-    @Inject
-    TestStore store;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    DSLContext db;
-    long userId;
 
     @BeforeEach
-    void reset() {
-        store.reset();
-        userId = users.create("writer", "writer@example.org", "Writer", Role.AUTHOR).id();
+    void setUp() {
+        revisions = new Revisions(repo, settings);
+    }
+
+    private static Revision revision(long id, String title, boolean autosave) {
+        return new Revision(id, "item", 42L, title, "body", null, "", USER, LocalDateTime.now(), autosave);
     }
 
     @Test
     void keepsNewest25() {
+        when(settings.get("revisions_keep")).thenReturn(Optional.empty());
         for (int i = 1; i <= 30; i++) {
-            revisions.saved("item", 42, "save " + i, "body", "blocks", "", userId);
+            revisions.saved("item", 42, "save " + i, "body", "blocks", "", USER);
         }
-        var kept = revisions.list("item", 42);
-        assertThat(kept).hasSize(25);
-        assertThat(kept.getFirst().title()).isEqualTo("save 30");
-        assertThat(kept.getLast().title()).isEqualTo("save 6");
+        // every save prunes to the default 25, and the repository lists the survivors newest first
+        verify(repo, times(30)).prune("item", 42, 25);
+        when(repo.list("item", 42)).thenReturn(List.of(revision(30, "save 30", false), revision(6, "save 6", false)));
+        assertThat(revisions.list("item", 42)).extracting(Revision::title).containsExactly("save 30", "save 6");
     }
 
     @Test
     void autosaveIsReplacedNotAccumulatedAndDeletedOnSave() {
-        var item = items.create("post", userId);
-        revisions.autosave("item", item.id(), userId, "one", "b1", "");
-        revisions.autosave("item", item.id(), userId, "two", "b2", "");
-        assertThat(db.fetchCount(REVISION, REVISION.AUTOSAVE.isTrue())).isEqualTo(1);
-        assertThat(revisions.autosaveOf("item", item.id(), userId).map(Revision::title)).contains("two");
-        items.update(
-                item.id(),
-                new ItemService.Update(
-                        "saved",
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        item.modifiedAt()
-                ),
-                new ItemService.Actor(userId, Role.AUTHOR)
-        );
-        assertThat(revisions.autosaveOf("item", item.id(), userId)).isEmpty();
+        revisions.autosave("item", 5, USER, "one", "b1", "");
+        revisions.autosave("item", 5, USER, "two", "b2", "");
+        // each autosave first drops the previous one, then inserts the new one flagged as autosave
+        var order = inOrder(repo);
+        order.verify(repo).deleteAutosave("item", 5, USER);
+        order.verify(repo).insert("item", 5, "one", "b1", null, "", USER, true);
+        order.verify(repo).deleteAutosave("item", 5, USER);
+        order.verify(repo).insert("item", 5, "two", "b2", null, "", USER, true);
+        verifyNoMoreInteractions(repo);
+
+        revisions.deleteAutosave("item", 5, USER);
+        verify(repo, times(3)).deleteAutosave("item", 5, USER);
+        when(repo.autosave("item", 5, USER)).thenReturn(Optional.empty());
+        assertThat(revisions.autosaveOf("item", 5, USER)).isEmpty();
     }
 
     @Test
     void autosaveIsNotARevision() {
-        revisions.autosave("item", 42, userId, "draft", "b", "");
+        revisions.autosave("item", 42, USER, "draft", "b", "");
+        verify(repo, never()).prune("item", 42, 25);
+        // the repository lists revisions without autosaves, so the autosave is only reachable through autosaveOf
+        when(repo.list("item", 42)).thenReturn(List.of());
+        when(repo.autosave("item", 42, USER)).thenReturn(Optional.of(revision(1, "draft", true)));
         assertThat(revisions.list("item", 42)).isEmpty();
-        assertThat(revisions.autosaveOf("item", 42, userId).map(Revision::title)).contains("draft");
+        assertThat(revisions.autosaveOf("item", 42, USER).map(Revision::title)).contains("draft");
     }
 }
