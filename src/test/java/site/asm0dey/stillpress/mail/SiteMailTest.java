@@ -164,9 +164,24 @@ class SiteMailTest {
                 .requiringNew()
                 .run(() -> mail.sendAfterCommit(new Mail("reader@example.org", "hung", "hung")));
             assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(500));
+            // refusing the waiting client fails its send now, so its late error cannot land in the next test
+            silent.setSoTimeout(5000);
+            try (var client = silent.accept()) {
+                client.getOutputStream().write("421 closing\r\n".getBytes(StandardCharsets.US_ASCII));
+            }
         }
-        // the client gives up on the closed server; the next test reloads anyway
+        awaitLastError();
+        assertThat(settings.get("mail_last_error")).isNotEmpty();
         mail.reload();
+    }
+
+    @Test
+    void brokenSettingIsRecordedNotThrown() {
+        // the admin screen validates the port, so only a damaged setting gets here: the client cannot even be built
+        settings.put("smtp_port", "not a number");
+        mail.reload();
+        assertThatCode(() -> mail.sendAfterCommit(new Mail("reader@example.org", "lost", "lost"))).doesNotThrowAnyException();
+        assertThat(settings.get("mail_last_error")).isNotEmpty();
     }
 
     private void awaitLastError() {

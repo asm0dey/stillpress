@@ -93,8 +93,9 @@ public class SiteMail {
                         });
                     }
                 });
-        } catch (MailFailedException e) {
-            failed(m, e.getMessage());
+        } catch (RuntimeException e) {
+            // also a database or client error: outside a transaction this runs on the caller's thread
+            failed(m, reason(e));
         }
     }
 
@@ -124,9 +125,14 @@ public class SiteMail {
 
     private void failed(Mail m, String reason) {
         LOG.warnf("Mail \"%s\" was not sent: %s", m.subject(), reason);
-        QuarkusTransaction
-            .requiringNew()
-            .run(() -> settings.put(LAST_ERROR, Instant.now() + " " + reason));
+        try {
+            QuarkusTransaction
+                .requiringNew()
+                .run(() -> settings.put(LAST_ERROR, Instant.now() + " " + reason));
+        } catch (RuntimeException e) {
+            // the database may be what failed the send; the warning above is then all that is left
+            LOG.warnf("Could not record the mail failure: %s", reason(e));
+        }
     }
 
     /**

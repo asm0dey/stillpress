@@ -8,6 +8,7 @@ import './theme.css';
 import Setup from './pages/Setup.tsx';
 import Login from './pages/Login.tsx';
 import SetPassword from './pages/SetPassword.tsx';
+import ForgotPassword from './pages/ForgotPassword.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 
 // the larger admin screens come as one chunk; login, setup and the dashboard stay in the entry
@@ -28,7 +29,7 @@ const BlockEditor = lazy(() => loadWordPressLocale().then(() => import('./editor
 // the diff library comes with the revisions screens only
 const Revisions = lazy(() => import('./pages/Revisions.tsx'));
 
-const PUBLIC = ['/setup', '/login', '/set-password'];
+const PUBLIC = ['/setup', '/login', '/set-password', '/forgot-password'];
 /**
  * Sends a fresh install to the wizard, an anonymous visitor to the login page and a role to the dashboard from a
  * screen it may not use. Checks again on every navigation, rendering nothing until the check lands.
@@ -77,6 +78,7 @@ void api<SessionUser>('/session').then((s) => s.locale, () => browserLocale()).t
           <Route path="/setup" element={<Setup />} />
           <Route path="/login" element={<Login />} />
           <Route path="/set-password" element={<SetPassword />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/" element={<Dashboard />} />
           <Route path="/users" element={<Users />} />
           <Route path="/profile" element={<Profile />} />

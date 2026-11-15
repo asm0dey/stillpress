@@ -1,11 +1,16 @@
 package site.asm0dey.stillpress.admin;
 
 import static site.asm0dey.stillpress.Csrf.csrf;
+import static site.asm0dey.stillpress.db.Tables.USER_TOKEN;
 import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.startsWith;
+import com.icegreen.greenmail.junit5.GreenMailExtension;
+import com.icegreen.greenmail.util.ServerSetupTest;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
@@ -13,15 +18,25 @@ import jakarta.inject.Inject;
 import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.jooq.DSLContext;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 
 @QuarkusTest
 class UsersResourceTest {
+    // one server per class on GreenMail's fixed test port; test classes run one after another, so they never share it
+    @RegisterExtension
+    static final GreenMailExtension SMTP = new GreenMailExtension(ServerSetupTest.SMTP);
+    @Inject
+    SiteMail mail;
+    @Inject
+    DSLContext db;
     @Inject
     TestStore store;
     @Inject
@@ -44,6 +59,106 @@ class UsersResourceTest {
         writerId = user("writer", Role.AUTHOR);
         adminCookie = sessions.create(adminId);
         writerCookie = sessions.create(writerId);
+        mail.reload();
+    }
+
+    @Test
+    void createMailsInviteWhenMailConfigured() throws Exception {
+        settings.put("admin_url", "https://blog.example.org");
+        smtp(ServerSetupTest.SMTP.getPort());
+        var id = create("editor1", "editor")
+            .then()
+            .statusCode(201)
+            .body("mailed", equalTo(true))
+            .body("$", not(hasKey("setPasswordUrl")))
+            .extract()
+            .<Integer>path("id");
+        assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
+        var received = SMTP.getReceivedMessages();
+        assertThat(received[0].getAllRecipients()).extracting(Object::toString).containsExactly("editor1@example.org");
+        var body = received[0].getContent().toString();
+        assertThat(body).contains("https://blog.example.org/admin/set-password?token=");
+        var expires = db
+            .select(USER_TOKEN.EXPIRES_AT)
+            .from(USER_TOKEN)
+            .where(USER_TOKEN.USER_ID.eq((long) id))
+            .fetchSingle(USER_TOKEN.EXPIRES_AT);
+        var week = LocalDateTime.now(ZoneOffset.UTC).plusDays(7);
+        assertThat(expires).isBetween(week.minusMinutes(1), week.plusMinutes(1));
+        setPassword(token(body), "editor password 1").then().statusCode(204);
+    }
+
+    @Test
+    void createWithoutMailReturnsLink() {
+        create("editor1", "editor")
+            .then()
+            .statusCode(201)
+            .body("mailed", equalTo(false))
+            .body("setPasswordUrl", startsWith("/admin/set-password?token="));
+        assertThat(SMTP.getReceivedMessages()).isEmpty();
+    }
+
+    @Test
+    void inviteMailFailureKeepsTheUser() throws IOException {
+        try (var closed = new ServerSocket(0)) {
+            smtp(closed.getLocalPort());
+        }
+        create("editor1", "editor").then().statusCode(201).body("mailed", equalTo(true));
+        assertThat(users.findByLogin("editor1")).isPresent();
+        TestStore.await(() -> settings.get(SiteMail.LAST_ERROR).isPresent(), 10);
+        assertThat(settings.get(SiteMail.LAST_ERROR)).isNotEmpty();
+    }
+
+    @Test
+    void inviteRevokesEarlierLink() throws Exception {
+        var pending = users.create("pending", "pending@example.org", "P", Role.AUTHOR).getId();
+        var url = asAdmin()
+            .post("/admin/api/users/" + pending + "/password-link")
+            .then()
+            .statusCode(200)
+            .extract()
+            .<String>path("url");
+        smtp(ServerSetupTest.SMTP.getPort());
+        asAdmin().post("/admin/api/users/" + pending + "/invite").then().statusCode(204);
+        assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
+        setPassword(url.substring(url.indexOf("token=") + 6), "pending password 1").then().statusCode(410);
+        setPassword(token(SMTP.getReceivedMessages()[0].getContent().toString()), "pending password 1").then().statusCode(
+                204
+        );
+    }
+
+    @Test
+    void inviteNeedsMailAnEmailAndTheUser() {
+        var noEmail = users.create("noemail", null, "N", Role.AUTHOR).getId();
+        asAdmin()
+            .post("/admin/api/users/" + writerId + "/invite")
+            .then()
+            .statusCode(409)
+            .body("error", equalTo("mail_not_configured"));
+        smtp(ServerSetupTest.SMTP.getPort());
+        asAdmin().post("/admin/api/users/" + noEmail + "/invite").then().statusCode(400).body(
+                "error",
+                equalTo("no_email")
+        );
+        asAdmin().post("/admin/api/users/999999/invite").then().statusCode(404);
+        as(writerCookie).post("/admin/api/users/" + writerId + "/invite").then().statusCode(403);
+        assertThat(SMTP.getReceivedMessages()).isEmpty();
+    }
+
+    private void smtp(int port) {
+        settings.put("smtp_host", "localhost");
+        settings.put("smtp_port", String.valueOf(port));
+        settings.put("smtp_security", "none");
+        settings.put("smtp_from", "blog@example.org");
+        mail.reload();
+    }
+
+    /**
+     * The token of the first set-password link in a mail body.
+     */
+    private static String token(String body) {
+        assertThat(body).containsPattern("token=\\S+");
+        return body.replaceFirst("(?s).*?token=(\\S+).*", "$1");
     }
 
     @Test

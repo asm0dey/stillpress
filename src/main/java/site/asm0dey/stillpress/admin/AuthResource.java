@@ -20,19 +20,23 @@ import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SessionAuthMechanism;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
+import site.asm0dey.stillpress.account.SetPasswordLink;
+import site.asm0dey.stillpress.mail.Mail;
+import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TokenRepository;
 
 /**
- * Password login, logout, the current session, and setting a password from a single-use token.
+ * Password login, logout, the current session, mailed password resets, and setting a password from a single-use token.
  */
 @Path("/admin/api")
 public class AuthResource {
     // an unknown login is verified against this, so it costs the same as a wrong password
     private static final String DUMMY_HASH = Passwords.hash("no such user, same Argon2id cost");
     private static final int MAX_LOGIN = 100;
+    private static final Duration RESET_INTERVAL = Duration.ofMinutes(5);
     private static final Map<String, String> INVALID_CREDENTIALS = Map.of("error", "invalid_credentials");
     @Inject
     LoginLimiter limiter;
@@ -46,6 +50,10 @@ public class AuthResource {
     SettingRepository settings;
     @Inject
     SecurityIdentity identity;
+    @Inject
+    SiteMail mail;
+    @Inject
+    SetPasswordLink links;
     @Context
     HttpServerRequest request;
 
@@ -56,6 +64,16 @@ public class AuthResource {
     public record SessionUser(long id, String login, String displayName, String email, String role, String locale) {}
 
     public record NewLocale(String locale) {}
+
+    /**
+     * {@code captcha} and the honeypot {@code website} are checked from 02c's CAPTCHA task on.
+     */
+    public record ResetRequest(String login, String captcha, String website) {}
+
+    /**
+     * What the login screen offers: {@code mail} says whether "Forgot password?" can mail a link.
+     */
+    public record LoginOptions(boolean mail) {}
 
     private static final Set<String> LOCALES = Set.of("en", "ru");
 
@@ -100,6 +118,56 @@ public class AuthResource {
             .noContent()
             .header(HttpHeaders.SET_COOKIE, SessionAuthMechanism.cookie(raw, secure()).encode())
             .build();
+    }
+
+    @GET
+    @Path("login-options")
+    public LoginOptions loginOptions() {
+        return new LoginOptions(mail.configured());
+    }
+
+    /**
+     * Mails a one-hour set-password link to the account with this login or email. The answer is 204 whether or not
+     * the account exists, has an email or gets a mail, so it tells nothing about accounts; at most one mail per
+     * account per five minutes.
+     */
+    @POST
+    @Path("password-reset")
+    public Response passwordReset(ResetRequest r) {
+        var ip = request.remoteAddress().hostAddress();
+        var wait = limiter.blockedIp(ip);
+        if (wait.isPresent()) {
+            return rateLimited(wait.get());
+        }
+        // every request counts, so the endpoint cannot be used to spray mail or probe accounts at volume
+        limiter.ipFailure(ip);
+        var login = r == null ? null : r.login();
+        if (login != null && login.length() <= MAX_LOGIN && mail.configured()) {
+            users
+                .findByLoginOrEmail(login)
+                .filter(u -> u.getEmail() != null && !u.getEmail().isBlank())
+                .filter(u -> !tokens.issuedSince(
+                        u.getId(),
+                        TokenRepository.SET_PASSWORD,
+                        Instant.now().minus(RESET_INTERVAL)
+                ))
+                .ifPresent(this::mailReset);
+        }
+        return Response.noContent().build();
+    }
+
+    private void mailReset(AuthorRecord u) {
+        var site = settings.get("title").orElse("Stillpress");
+        var texts = SiteMail.texts(adminLocale(u.getLocale(), settings.get("language")));
+        var link = links.issue(u.getId(), SetPasswordLink.RESET_TTL);
+        var minutes = (int) SetPasswordLink.RESET_TTL.toMinutes();
+        mail.sendAfterCommit(
+                new Mail(
+                        u.getEmail(),
+                        texts.resetSubject(site),
+                        texts.resetBody(UsersResource.displayName(u), site, link, minutes)
+                )
+        );
     }
 
     @POST

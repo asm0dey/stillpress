@@ -19,6 +19,8 @@ export default function Users() {
   const [users, setUsers] = useState<UserView[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [link, setLink] = useState<{ login: string; url: string } | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+  const [mail, setMail] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [editing, setEditing] = useState<{ id: number; displayName: string; email: string } | null>(null);
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
@@ -26,7 +28,10 @@ export default function Users() {
 
   const latest = useLatest();
   const load = () => latest(api<UserView[]>('/users')).then(setUsers, () => setMessage(__('Could not load the users.', 'stillpress')));
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    api<{ mail: boolean }>('/login-options').then((o) => setMail(o.mail), () => {});
+  }, []);
 
   async function changeRole(u: UserView, role: Role) {
     setMessage(null);
@@ -69,8 +74,25 @@ export default function Users() {
     }
   }
 
+  async function invite(u: UserView) {
+    setMessage(null);
+    try {
+      await api(`/users/${u.id}/invite`, { method: 'POST' });
+      showSent(u.email);
+    } catch (e) {
+      const err = asApiError(e);
+      setMessage(err.error === 'csrf' ? err.message! : __('Could not send the invite.', 'stillpress'));
+    }
+  }
+
+  function showSent(email: string) {
+    setLink(null);
+    setSent(sprintf(__('Invite sent to %s.', 'stillpress'), email));
+  }
+
   async function copy(login: string, url: string) {
     // the link is shown either way: clipboard access can be refused
+    setSent(null);
     setLink({ login, url: new URL(url, location.origin).href });
     await navigator.clipboard?.writeText(new URL(url, location.origin).href).catch(() => {});
   }
@@ -80,8 +102,9 @@ export default function Users() {
     setMessage(null);
     setAddErrors({});
     try {
-      const { setPasswordUrl } = await api<{ setPasswordUrl: string }>('/users', { method: 'POST', body: form });
-      await copy(form.login, setPasswordUrl);
+      const created = await api<{ mailed?: boolean; setPasswordUrl?: string }>('/users', { method: 'POST', body: form });
+      if (created.mailed) showSent(form.email.trim());
+      else await copy(form.login, created.setPasswordUrl!);
       setForm(EMPTY);
       void load();
     } catch (e) {
@@ -101,6 +124,7 @@ export default function Users() {
     <Shell>
       <h1>{__('Users', 'stillpress')}</h1>
       {message && <p role="alert" className="error">{message}</p>}
+      {sent && <p role="status">{sent}</p>}
       {link && (
         <div className="link-box" role="status">
           {sprintf(__('Set-password link for %s (valid 24 hours, single use; copied if your browser allowed it):', 'stillpress'), link.login)}
@@ -138,6 +162,7 @@ export default function Users() {
                 <td>
                   <button type="button" onClick={() => { setEditErrors({}); setEditing({ id: u.id, displayName: u.displayName ?? '', email: u.email ?? '' }); }}>{__('Edit', 'stillpress')}</button>{' '}
                   <button type="button" onClick={() => showLink(u)}>{__('Copy set-password link', 'stillpress')}</button>
+                  {mail && !u.hasPassword && u.email && <>{' '}<button type="button" onClick={() => invite(u)}>{__('Send invite', 'stillpress')}</button></>}
                 </td>
               </tr>
             ))}

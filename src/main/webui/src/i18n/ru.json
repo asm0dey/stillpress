@@ -1170,5 +1170,35 @@
  ],
  "Send test email": [
   "Отправить тестовое письмо"
+ ],
+ "Forgot password?": [
+  "Забыли пароль?"
+ ],
+ "Forgot password": [
+  "Восстановление пароля"
+ ],
+ "Email isn't set up on this site. Ask an administrator for a link to set your password.": [
+  "На этом сайте не настроена почта. Попросите администратора дать вам ссылку для задания пароля."
+ ],
+ "If an account matches, we sent a link to its email address. The link works for one hour.": [
+  "Если такая учётная запись есть, мы отправили ссылку на её адрес электронной почты. Ссылка действует один час."
+ ],
+ "Send link": [
+  "Отправить ссылку"
+ ],
+ "Could not send the link. Try again.": [
+  "Не удалось отправить ссылку. Попробуйте ещё раз."
+ ],
+ "Back to log in": [
+  "Вернуться ко входу"
+ ],
+ "Send invite": [
+  "Отправить приглашение"
+ ],
+ "Invite sent to %s.": [
+  "Приглашение отправлено на %s."
+ ],
+ "Could not send the invite.": [
+  "Не удалось отправить приглашение."
  ]
 }

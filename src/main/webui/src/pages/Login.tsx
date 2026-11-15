@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { __ } from '@wordpress/i18n';
 import { asApiError, type ApiError, type SessionUser, api } from '../api.ts';
 import { loadLocale } from '../i18n/index.ts';
@@ -43,6 +43,7 @@ export default function Login() {
           value={password} onChange={(e) => setPassword(e.target.value)} error={error} />
         <button type="submit" className="primary" disabled={busy}>{busy ? __('Logging in…', 'stillpress') : __('Log in', 'stillpress')}</button>
       </form>
+      <p><Link to="/forgot-password">{__('Forgot password?', 'stillpress')}</Link></p>
     </main>
   );
 }

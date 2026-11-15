@@ -103,3 +103,36 @@ test('an expired session token says to reload', async () => {
   await t.user.click(await view.findByRole('button', { name: 'Copy set-password link' }));
   expect((await view.findByRole('alert')).textContent).toBe('Your session token has expired. Reload the page and try again.');
 });
+
+test('sendInviteButtonOnlyWithMail', async () => {
+  // ADA has a password; BOB has none and an email; CAROL has neither
+  const CAROL: UserView = { ...BOB, id: 3, login: 'carol', email: '' };
+  fakeApi({ ...SESSION, 'GET /login-options': { body: { mail: false } }, 'GET /users': { body: [ADA, BOB, CAROL] } });
+  let view = page();
+  await view.findByText('bob@example.com');
+  expect(view.queryByRole('button', { name: 'Send invite' })).toBeNull();
+  view.unmount();
+
+  const calls = fakeApi({
+    ...SESSION, 'GET /login-options': { body: { mail: true } }, 'GET /users': { body: [ADA, BOB, CAROL] },
+    'POST /users/2/invite': { status: 204 },
+  });
+  view = page();
+  await t.user.click(await view.findByRole('button', { name: 'Send invite' }));
+  expect(view.getAllByRole('button', { name: 'Send invite' })).toHaveLength(1);
+  expect((await view.findByRole('status')).textContent).toBe('Invite sent to bob@example.com.');
+  expect(calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual(['/users/2/invite']);
+});
+
+test('adding a user with mail on says the invite went out', async () => {
+  fakeApi({
+    ...SESSION, 'GET /login-options': { body: { mail: true } }, 'GET /users': { body: [ADA] },
+    'POST /users': { status: 201, body: { id: 5, mailed: true } },
+  });
+  const view = page();
+  await t.user.type(view.getByLabelText('Login', { selector: '[name="login"]' }), 'carol');
+  await t.user.type(view.getByLabelText('Email', { selector: '[name="email"]' }), 'carol@example.com');
+  await t.user.type(view.getByLabelText('Display name', { selector: '[name="displayName"]' }), 'Carol');
+  await t.user.click(view.getByRole('button', { name: 'Add user' }));
+  expect((await view.findByRole('status')).textContent).toBe('Invite sent to carol@example.com.');
+});

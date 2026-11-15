@@ -19,14 +19,18 @@ import site.asm0dey.stillpress.account.SetPasswordLink;
 import site.asm0dey.stillpress.account.UserFields;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.importer.ImportGuard;
+import site.asm0dey.stillpress.mail.Mail;
+import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.FragmentRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
+import site.asm0dey.stillpress.store.SettingRepository;
 
 /**
- * Administrator-only user management, except that anyone edits their own profile; set-password links are handed over by the administrator until mail exists.
+ * Administrator-only user management, except that anyone edits their own profile. A new user's set-password link is
+ * mailed when mail is set up, and otherwise handed over by the administrator.
  */
 @Path("/admin/api/users")
 @RolesAllowed("administrator")
@@ -47,6 +51,10 @@ public class UsersResource {
     Jobs jobs;
     @Inject
     SecurityIdentity identity;
+    @Inject
+    SiteMail mail;
+    @Inject
+    SettingRepository settings;
 
     public record UserView(long id, String login, String displayName, String email, String role, boolean hasPassword) {}
 
@@ -115,10 +123,54 @@ public class UsersResource {
         queue.base("/author/" + created.getSlug() + "/");
         jobs.requestPublish();
         var id = created.getId();
+        if (mail.configured()) {
+            invite(created);
+            return Response.status(201).entity(Map.of("id", id, "mailed", true)).build();
+        }
         return Response
             .status(201)
-            .entity(Map.of("id", id, "setPasswordUrl", links.issue(id, SetPasswordLink.MANUAL_TTL)))
+            .entity(Map.of("id", id, "mailed", false, "setPasswordUrl", links.issue(id, SetPasswordLink.MANUAL_TTL)))
             .build();
+    }
+
+    /**
+     * Mails the user a set-password link once the transaction commits; the link replaces any earlier one.
+     */
+    @POST
+    @Path("{id}/invite")
+    @Transactional
+    public Response sendInvite(@PathParam("id") long id) {
+        var u = users.findById(id).orElse(null);
+        if (u == null) {
+            return error(404, "not_found");
+        }
+        if (!mail.configured()) {
+            return error(409, "mail_not_configured");
+        }
+        if (u.getEmail() == null || u.getEmail().isBlank()) {
+            return error(400, "no_email");
+        }
+        guard.close();
+        invite(u);
+        return Response.noContent().build();
+    }
+
+    private void invite(AuthorRecord u) {
+        var site = settings.get("title").orElse("Stillpress");
+        var texts = SiteMail.texts(AuthResource.adminLocale(u.getLocale(), settings.get("language")));
+        var link = links.issue(u.getId(), SetPasswordLink.INVITE_TTL);
+        var days = (int) SetPasswordLink.INVITE_TTL.toDays();
+        mail.sendAfterCommit(
+                new Mail(u.getEmail(), texts.inviteSubject(site), texts.inviteBody(displayName(u), site, link, days))
+        );
+    }
+
+    /**
+     * How a mail greets the user: the display name, or the login when an imported author has none.
+     */
+    static String displayName(AuthorRecord u) {
+        var name = u.getDisplayName();
+        return name == null || name.isBlank() ? u.getLogin() : name;
     }
 
     /**
