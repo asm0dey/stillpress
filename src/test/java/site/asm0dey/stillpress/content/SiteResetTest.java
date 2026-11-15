@@ -111,6 +111,12 @@ class SiteResetTest {
         lock.holding(() -> publisher.publishAll());
         queue.item(item);
         secrets.put("smtp_password", "x");
+        factors.putTotp(adminId, secrets.encrypt("totp:" + adminId, "seed"));
+        factors.addPasskey(
+                adminId,
+                "admin-key",
+                new RequiredPersistedData("admin", "admin-cred", UUID.randomUUID(), new byte[] {1}, -7, 0)
+        );
         factors.putTotp(editor, secrets.encrypt("totp:" + editor, "seed"));
         factors.addPasskey(
                 editor,
@@ -142,7 +148,11 @@ class SiteResetTest {
         // closed during the file steps, open again once reset returns
         assertThat(guard.state()).isEmpty();
         assertThat(guard.importable()).isTrue();
-        assertThat(tablesWithRows()).containsExactlyInAnyOrder("author", "setting");
+        assertThat(tablesWithRows()).containsExactlyInAnyOrder("author", "setting", "totp_factor", "passkey");
+        assertThat(db.select(TOTP_FACTOR.USER_ID).from(TOTP_FACTOR).fetch(TOTP_FACTOR.USER_ID)).containsExactly(adminId);
+        assertThat(db.select(PASSKEY.CREDENTIAL_ID).from(PASSKEY).fetch(PASSKEY.CREDENTIAL_ID)).containsExactly(
+                "admin-cred"
+        );
         assertThat(db.select(SCHEDULED_TASKS.TASK_NAME).from(SCHEDULED_TASKS).fetch(SCHEDULED_TASKS.TASK_NAME))
             .containsOnly(Jobs.PUBLISH_SWEEP);
         var admin = users.all();
