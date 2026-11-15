@@ -17,6 +17,11 @@ public class TokenRepository {
     public static final String INVITE = "invite";
     public static final String SET_PASSWORD = "set_password";
     public static final Duration SET_PASSWORD_TTL = Duration.ofHours(24);
+    /**
+     * A correct password of a user with a second factor: the half-way sign-in the second step finishes.
+     */
+    public static final String SECOND_FACTOR = "second_factor";
+    public static final Duration SECOND_FACTOR_TTL = Duration.ofMinutes(5);
     @Inject
     DSLContext db;
 
@@ -87,6 +92,24 @@ public class TokenRepository {
             // expiry is checked here, not in where: the delete also removes an expired token, else it would stay in user_token forever
             .filter(t -> t.getExpiresAt().isAfter(SessionRepository.now()))
             .map(UserTokenRecord::getUserId);
+    }
+
+    /**
+     * The token's user while it is unexpired; the token stays.
+     */
+    public Optional<Long> peek(String rawToken, String purpose) {
+        if (rawToken == null) {
+            return Optional.empty();
+        }
+        return db
+            .select(USER_TOKEN.USER_ID)
+            .from(USER_TOKEN)
+            .where(
+                    USER_TOKEN.ID.eq(SessionRepository.hash(rawToken)),
+                    USER_TOKEN.PURPOSE.eq(purpose),
+                    USER_TOKEN.EXPIRES_AT.gt(SessionRepository.now())
+            )
+            .fetchOptional(USER_TOKEN.USER_ID);
     }
 
     /**

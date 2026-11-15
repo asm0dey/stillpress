@@ -3,8 +3,12 @@ package site.asm0dey.stillpress.admin;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
+import io.quarkus.security.webauthn.WebAuthnCredentialRecord;
+import io.quarkus.security.webauthn.WebAuthnSecurity;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.RoutingContext;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.CookieParam;
@@ -21,17 +25,20 @@ import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.account.Captcha;
 import site.asm0dey.stillpress.account.CaptchaFailedException;
 import site.asm0dey.stillpress.account.LoginLimiter;
+import site.asm0dey.stillpress.account.PasskeyChallenges;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.account.SessionAuthMechanism;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
 import site.asm0dey.stillpress.account.SetPasswordLink;
+import site.asm0dey.stillpress.account.Totp;
 import site.asm0dey.stillpress.mail.Mail;
 import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TokenRepository;
+import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 /**
  * Password login, logout, the current session, mailed password resets, and setting a password from a single-use token.
@@ -44,6 +51,7 @@ public class AuthResource {
     private static final int MAX_LOGIN = 100;
     private static final Duration RESET_INTERVAL = Duration.ofMinutes(5);
     private static final Map<String, String> INVALID_CREDENTIALS = Map.of("error", "invalid_credentials");
+    private static final Map<String, String> SECOND_STEP_EXPIRED = Map.of("error", "second_step_expired");
     @Inject
     Vertx vertx;
     @Inject
@@ -64,6 +72,14 @@ public class AuthResource {
     SiteMail mail;
     @Inject
     SetPasswordLink links;
+    @Inject
+    TwoFactorRepository factors;
+    @Inject
+    Totp totp;
+    @Inject
+    WebAuthnSecurity webAuthn;
+    @Inject
+    PasskeyChallenges challenges;
     @Context
     HttpServerRequest request;
 
@@ -77,6 +93,11 @@ public class AuthResource {
     public record SessionUser(long id, String login, String displayName, String email, String role, String locale) {}
 
     public record NewLocale(String locale) {}
+
+    /**
+     * The password was right; these factors can finish the sign-in.
+     */
+    public record SecondStep(boolean totp, boolean passkey) {}
 
     public record ResetRequest(String login, String captcha, String website) {}
 
@@ -125,12 +146,132 @@ public class AuthResource {
             limiter.failure(account, ip);
             return Response.status(401).entity(INVALID_CREDENTIALS).build();
         }
+        var id = user.get().getId();
+        var second =
+                new SecondStep(
+                        factors
+                            .totp(id)
+                            .filter(t -> t.getConfirmed())
+                            .isPresent(),
+                        !factors.passkeys(id).isEmpty()
+        );
+        if (second.totp() || second.passkey()) {
+            // half-way: the account bucket is reset only once the second step succeeds
+            var raw = tokens.create(id, TokenRepository.SECOND_FACTOR, TokenRepository.SECOND_FACTOR_TTL);
+            return Response
+                .ok(second)
+                .header(HttpHeaders.SET_COOKIE, SessionAuthMechanism.secondStepCookie(raw, secure()).encode())
+                .build();
+        }
         limiter.success(account);
-        var raw = sessions.create(user.get().getId());
+        return signedIn(id).build();
+    }
+
+    @POST
+    @Path("login/totp")
+    public Response loginTotp(TwoFactorResource.Code c, @CookieParam(SessionAuthMechanism.SECOND_STEP) String raw) {
+        return secondStep(raw, "invalid_code", id -> c != null && totp.verify(id, c.code()));
+    }
+
+    @POST
+    @Path("login/passkey-step")
+    public Response loginPasskeyStep(
+            JsonObject credential,
+            @CookieParam(SessionAuthMechanism.SECOND_STEP) String raw,
+            RoutingContext ctx
+    ) {
+        return secondStep(raw, "invalid_passkey", id -> {
+            var login = users.findById(id).map(AuthorRecord::getLogin);
+            return verifyPasskey(credential, ctx, r -> login.filter(r.getUsername()::equals).isPresent()).isPresent();
+        });
+    }
+
+    /**
+     * A discoverable passkey alone signs in: it is possession and user verification in one. No CAPTCHA: the
+     * authenticator's signature is the proof of a human, and a bad one costs only the IP.
+     */
+    @POST
+    @Path("login/passkey")
+    public Response loginPasskey(JsonObject credential, RoutingContext ctx) {
+        var ip = request.remoteAddress().hostAddress();
+        var wait = limiter.blockedIp(ip);
+        if (wait.isPresent()) {
+            return rateLimited(wait.get());
+        }
+        var user = verifyPasskey(credential, ctx, _ -> true).flatMap(r -> users.findByLogin(r.getUsername()));
+        if (user.isEmpty()) {
+            limiter.ipFailure(ip);
+            return Response.status(401).entity(Map.of("error", "invalid_passkey")).build();
+        }
+        return signedIn(user.get().getId()).build();
+    }
+
+    /**
+     * Finishes the sign-in the {@code sp_2fa} token started: the token is spent and a session made only when
+     * {@code check} passes; a failure counts against the account and leaves the token for a retry.
+     */
+    private Response secondStep(String raw, String invalid, LongPredicate check) {
+        var ip = request.remoteAddress().hostAddress();
+        var wait = limiter.blockedIp(ip);
+        if (wait.isPresent()) {
+            return rateLimited(wait.get());
+        }
+        var id = tokens.peek(raw, TokenRepository.SECOND_FACTOR);
+        if (id.isEmpty()) {
+            return Response.status(401).entity(SECOND_STEP_EXPIRED).build();
+        }
+        var account = "user:" + id.get();
+        wait = limiter.blockedAccount(account);
+        if (wait.isPresent()) {
+            return rateLimited(wait.get());
+        }
+        if (!check.test(id.get())) {
+            limiter.failure(account, ip);
+            return Response.status(401).entity(Map.of("error", invalid)).build();
+        }
+        // the delete is the claim: of two concurrent finishes only one gets a session
+        if (tokens.consume(raw, TokenRepository.SECOND_FACTOR).isEmpty()) {
+            return Response.status(401).entity(SECOND_STEP_EXPIRED).build();
+        }
+        limiter.success(account);
+        return signedIn(id.get())
+            .header(HttpHeaders.SET_COOKIE, SessionAuthMechanism.clearedSecondStepCookie(secure()).encode())
+            .build();
+    }
+
+    /**
+     * The verified passkey record when the assertion is valid, its challenge unspent and {@code accept} agrees; the
+     * passkey's counter and last use are then recorded.
+     */
+    private Optional<WebAuthnCredentialRecord> verifyPasskey(
+            JsonObject credential,
+            RoutingContext ctx,
+            Predicate<WebAuthnCredentialRecord> accept
+    ) {
+        WebAuthnCredentialRecord passkey;
+        String challenge;
+        try {
+            passkey = webAuthn.login(credential, ctx).await().atMost(Duration.ofSeconds(10));
+            // verified above, so the challenge in the signed client data is the one the server issued
+            var clientData =
+                    Base64.getUrlDecoder().decode(credential.getJsonObject("response").getString("clientDataJSON"));
+            challenge = new JsonObject(new String(clientData, StandardCharsets.UTF_8)).getString("challenge");
+        } catch (RuntimeException e) {
+            LOG.debugf(e, "passkey sign-in refused");
+            return Optional.empty();
+        }
+        if (!accept.test(passkey) || !challenges.claim(challenge)) {
+            return Optional.empty();
+        }
+        factors.usePasskey(passkey.getCredentialID(), passkey.getCounter());
+        return Optional.of(passkey);
+    }
+
+    private Response.ResponseBuilder signedIn(long userId) {
+        var raw = sessions.create(userId);
         return Response
             .noContent()
-            .header(HttpHeaders.SET_COOKIE, SessionAuthMechanism.cookie(raw, secure()).encode())
-            .build();
+            .header(HttpHeaders.SET_COOKIE, SessionAuthMechanism.cookie(raw, secure()).encode());
     }
 
     @GET

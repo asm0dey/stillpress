@@ -14,6 +14,7 @@ import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import site.asm0dey.stillpress.store.SessionRepository;
+import site.asm0dey.stillpress.store.TokenRepository;
 
 /**
  * Authenticates requests by the {@code sp_session} cookie. No cookie, or a stale one, means anonymous: the public site
@@ -22,6 +23,7 @@ import site.asm0dey.stillpress.store.SessionRepository;
 @ApplicationScoped
 public class SessionAuthMechanism implements HttpAuthenticationMechanism {
     public static final String COOKIE = "sp_session";
+    public static final String SECOND_STEP = "sp_2fa";
 
     @Override
     public Uni<SecurityIdentity> authenticate(RoutingContext context, IdentityProviderManager identityProviderManager) {
@@ -65,6 +67,23 @@ public class SessionAuthMechanism implements HttpAuthenticationMechanism {
 
     public static Cookie clearedCookie(boolean secure) {
         return base("", secure).setMaxAge(0);
+    }
+
+    /**
+     * The half-way sign-in after a correct password; sent only to the second-step endpoints, never a session.
+     */
+    public static Cookie secondStepCookie(String raw, boolean secure) {
+        return Cookie
+            .cookie(SECOND_STEP, raw)
+            .setPath("/admin/api/login")
+            .setHttpOnly(true)
+            .setSameSite(CookieSameSite.STRICT)
+            .setSecure(secure)
+            .setMaxAge(TokenRepository.SECOND_FACTOR_TTL.toSeconds());
+    }
+
+    public static Cookie clearedSecondStepCookie(boolean secure) {
+        return secondStepCookie("", secure).setMaxAge(0);
     }
 
     private static Cookie base(String value, boolean secure) {

@@ -49,6 +49,13 @@ class TwoFactorResourceTest {
      * The code an authenticator would show for the Base32 secret on the app clock (tests move it).
      */
     String codeFor(String secret) throws Exception {
+        return code(secret, clock.instant());
+    }
+
+    /**
+     * The code an authenticator would show for the Base32 secret at {@code at}.
+     */
+    static String code(String secret, Instant at) throws Exception {
         var seed = new byte[secret.length() * 5 / 8];
         var bits = 0;
         var acc = 0;
@@ -62,7 +69,7 @@ class TwoFactorResourceTest {
             }
         }
         return new TimeBasedOneTimePasswordGenerator(Duration.ofSeconds(30), 6, "HmacSHA1")
-            .generateOneTimePasswordString(new SecretKeySpec(seed, "HmacSHA1"), clock.instant());
+            .generateOneTimePasswordString(new SecretKeySpec(seed, "HmacSHA1"), at);
     }
 
     @Test
