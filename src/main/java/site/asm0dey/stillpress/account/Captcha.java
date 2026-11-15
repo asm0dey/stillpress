@@ -70,8 +70,8 @@ public class Captcha {
         }
         if (envProvider.filter("turnstile"::equals).isPresent() && (isBlank(envSiteKey) || isBlank(envSecret))) {
             return Optional.of(
-                    "STILLPRESS_CAPTCHA_PROVIDER is turnstile, but STILLPRESS_CAPTCHA_TURNSTILE_SITE_KEY and"
-                    + " STILLPRESS_CAPTCHA_TURNSTILE_SECRET must both be set"
+                    "STILLPRESS_CAPTCHA_PROVIDER is turnstile, but STILLPRESS_TURNSTILE_SITE_KEY and"
+                    + " STILLPRESS_TURNSTILE_SECRET must both be set"
             );
         }
         return Optional.empty();

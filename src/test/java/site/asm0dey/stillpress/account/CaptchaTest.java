@@ -65,8 +65,8 @@ class CaptchaTest {
     void envTurnstileWithoutKeysIsAStartupProblem() {
         assertThat(withEnv("turnstile", "site", null).environmentProblem())
             .hasValueSatisfying(p -> assertThat(p)
-                .contains("STILLPRESS_CAPTCHA_TURNSTILE_SITE_KEY")
-                .contains("STILLPRESS_CAPTCHA_TURNSTILE_SECRET"));
+                .contains("STILLPRESS_TURNSTILE_SITE_KEY")
+                .contains("STILLPRESS_TURNSTILE_SECRET"));
         assertThat(withEnv("turnstile", " ", "secret").environmentProblem()).isPresent();
         assertThat(withEnv("turnstile", "site", "secret").environmentProblem()).isEmpty();
     }
