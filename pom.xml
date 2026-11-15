@@ -136,6 +136,16 @@
             <artifactId>tink</artifactId>
             <version>1.24.0</version>
         </dependency>
+        <dependency>
+            <groupId>com.eatthepath</groupId>
+            <artifactId>java-otp</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.nayuki</groupId>
+            <artifactId>qrcodegen</artifactId>
+            <version>1.8.0</version>
+        </dependency>
         <!-- ALTCHA server-side challenge creation and verification (v1 hashcash protocol) -->
         <dependency>
             <groupId>org.altcha</groupId>
