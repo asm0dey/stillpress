@@ -110,9 +110,9 @@ class UsersResourceTest {
     }
 
     @Test
-    void inviteRevokesEarlierLink() throws Exception {
+    void inviteRevokesEarlierInviteButNotACopiedLink() throws Exception {
         var pending = users.create("pending", "pending@example.org", "P", Role.AUTHOR).getId();
-        var url = asAdmin()
+        var copied = asAdmin()
             .post("/admin/api/users/" + pending + "/password-link")
             .then()
             .statusCode(200)
@@ -120,11 +120,14 @@ class UsersResourceTest {
             .<String>path("url");
         smtp(ServerSetupTest.SMTP.getPort());
         asAdmin().post("/admin/api/users/" + pending + "/invite").then().statusCode(204);
-        assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
-        setPassword(url.substring(url.indexOf("token=") + 6), "pending password 1").then().statusCode(410);
-        setPassword(token(SMTP.getReceivedMessages()[0].getContent().toString()), "pending password 1").then().statusCode(
-                204
-        );
+        asAdmin().post("/admin/api/users/" + pending + "/invite").then().statusCode(204);
+        assertThat(SMTP.waitForIncomingEmail(5000, 2)).isTrue();
+        var first = token(SMTP.getReceivedMessages()[0].getContent().toString());
+        var second = token(SMTP.getReceivedMessages()[1].getContent().toString());
+        setPassword(first, "pending password 1").then().statusCode(410);
+        setPassword(second, "pending password 1").then().statusCode(204);
+        // spending the invite kills the copied link too
+        setPassword(copied.substring(copied.indexOf("token=") + 6), "pending password 1").then().statusCode(410);
     }
 
     @Test

@@ -2,7 +2,10 @@ package site.asm0dey.stillpress;
 
 import io.quarkus.picocli.runtime.annotations.TopCommand;
 import io.quarkus.runtime.Quarkus;
+import jakarta.inject.Inject;
+import module java.base;
 import picocli.CommandLine.Command;
+import site.asm0dey.stillpress.account.Captcha;
 import site.asm0dey.stillpress.account.CaptchaCommand;
 import site.asm0dey.stillpress.account.SecretsCommand;
 import site.asm0dey.stillpress.account.UserCommand;
@@ -28,16 +31,34 @@ import site.asm0dey.stillpress.verify.VerifyUrlsCommand;
         }
 )
 public class StillpressCommand implements Runnable {
+    @Inject
+    ServeCommand serve;
+
     @Override
     public void run() {
         // no args behaves like `serve`
-        new ServeCommand().run();
+        serve.run();
     }
 
     @Command(name = "serve", description = "Serve the published site (Mode 1) and the redirect fallback (default)")
     public static class ServeCommand implements Runnable {
+        @Inject
+        Captcha captcha;
+
+        /**
+         * 1 and the problem on stderr when the CAPTCHA environment is unusable, so a typo fails at start, not on first use.
+         */
+        public static int check(Captcha captcha, PrintWriter err) {
+            var problem = captcha.environmentProblem();
+            problem.ifPresent(err::println);
+            return problem.isPresent() ? 1 : 0;
+        }
+
         @Override
         public void run() {
+            if (check(captcha, new PrintWriter(System.err, true)) != 0) {
+                Quarkus.asyncExit(1);
+            }
             Quarkus.waitForExit();
         }
     }

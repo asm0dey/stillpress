@@ -19,6 +19,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Limiters;
 import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.account.SetPasswordLink;
+import site.asm0dey.stillpress.store.TokenRepository;
 import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
@@ -38,6 +40,8 @@ class PasswordResetTest {
     SiteMail mail;
     @Inject
     DSLContext db;
+    @Inject
+    SetPasswordLink links;
     long adaId;
 
     @BeforeEach
@@ -82,6 +86,17 @@ class PasswordResetTest {
         assertThat(SMTP.getReceivedMessages()[0].getContent().toString())
             .contains("https://blog.example.org/admin/set-password?token=")
             .doesNotContain("evil.example");
+    }
+
+    @Test
+    void resetKeepsAPendingInvite() throws Exception {
+        var invite = links.issue(adaId, TokenRepository.INVITE, SetPasswordLink.INVITE_TTL);
+        reset("ada").then().statusCode(204);
+        assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
+        var resetMail = SMTP.getReceivedMessages()[0].getContent().toString();
+        assertThat(db.fetchCount(USER_TOKEN, USER_TOKEN.USER_ID.eq(adaId))).isEqualTo(2);
+        setPassword(invite.substring(invite.indexOf("token=") + 6)).then().statusCode(204);
+        setPassword(resetMail.replaceFirst("(?s).*?token=(\\S+).*", "$1")).then().statusCode(410);
     }
 
     @Test
@@ -143,6 +158,13 @@ class PasswordResetTest {
         RestAssured.get("/admin/api/login-options").then().statusCode(200).body("mail", equalTo(true));
         settings.delete("smtp_host");
         RestAssured.get("/admin/api/login-options").then().statusCode(200).body("mail", equalTo(false));
+    }
+
+    private static Response setPassword(String token) {
+        return csrf()
+            .contentType(JSON)
+            .body(Map.of("token", token, "password", "a long enough password"))
+            .post("/admin/api/set-password");
     }
 
     private static Response reset(String login) {

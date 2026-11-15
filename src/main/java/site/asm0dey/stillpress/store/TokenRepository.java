@@ -13,6 +13,7 @@ import site.asm0dey.stillpress.db.tables.records.UserTokenRecord;
  */
 @ApplicationScoped
 public class TokenRepository {
+    public static final String INVITE = "invite";
     public static final String SET_PASSWORD = "set_password";
     public static final Duration SET_PASSWORD_TTL = Duration.ofHours(24);
     @Inject
@@ -48,6 +49,29 @@ public class TokenRepository {
                 USER_TOKEN.PURPOSE.eq(purpose),
                 USER_TOKEN.CREATED_AT.ge(LocalDateTime.ofInstant(since, ZoneOffset.UTC))
         );
+    }
+
+    /**
+     * Like {@link #consume}, for a token of any of the purposes.
+     */
+    public Optional<Long> consumeAny(String rawToken, Set<String> purposes) {
+        if (rawToken == null) {
+            return Optional.empty();
+        }
+        return db
+            .deleteFrom(USER_TOKEN)
+            .where(USER_TOKEN.ID.eq(SessionRepository.hash(rawToken)), USER_TOKEN.PURPOSE.in(purposes))
+            .returning(USER_TOKEN.USER_ID, USER_TOKEN.EXPIRES_AT)
+            .fetchOptional()
+            .filter(t -> t.getExpiresAt().isAfter(SessionRepository.now()))
+            .map(UserTokenRecord::getUserId);
+    }
+
+    /**
+     * Revokes every token of these purposes for the user.
+     */
+    public void deleteAll(long userId, Set<String> purposes) {
+        db.deleteFrom(USER_TOKEN).where(USER_TOKEN.USER_ID.eq(userId), USER_TOKEN.PURPOSE.in(purposes)).execute();
     }
 
     /**

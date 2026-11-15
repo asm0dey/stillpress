@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.Altchas;
+import site.asm0dey.stillpress.StillpressCommand.ServeCommand;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.store.SettingRepository;
 
@@ -38,6 +39,45 @@ class CaptchaTest {
     @AfterEach
     void stop() {
         wm.stop();
+    }
+
+    private Captcha withEnv(String provider, String siteKey, String secret) {
+        return new Captcha(
+                Optional.ofNullable(provider),
+                Optional.ofNullable(siteKey),
+                Optional.ofNullable(secret),
+                URI.create("http://localhost:1/siteverify"),
+                Duration.ofSeconds(1),
+                settings,
+                secrets
+        );
+    }
+
+    @Test
+    void unknownEnvProviderIsAStartupProblem() {
+        assertThat(withEnv("recaptcha", null, null).environmentProblem())
+            .hasValueSatisfying(p -> assertThat(p).contains("must be none, turnstile or altcha: recaptcha"));
+        assertThat(withEnv("altcha", null, null).environmentProblem()).isEmpty();
+        assertThat(withEnv(null, null, null).environmentProblem()).isEmpty();
+    }
+
+    @Test
+    void envTurnstileWithoutKeysIsAStartupProblem() {
+        assertThat(withEnv("turnstile", "site", null).environmentProblem())
+            .hasValueSatisfying(p -> assertThat(p)
+                .contains("STILLPRESS_CAPTCHA_TURNSTILE_SITE_KEY")
+                .contains("STILLPRESS_CAPTCHA_TURNSTILE_SECRET"));
+        assertThat(withEnv("turnstile", " ", "secret").environmentProblem()).isPresent();
+        assertThat(withEnv("turnstile", "site", "secret").environmentProblem()).isEmpty();
+    }
+
+    @Test
+    void serveExitsOnEnvProblem() {
+        var err = new StringWriter();
+        var bad = withEnv("recaptcha", null, null);
+        assertThat(ServeCommand.check(bad, new PrintWriter(err, true))).isOne();
+        assertThat(err.toString()).contains("must be none, turnstile or altcha: recaptcha");
+        assertThat(ServeCommand.check(withEnv("none", null, null), new PrintWriter(err, true))).isZero();
     }
 
     @Test

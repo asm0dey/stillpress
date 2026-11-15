@@ -27,6 +27,7 @@ import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.FragmentRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
+import site.asm0dey.stillpress.store.TokenRepository;
 
 /**
  * Administrator-only user management, except that anyone edits their own profile. A new user's set-password link is
@@ -129,7 +130,14 @@ public class UsersResource {
         }
         return Response
             .status(201)
-            .entity(Map.of("id", id, "mailed", false, "setPasswordUrl", links.issue(id, SetPasswordLink.MANUAL_TTL)))
+            .entity(Map.of(
+                    "id",
+                    id,
+                    "mailed",
+                    false,
+                    "setPasswordUrl",
+                    links.issue(id, TokenRepository.SET_PASSWORD, SetPasswordLink.MANUAL_TTL)
+            ))
             .build();
     }
 
@@ -158,7 +166,7 @@ public class UsersResource {
     private void invite(AuthorRecord u) {
         var site = settings.get("title").orElse("Stillpress");
         var texts = SiteMail.texts(AuthResource.adminLocale(u.getLocale(), settings.get("language")));
-        var link = links.issue(u.getId(), SetPasswordLink.INVITE_TTL);
+        var link = links.issue(u.getId(), TokenRepository.INVITE, SetPasswordLink.INVITE_TTL);
         var days = (int) SetPasswordLink.INVITE_TTL.toDays();
         mail.sendAfterCommit(
                 new Mail(u.getEmail(), texts.inviteSubject(site), texts.inviteBody(displayName(u), site, link, days))
@@ -247,7 +255,9 @@ public class UsersResource {
             return error(404, "not_found");
         }
         guard.close();
-        return Response.ok(Map.of("url", links.issue(id, SetPasswordLink.MANUAL_TTL))).build();
+        return Response
+            .ok(Map.of("url", links.issue(id, TokenRepository.SET_PASSWORD, SetPasswordLink.MANUAL_TTL)))
+            .build();
     }
 
     private static Role role(String id) {

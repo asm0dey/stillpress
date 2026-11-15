@@ -168,7 +168,7 @@ public class AuthResource {
     private void mailReset(AuthorRecord u) {
         var site = settings.get("title").orElse("Stillpress");
         var texts = SiteMail.texts(adminLocale(u.getLocale(), settings.get("language")));
-        var link = links.issue(u.getId(), SetPasswordLink.RESET_TTL);
+        var link = links.issue(u.getId(), TokenRepository.SET_PASSWORD, SetPasswordLink.RESET_TTL);
         var minutes = (int) SetPasswordLink.RESET_TTL.toMinutes();
         mail.sendAfterCommit(
                 new Mail(
@@ -246,13 +246,16 @@ public class AuthResource {
             return Response.status(400).entity(Map.of("error", "weak_password")).build();
         }
         // one transaction: the token is spent only if the password is set and every old session is revoked
-        var userId = tokens.consume(p.token(), TokenRepository.SET_PASSWORD);
+        var purposes = Set.of(TokenRepository.INVITE, TokenRepository.SET_PASSWORD);
+        var userId = tokens.consumeAny(p.token(), purposes);
         if (userId.isEmpty()) {
             return Response.status(410).entity(Map.of("error", "invalid_token")).build();
         }
         // hashing is the slow step: a bad token is refused before paying for it
         var hash = Passwords.hash(password);
         users.setPassword(userId.get(), hash);
+        // the other link of the pair dies with the one used
+        tokens.deleteAll(userId.get(), purposes);
         sessions.deleteAllFor(userId.get());
         return Response.noContent().build();
     }

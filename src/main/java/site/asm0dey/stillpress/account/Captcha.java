@@ -51,17 +51,34 @@ public class Captcha {
             Secrets secrets
     ) {
         this.envProvider = envProvider.map(p -> p.strip().toLowerCase(Locale.ROOT));
-        this.envProvider
-            .filter(p -> !PROVIDERS.contains(p))
-            .ifPresent(p -> {
-                throw new IllegalStateException("STILLPRESS_CAPTCHA_PROVIDER must be none, turnstile or altcha: " + p);
-            });
         this.envSiteKey = envSiteKey;
         this.envSecret = envSecret;
         this.verifyUrl = verifyUrl;
         this.timeout = timeout;
         this.settings = settings;
         this.secrets = secrets;
+    }
+
+    /**
+     * What is wrong with the environment, for `serve` to refuse at startup; the constructor itself never throws, so
+     * `captcha none` can still start and print its override warning.
+     */
+    public Optional<String> environmentProblem() {
+        var unknown = envProvider.filter(p -> !PROVIDERS.contains(p));
+        if (unknown.isPresent()) {
+            return Optional.of("STILLPRESS_CAPTCHA_PROVIDER must be none, turnstile or altcha: " + unknown.get());
+        }
+        if (envProvider.filter("turnstile"::equals).isPresent() && (isBlank(envSiteKey) || isBlank(envSecret))) {
+            return Optional.of(
+                    "STILLPRESS_CAPTCHA_PROVIDER is turnstile, but STILLPRESS_CAPTCHA_TURNSTILE_SITE_KEY and"
+                    + " STILLPRESS_CAPTCHA_TURNSTILE_SECRET must both be set"
+            );
+        }
+        return Optional.empty();
+    }
+
+    private static boolean isBlank(Optional<String> value) {
+        return value.filter(v -> !v.isBlank()).isEmpty();
     }
 
     public String provider() {

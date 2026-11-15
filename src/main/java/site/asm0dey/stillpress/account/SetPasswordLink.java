@@ -21,8 +21,8 @@ public class SetPasswordLink {
 
     // the lookbehind keeps the regex linear
     @SuppressWarnings("java:S8786")
-    public String issue(long userId, Duration ttl) {
-        var token = tokens.create(userId, TokenRepository.SET_PASSWORD, ttl);
+    public String issue(long userId, String purpose, Duration ttl) {
+        var token = tokens.create(userId, purpose, ttl);
         var base = settings.get("admin_url").orElse("").replaceAll("(?<!/)/+$", "");
         return base + "/admin/set-password?token=" + token;
     }
