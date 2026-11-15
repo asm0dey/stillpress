@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { __ } from '@wordpress/i18n';
 import { asApiError, type ApiError, api } from '../api.ts';
 import { Field } from '../Field.tsx';
+import { CAPTCHA_FAILED, useCaptcha } from '../Captcha.tsx';
 
 interface Form {
   token: string; title: string; language: string; login: string; email: string; displayName: string;
@@ -28,6 +29,7 @@ export default function Setup() {
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const captcha = useCaptcha();
 
   const field = (name: keyof Form) => ({
     name,
@@ -53,11 +55,13 @@ export default function Setup() {
     setErrors({});
     setProblem(null);
     try {
-      await api('/setup', { method: 'POST', body: { ...form, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } });
+      await api('/setup', { method: 'POST', body: { ...form, ...captcha.fields, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } });
       setDone(true);
     } catch (e) {
       const err = asApiError(e);
+      captcha.reset();
       if (err.error === 'csrf') setProblem(err.message!);
+      else if (err.error === 'captcha_failed') setProblem(CAPTCHA_FAILED());
       else if (err.status === 403) setErrors({ token: __('That token does not match the one in the server log.', 'stillpress') });
       else if (err.status === 400) setErrors({ [err.field!]: messages()[err.field!] ?? __('Check this value.', 'stillpress') });
       else if (err.error === 'email_taken') setErrors({ email: __('Another user has this email.', 'stillpress') });
@@ -110,7 +114,8 @@ export default function Setup() {
           <Field label={__('Password', 'stillpress')} type="password" autoComplete="new-password" minLength={12}
             hint={__('At least 12 characters.', 'stillpress')} {...field('password')} />
         </fieldset>
-        <button type="submit" className="primary" disabled={busy}>{busy ? __('Creating…', 'stillpress') : __('Create site', 'stillpress')}</button>
+        {captcha.widgets}
+        <button type="submit" className="primary" disabled={busy || !captcha.ready}>{busy ? __('Creating…', 'stillpress') : __('Create site', 'stillpress')}</button>
       </form>
     </main>
   );

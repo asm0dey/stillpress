@@ -3,12 +3,14 @@ import { Link, useSearchParams } from 'react-router';
 import { __ } from '@wordpress/i18n';
 import { asApiError, type ApiError, CSRF_MESSAGE, api } from '../api.ts';
 import { Field } from '../Field.tsx';
+import { CAPTCHA_FAILED, useCaptcha } from '../Captcha.tsx';
 
 export default function SetPassword() {
   const [params] = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({});
+  const [errors, setErrors] = useState<{ password?: string; confirm?: string; captcha?: string }>({});
+  const captcha = useCaptcha();
   const [state, setState] = useState<'form' | 'done' | 'expired' | 'failed' | 'csrf'>('form');
 
   async function submit(e: FormEvent) {
@@ -19,11 +21,13 @@ export default function SetPassword() {
     }
     setErrors({});
     try {
-      await api('/set-password', { method: 'POST', body: { token: params.get('token'), password } });
+      await api('/set-password', { method: 'POST', body: { token: params.get('token'), password, ...captcha.fields } });
       setState('done');
     } catch (e) {
       const err = asApiError(e);
+      captcha.reset();
       if (err.error === 'csrf') setState('csrf');
+      else if (err.error === 'captcha_failed') setErrors({ captcha: CAPTCHA_FAILED() });
       else if (err.status === 400) setErrors({ password: __('Use 12 to 1024 characters.', 'stillpress') });
       else setState(err.status === 410 ? 'expired' : 'failed');
     }
@@ -44,7 +48,9 @@ export default function SetPassword() {
           error={errors.password} />
         <Field label={__('Repeat password', 'stillpress')} type="password" autoComplete="new-password" required value={confirm}
           onChange={(e) => setConfirm(e.target.value)} error={errors.confirm} />
-        <button type="submit" className="primary">{__('Set password', 'stillpress')}</button>
+        {captcha.widgets}
+        {errors.captcha && <p role="alert" className="error">{errors.captcha}</p>}
+        <button type="submit" className="primary" disabled={!captcha.ready}>{__('Set password', 'stillpress')}</button>
       </form>
     </main>
   );

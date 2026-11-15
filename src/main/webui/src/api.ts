@@ -77,6 +77,10 @@ export interface MailSettings {
   host: string; port: number; security: 'none' | 'starttls' | 'tls'; username: string; from: string; passwordSet: boolean;
   lastError: string | null;
 }
+/** GET and PUT /captcha; PUT takes turnstileSecret instead of secretSet, null keeping the stored one */
+export interface CaptchaSettings {
+  provider: 'none' | 'turnstile' | 'altcha'; turnstileSiteKey: string | null; secretSet: boolean; locked: boolean;
+}
 /** GET /terms */
 export interface TermView { id: number; name: string; slug: string; parentId: number | null; description?: string | null; count?: number }
 /** GET /redirects */

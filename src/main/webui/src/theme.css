@@ -130,3 +130,5 @@ section.danger { margin-top: var(--space-6); }
 .diff-added { background: var(--color-success-bg); color: var(--color-success-fg); }
 .diff-removed { background: var(--color-danger-bg); color: var(--color-danger-fg); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.option { display: block; margin-bottom: var(--space-2); }

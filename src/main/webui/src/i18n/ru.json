@@ -1200,5 +1200,53 @@
  ],
  "Could not send the invite.": [
   "Не удалось отправить приглашение."
+ ],
+ "Website": [
+  "Сайт"
+ ],
+ "The check didn't pass. Try again.": [
+  "Проверка не пройдена. Попробуйте ещё раз."
+ ],
+ "Choose a CAPTCHA.": [
+  "Выберите CAPTCHA."
+ ],
+ "Enter the site key from Cloudflare.": [
+  "Введите ключ сайта из Cloudflare."
+ ],
+ "Enter the secret key from Cloudflare.": [
+  "Введите секретный ключ из Cloudflare."
+ ],
+ "Cloudflare rejected this secret key.": [
+  "Cloudflare отклонил этот секретный ключ."
+ ],
+ "Could not reach Cloudflare to check the secret key. Try again.": [
+  "Не удалось связаться с Cloudflare для проверки секретного ключа. Попробуйте ещё раз."
+ ],
+ "Set by STILLPRESS_CAPTCHA_PROVIDER on the server.": [
+  "Задаётся переменной STILLPRESS_CAPTCHA_PROVIDER на сервере."
+ ],
+ "Could not load the CAPTCHA settings.": [
+  "Не удалось загрузить настройки CAPTCHA."
+ ],
+ "Could not save the CAPTCHA settings.": [
+  "Не удалось сохранить настройки CAPTCHA."
+ ],
+ "Cloudflare Turnstile": [
+  "Cloudflare Turnstile"
+ ],
+ "ALTCHA (self-hosted)": [
+  "ALTCHA (на своём сервере)"
+ ],
+ "CAPTCHA": [
+  "CAPTCHA"
+ ],
+ "Check on the login, setup and password forms": [
+  "Проверка на формах входа, установки и пароля"
+ ],
+ "Site key": [
+  "Ключ сайта"
+ ],
+ "Secret key": [
+  "Секретный ключ"
  ]
 }

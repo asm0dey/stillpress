@@ -1,6 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react';
 import { __, sprintf } from '@wordpress/i18n';
-import { asApiError, type MailSettings, api } from '../api.ts';
+import { asApiError, type CaptchaSettings, type MailSettings, api } from '../api.ts';
 import { Field } from '../Field.tsx';
 import Shell from '../Shell.tsx';
 
@@ -16,12 +16,13 @@ const testMessages = (): Record<string, string> => ({
   mail_not_configured: __('Save an SMTP server first.', 'stillpress'),
 });
 
-/** The administrator's security settings: for now, the SMTP server the site mails through. */
+/** The administrator's security settings: the SMTP server the site mails through and the CAPTCHA on the public forms. */
 export default function Security() {
   return (
     <Shell>
       <h1>{__('Security', 'stillpress')}</h1>
       <EmailSettings />
+      <CaptchaSettingsForm />
     </Shell>
   );
 }
@@ -111,6 +112,91 @@ function EmailSettings() {
         <button type="submit" className="primary">{__('Save', 'stillpress')}</button>
         {' '}
         <button type="button" onClick={sendTest} disabled={busy || !form.host}>{__('Send test email', 'stillpress')}</button>
+      </form>
+    </section>
+  );
+}
+
+const captchaMessages = (): Record<string, string> => ({
+  provider: __('Choose a CAPTCHA.', 'stillpress'),
+  turnstileSiteKey: __('Enter the site key from Cloudflare.', 'stillpress'),
+  turnstileSecret: __('Enter the secret key from Cloudflare.', 'stillpress'),
+});
+
+const captchaErrors = (): Record<string, string> => ({
+  invalid_turnstile_secret: __('Cloudflare rejected this secret key.', 'stillpress'),
+  turnstile_unreachable: __('Could not reach Cloudflare to check the secret key. Try again.', 'stillpress'),
+  captcha_locked: __('Set by STILLPRESS_CAPTCHA_PROVIDER on the server.', 'stillpress'),
+});
+
+function CaptchaSettingsForm() {
+  const [form, setForm] = useState<CaptchaSettings | null>(null);
+  // null keeps the stored secret; the server never sends it back
+  const [secret, setSecret] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api<CaptchaSettings>('/captcha').then((c) => !cancelled && setForm(c),
+      () => !cancelled && setMessage(__('Could not load the CAPTCHA settings.', 'stillpress')));
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!form) return message && <p role="alert" className="error">{message}</p>;
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setErrors({});
+    setStatus(null);
+    try {
+      const { provider, turnstileSiteKey } = form!;
+      setForm(await api<CaptchaSettings>('/captcha', { method: 'PUT', body: { provider, turnstileSiteKey, turnstileSecret: secret } }));
+      setSecret(null);
+      setStatus(__('Saved.', 'stillpress'));
+    } catch (err) {
+      const f = asApiError(err);
+      if (f.field) setErrors({ [f.field]: captchaMessages()[f.field] ?? __('Check this field.', 'stillpress') });
+      else if (f.error === 'invalid_turnstile_secret') setErrors({ turnstileSecret: captchaErrors()[f.error] });
+      else setMessage(f.error === 'csrf' ? f.message! : captchaErrors()[f.error ?? ''] ?? __('Could not save the CAPTCHA settings.', 'stillpress'));
+    }
+  }
+
+  const providers: [CaptchaSettings['provider'], string][] = [
+    ['none', __('None', 'stillpress')],
+    ['turnstile', __('Cloudflare Turnstile', 'stillpress')],
+    ['altcha', __('ALTCHA (self-hosted)', 'stillpress')],
+  ];
+  return (
+    <section aria-labelledby="captcha-heading">
+      <h2 id="captcha-heading">{__('CAPTCHA', 'stillpress')}</h2>
+      {form.locked && <p className="muted">{__('Set by STILLPRESS_CAPTCHA_PROVIDER on the server.', 'stillpress')}</p>}
+      <form onSubmit={save}>
+        <fieldset disabled={form.locked}>
+          <legend>{__('Check on the login, setup and password forms', 'stillpress')}</legend>
+          {providers.map(([value, label]) => (
+            <label key={value} className="option">
+              <input type="radio" name="provider" value={value} checked={form.provider === value}
+                onChange={() => setForm({ ...form, provider: value })} />
+              {' '}{label}
+            </label>
+          ))}
+          {errors.provider && <p role="alert" className="error">{errors.provider}</p>}
+          {form.provider === 'turnstile' && (
+            <>
+              <Field label={__('Site key', 'stillpress')} name="turnstileSiteKey" autoComplete="off" value={form.turnstileSiteKey ?? ''}
+                onChange={(e) => setForm({ ...form, turnstileSiteKey: e.target.value })} error={errors.turnstileSiteKey} />
+              <Field label={__('Secret key', 'stillpress')} name="turnstileSecret" type="password" autoComplete="new-password"
+                placeholder={form.secretSet ? __('Saved', 'stillpress') : undefined} value={secret ?? ''}
+                onChange={(e) => setSecret(e.target.value)} error={errors.turnstileSecret} />
+            </>
+          )}
+        </fieldset>
+        {message && <p role="alert" className="error">{message}</p>}
+        {status && <p role="status">{status}</p>}
+        <button type="submit" className="primary" disabled={form.locked}>{__('Save', 'stillpress')}</button>
       </form>
     </section>
   );
