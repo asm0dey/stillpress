@@ -81,7 +81,7 @@ public class MailResource {
     }
 
     private void save(Update u) {
-        var host = UserFields.trim(u.host());
+        var host = u.host().strip();
         if (host.isEmpty()) {
             KEYS.forEach(settings::delete);
             secrets.delete(SiteMail.PASSWORD);

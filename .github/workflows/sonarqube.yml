@@ -42,6 +42,8 @@ jobs:
         with:
           # the scanner needs compiled classes for Java; node_modules and the built admin UI are not our code.
           # Qute strips the parameter-declaration lines above <?xml in the feed templates (TemplatesTest checks it)
+          # PostgreSQL and H2 keep '' distinct from NULL (the Oracle-only rule misfires); plain/comment.html is a fragment
+          # included inside <ul class="replies"> and single.html's <ul class="comments">
           args: >
             -Dsonar.organization=asm0dey
             -Dsonar.projectKey=asm0dey_stillpress
@@ -53,6 +55,12 @@ jobs:
             -Dsonar.exclusions=src/main/webui/node_modules/**,src/main/webui/dist/**,src/main/webui/coverage/**,**/*.test.ts,**/*.test.tsx,src/main/webui/src/testapi.ts,src/main/webui/src/editor/testwxr.ts
             -Dsonar.coverage.jacoco.xmlReportPaths=target/jacoco-report/jacoco.xml
             -Dsonar.javascript.lcov.reportPaths=src/main/webui/coverage/lcov.info
-            -Dsonar.issue.ignore.multicriteria=feedProlog
+            -Dsonar.issue.ignore.multicriteria=feedProlog,blankEmail,commentItem
             -Dsonar.issue.ignore.multicriteria.feedProlog.ruleKey=xml:S1778
             -Dsonar.issue.ignore.multicriteria.feedProlog.resourceKey=src/main/resources/templates/feed/*.xml
+            -Dsonar.issue.ignore.multicriteria.blankEmail.ruleKey=plsql:NullComparison
+            -Dsonar.issue.ignore.multicriteria.blankEmail.resourceKey=src/main/resources/db/migration/**/*.sql
+            -Dsonar.issue.ignore.multicriteria.commentItem.ruleKey=Web:ItemTagNotWithinContainerTagCheck
+            -Dsonar.issue.ignore.multicriteria.commentItem.resourceKey=src/main/resources/templates/plain/comment.html
+            -Dsonar.coverage.exclusions=src/main/webui/scripts/**,src/main/webui/src/main.tsx
+            -Dsonar.qualitygate.wait=true
