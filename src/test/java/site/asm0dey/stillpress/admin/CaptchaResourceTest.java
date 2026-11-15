@@ -69,7 +69,8 @@ class CaptchaResourceTest {
     void badTurnstileSecretIsRefused() {
         wm.stubFor(post("/siteverify")
             .withRequestBody(containing("response=stillpress-key-check"))
-            .willReturn(okJson("{\"success\":false,\"error-codes\":[\"invalid-input-secret\"]}"))
+            // Cloudflare answers a bad secret with HTTP 400 and this body
+            .willReturn(jsonResponse("{\"success\":false,\"error-codes\":[\"invalid-input-secret\"]}", 400))
         );
         put("turnstile", "site-key", "wrong").then().statusCode(400).body("error", equalTo("invalid_turnstile_secret"));
         assertThat(settings.get("captcha_provider")).isEmpty();

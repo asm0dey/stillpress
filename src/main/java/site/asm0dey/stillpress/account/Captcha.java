@@ -192,7 +192,7 @@ public class Captcha {
     }
 
     /**
-     * Cloudflare's answer; anything but a 200 counts as unreachable.
+     * Cloudflare's answer; it sends a bad secret with a 400, and anything but a 200 or 400 counts as unreachable.
      */
     private String siteverify(String secret, String response, String ip) throws IOException, InterruptedException {
         var body = "secret="
@@ -207,7 +207,7 @@ public class Captcha {
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build();
         var resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-        if (resp.statusCode() != 200) {
+        if (resp.statusCode() != 200 && resp.statusCode() != 400) {
             throw new IOException("siteverify answered " + resp.statusCode());
         }
         return resp.body();
