@@ -16,6 +16,7 @@ import jakarta.ws.rs.core.Response;
 import module java.base;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.account.Captcha;
+import site.asm0dey.stillpress.account.CaptchaFailedException;
 import site.asm0dey.stillpress.account.LoginLimiter;
 import site.asm0dey.stillpress.account.Passwords;
 import site.asm0dey.stillpress.account.Role;
@@ -94,7 +95,7 @@ public class AuthResource {
             return rateLimited(wait.get());
         }
         // before any lookup, and never against the account: a bot without a token learns nothing and locks no one out
-        captcha.verify(c.captcha(), c.website(), ip);
+        verifyCaptcha(c.captcha(), c.website(), ip);
         // no real login or password is this long: refuse before it becomes a limiter key or Argon2 input, counting
         // it against the IP only so oversized spam still runs into the IP limit
         if (c.login().length() > MAX_LOGIN
@@ -141,13 +142,14 @@ public class AuthResource {
     @Path("password-reset")
     public Response passwordReset(ResetRequest r) {
         var ip = request.remoteAddress().hostAddress();
-        captcha.verify(r == null ? null : r.captcha(), r == null ? null : r.website(), ip);
         var wait = limiter.blockedIp(ip);
         if (wait.isPresent()) {
             return rateLimited(wait.get());
         }
         // every request counts, so the endpoint cannot be used to spray mail or probe accounts at volume
         limiter.ipFailure(ip);
+        // after the IP check, so a blocked IP makes no siteverify call; already counted once above
+        captcha.verify(r == null ? null : r.captcha(), r == null ? null : r.website(), ip);
         var login = r == null ? null : r.login();
         if (login != null && login.length() <= MAX_LOGIN && mail.configured()) {
             users
@@ -230,11 +232,12 @@ public class AuthResource {
     @Path("set-password")
     @Transactional
     public Response setPassword(NewPassword p) {
-        captcha.verify(
-                p == null ? null : p.captcha(),
-                p == null ? null : p.website(),
-                request.remoteAddress().hostAddress()
-        );
+        var ip = request.remoteAddress().hostAddress();
+        var wait = limiter.blockedIp(ip);
+        if (wait.isPresent()) {
+            return rateLimited(wait.get());
+        }
+        verifyCaptcha(p == null ? null : p.captcha(), p == null ? null : p.website(), ip);
         var password = p == null ? null : p.password();
         try {
             Passwords.validate(password);
@@ -252,6 +255,18 @@ public class AuthResource {
         users.setPassword(userId.get(), hash);
         sessions.deleteAllFor(userId.get());
         return Response.noContent().build();
+    }
+
+    /**
+     * A CAPTCHA failure counts against the IP, so one client cannot drive unbounded siteverify calls.
+     */
+    private void verifyCaptcha(String token, String honeypot, String ip) {
+        try {
+            captcha.verify(token, honeypot, ip);
+        } catch (CaptchaFailedException e) {
+            limiter.ipFailure(ip);
+            throw e;
+        }
     }
 
     private static Response rateLimited(Duration wait) {

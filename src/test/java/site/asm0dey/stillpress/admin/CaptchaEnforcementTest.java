@@ -3,6 +3,9 @@ package site.asm0dey.stillpress.admin;
 import static site.asm0dey.stillpress.Csrf.csrf;
 import static io.restassured.http.ContentType.JSON;
 import static org.hamcrest.Matchers.equalTo;
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
 import jakarta.inject.Inject;
@@ -13,6 +16,7 @@ import site.asm0dey.stillpress.Altchas;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Limiters;
 import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.account.Secrets;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 
@@ -29,6 +33,8 @@ class CaptchaEnforcementTest {
     SettingRepository settings;
     @Inject
     SetupToken token;
+    @Inject
+    Secrets secrets;
 
     @BeforeEach
     void reset() {
@@ -112,6 +118,37 @@ class CaptchaEnforcementTest {
             .statusCode(204);
     }
 
+    @Test
+    void captchaFailuresCountAgainstTheIp() {
+        settings.put("captcha_provider", "turnstile");
+        secrets.put("turnstile_secret", "s");
+        var wm = new WireMockServer(WireMockConfiguration.options().port(Altchas.TURNSTILE_PORT));
+        wm.start();
+        try {
+            wm.stubFor(WireMock.post("/siteverify").willReturn(WireMock.okJson("{\"success\":false}")));
+            // each path from its own IP, so the buckets do not mix
+            blockedAfter20(wm, "login", Map.of("login", "ada", "password", "x"), "203.0.113.1");
+            blockedAfter20(wm, "password-reset", Map.of("login", "ada"), "203.0.113.2");
+            blockedAfter20(wm, "set-password", Map.of("token", "t", "password", "correct horse battery"), "203.0.113.3");
+        } finally {
+            wm.stop();
+        }
+    }
+
+    /**
+     * Twenty bad tokens cost twenty siteverify calls; the 21st request is refused before any.
+     */
+    private static void blockedAfter20(WireMockServer wm, String path, Map<String, String> body, String ip) {
+        wm.resetRequests();
+        var bad = new HashMap<>(body);
+        bad.put("captcha", "garbage");
+        for (var i = 0; i < 20; i++) {
+            post(path, bad, ip).then().statusCode(400).body("error", equalTo("captcha_failed"));
+        }
+        post(path, bad, ip).then().statusCode(429);
+        wm.verify(WireMock.exactly(20), WireMock.postRequestedFor(WireMock.urlEqualTo("/siteverify")));
+    }
+
     private void ada() {
         users.setPassword(users.create("ada", "ada@example.org", "Ada", Role.AUTHOR).getId(), TestStore.PASSWORD_HASH);
     }
@@ -124,5 +161,9 @@ class CaptchaEnforcementTest {
 
     private static Response post(String path, Map<String, String> body) {
         return csrf().contentType(JSON).body(body).post("/admin/api/" + path);
+    }
+
+    private static Response post(String path, Map<String, String> body, String ip) {
+        return csrf().contentType(JSON).header("X-Forwarded-For", ip).body(body).post("/admin/api/" + path);
     }
 }
