@@ -1,113 +1,119 @@
 package site.asm0dey.stillpress.account;
 
-import static io.restassured.http.ContentType.JSON;
-import static org.hamcrest.Matchers.equalTo;
-import static site.asm0dey.stillpress.Csrf.csrf;
 import static org.assertj.core.api.Assertions.assertThat;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import picocli.CommandLine;
-import site.asm0dey.stillpress.TestStore;
+import site.asm0dey.stillpress.Fixtures;
 import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TokenRepository;
 import site.asm0dey.stillpress.store.TwoFactorRepository;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class UserCommandTest {
-    @Inject
-    CommandLine.IFactory factory;
-    @Inject
-    TestStore store;
-    @Inject
+    private static final long ADMIN = 7;
+    @Mock
     AuthorRepository users;
-    @Inject
+    @Mock
+    SetPasswordLink link;
+    @Mock
     SettingRepository settings;
-    @Inject
-    TokenRepository tokens;
-    @Inject
+    @Mock
     TwoFactorRepository factors;
-    long adminId;
+    @Mock
+    SessionRepository sessions;
+    @Mock
+    TwoFactorPolicy policy;
     StringWriter out = new StringWriter();
     StringWriter err = new StringWriter();
+    CommandLine cmd;
 
     @BeforeEach
-    void reset() {
-        store.reset();
-        adminId = users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR).id();
+    void setUp() {
+        cmd = new CommandLine(CommandLine.Model.CommandSpec.create());
+        cmd.addSubcommand("reset-password", new UserCommand.ResetPassword(users, link, settings));
+        cmd.addSubcommand("reset-2fa", new UserCommand.Reset2fa(users, factors, sessions, policy));
+        cmd.setOut(new PrintWriter(out, true));
+        cmd.setErr(new PrintWriter(err, true));
+    }
+
+    private void adminExists() {
+        when(users.findByLoginOrEmail("admin"))
+            .thenReturn(Optional.of(Fixtures.author(ADMIN, "admin", Role.ADMINISTRATOR, null)));
     }
 
     @Test
-    void resetLinkUsesAdminUrlOrPath() {
-        settings.put("home_url", "https://other.example.org");
-        settings.put("admin_url", "https://blog.example.ru/");
-        assertThat(run("reset-password", "admin")).isZero();
-        var prefix = "https://blog.example.ru/admin/set-password?token=";
-        assertThat(out.toString()).startsWith(prefix);
+    void resetPasswordPrintsTheIssuedLink() {
+        adminExists();
+        when(settings.get("admin_url")).thenReturn(Optional.of("https://blog.example.ru/"));
+        when(link.issue(ADMIN, TokenRepository.SET_PASSWORD, SetPasswordLink.MANUAL_TTL))
+            .thenReturn("https://blog.example.ru/admin/set-password?token=t");
+        assertThat(cmd.execute("reset-password", "admin")).isZero();
+        assertThat(out.toString().strip()).isEqualTo("https://blog.example.ru/admin/set-password?token=t");
         assertThat(err.toString()).isEmpty();
-        var token = out.toString().strip().substring(prefix.length());
-        assertThat(tokens.consume(token, "set_password")).contains(adminId);
     }
 
     @Test
-    void printsPathOnlyWithoutAdminUrl() {
-        settings.put("home_url", "https://other.example.org");
-        assertThat(run("reset-password", "admin")).isZero();
+    void resetPasswordWarnsWhenAdminUrlIsUnset() {
+        adminExists();
+        when(settings.get("admin_url")).thenReturn(Optional.empty());
+        when(link.issue(ADMIN, TokenRepository.SET_PASSWORD, SetPasswordLink.MANUAL_TTL))
+            .thenReturn("/admin/set-password?token=t");
+        assertThat(cmd.execute("reset-password", "admin")).isZero();
         assertThat(err.toString().strip()).isEqualTo("admin_url is not set; open the link on the admin's host");
-        assertThat(out.toString()).startsWith("/admin/set-password?token=");
+        assertThat(out.toString().strip()).isEqualTo("/admin/set-password?token=t");
     }
 
     @Test
-    void unknownLoginExits1() {
-        assertThat(run("reset-password", "nobody")).isOne();
+    void resetPasswordForUnknownLoginExits1() {
+        when(users.findByLoginOrEmail("nobody")).thenReturn(Optional.empty());
+        assertThat(cmd.execute("reset-password", "nobody")).isOne();
         assertThat(out.toString()).isEmpty();
-        assertThat(err.toString()).contains("nobody");
+        assertThat(err.toString().strip()).isEqualTo("No such user: nobody");
+        verify(link, never()).issue(anyLong(), any(), any());
     }
 
     @Test
-    void cliClearsTheLastAdministrator() {
-        users.setPassword(adminId, TestStore.PASSWORD_HASH);
-        factors.putTotp(adminId, "seed");
-        factors.confirmTotp(adminId, "seed", 1);
-        settings.put("require_2fa", "true");
-        assertThat(run("reset-2fa", "admin")).isZero();
+    void reset2faClearsFactorsAndSessionsAndMentionsEnrollmentUnderPolicy() {
+        adminExists();
+        when(factors.clear(ADMIN)).thenReturn(1);
+        when(policy.required()).thenReturn(true);
+        assertThat(cmd.execute("reset-2fa", "admin")).isZero();
         assertThat(out.toString().strip())
             .isEqualTo(
                     "Removed 1 two-factor methods for admin. They can sign in with their password."
                     + " They will be asked to add a new one."
             );
-        assertThat(factors.hasFactor(adminId)).isFalse();
-        var session = csrf()
-            .contentType(JSON)
-            .body(Map.of("login", "admin", "password", TestStore.PASSWORD))
-            .post("/admin/api/login")
-            .then()
-            .statusCode(204)
-            .extract()
-            .cookie("sp_session");
-        csrf().cookie("sp_session", session).get("/admin/api/session").then().body("enrollRequired", equalTo(true));
+        verify(sessions).deleteAllFor(ADMIN);
     }
 
     @Test
-    void cliWithoutPolicyOmitsTheEnrollmentSentence() {
-        assertThat(run("reset-2fa", "admin")).isZero();
+    void reset2faWithoutPolicyOmitsTheEnrollmentSentence() {
+        adminExists();
+        when(factors.clear(ADMIN)).thenReturn(0);
+        when(policy.required()).thenReturn(false);
+        assertThat(cmd.execute("reset-2fa", "admin")).isZero();
         assertThat(out.toString().strip())
             .isEqualTo("Removed 0 two-factor methods for admin. They can sign in with their password.");
     }
 
     @Test
-    void cliUnknownUserExits1() {
-        assertThat(run("reset-2fa", "nobody")).isOne();
+    void reset2faForUnknownUserExits1AndTouchesNothing() {
+        when(users.findByLoginOrEmail("nobody")).thenReturn(Optional.empty());
+        assertThat(cmd.execute("reset-2fa", "nobody")).isOne();
         assertThat(err.toString().strip()).isEqualTo("No such user: nobody");
-    }
-
-    private int run(String... args) {
-        var cmd = new CommandLine(UserCommand.class, factory);
-        cmd.setOut(new PrintWriter(out, true));
-        cmd.setErr(new PrintWriter(err, true));
-        return cmd.execute(args);
+        verify(factors, never()).clear(anyLong());
+        verify(sessions, never()).deleteAllFor(anyLong());
     }
 }

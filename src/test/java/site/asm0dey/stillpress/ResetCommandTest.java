@@ -1,87 +1,83 @@
 package site.asm0dey.stillpress;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static site.asm0dey.stillpress.db.Tables.ITEM;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import module java.base;
-import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import picocli.CommandLine;
-import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.config.DataDir;
-import site.asm0dey.stillpress.importer.ImportGuard;
-import site.asm0dey.stillpress.store.AuthorRepository;
-import site.asm0dey.stillpress.store.SettingRepository;
+import site.asm0dey.stillpress.content.SiteReset;
+import site.asm0dey.stillpress.importer.ImportRunningException;
+import site.asm0dey.stillpress.store.SchemaRepository;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class ResetCommandTest {
-    @Inject
-    CommandLine.IFactory factory;
-    @Inject
-    TestStore store;
-    @Inject
-    ImportGuard guard;
-    @Inject
-    AuthorRepository users;
-    @Inject
+    @Mock
+    SiteReset reset;
+    @Mock
+    SchemaRepository schema;
+    @Mock
     DataDir dataDir;
-    @Inject
-    DSLContext db;
-    @Inject
-    SettingRepository settings;
     StringWriter out = new StringWriter();
     StringWriter err = new StringWriter();
+    CommandLine cmd;
 
     @BeforeEach
-    void fill() throws Exception {
-        store.reset();
-        users.create("admin", "a@example.org", "Admin", Role.ADMINISTRATOR);
-        guard.begin();
-        store.importSample();
-        guard.done();
-    }
-
-    @Test
-    void withoutYesPrintsCountsAndDeletesNothing() {
-        var items = db.fetchCount(ITEM);
-        assertThat(run()).isOne();
-        assertThat(out.toString())
-            .contains("item: " + items)
-            .contains("author: " + users.all().size())
-            .contains(dataDir.root().toString())
-            .contains("--yes");
-        assertThat(db.fetchCount(ITEM)).isEqualTo(items);
-    }
-
-    @Test
-    void withYesEmptiesTheStore() {
-        assertThat(run("--yes")).isZero();
-        assertThat(db.fetchCount(ITEM)).isZero();
-        assertThat(users.all()).isEmpty();
-        assertThat(guard.state()).isEmpty();
-        assertThat(out.toString()).contains("setup token");
-    }
-
-    @Test
-    void runningImportExits1() {
-        settings.put(ImportGuard.STATE, "running");
-        var authors = users.all().size();
-        assertThat(run("--yes")).isOne();
-        assertThat(err.toString()).contains("--force");
-        assertThat(users.all()).hasSize(authors);
-        assertThat(guard.state()).hasValue("running");
-        assertThat(run("--yes", "--force")).isZero();
-        assertThat(users.all()).isEmpty();
-        assertThat(db.fetchCount(ITEM)).isZero();
-        assertThat(guard.state()).isEmpty();
-    }
-
-    private int run(String... args) {
-        var cmd = new CommandLine(ResetCommand.class, factory);
+    void setUp() {
+        cmd = new CommandLine(new ResetCommand(reset, schema, dataDir));
         cmd.setOut(new PrintWriter(out, true));
         cmd.setErr(new PrintWriter(err, true));
-        return cmd.execute(args);
+    }
+
+    @Test
+    void withoutYesPrintsCountsAndWipesNothing() {
+        var counts = new LinkedHashMap<String, Integer>();
+        counts.put("item", 12);
+        counts.put("author", 3);
+        when(schema.rowCounts()).thenReturn(counts);
+        when(dataDir.root()).thenReturn(Path.of("/data/stillpress"));
+        assertThat(cmd.execute()).isOne();
+        assertThat(out.toString()).contains("/data/stillpress").contains("item: 12").contains("author: 3").contains(
+                "--yes"
+        );
+        verify(reset, never()).wipe(anyBoolean());
+    }
+
+    @Test
+    void withYesWipesAndPointsAtTheSetupToken() {
+        when(reset.wipe(false)).thenReturn(true);
+        assertThat(cmd.execute("--yes")).isZero();
+        assertThat(out.toString()).contains("setup token");
+        assertThat(err.toString()).isEmpty();
+    }
+
+    @Test
+    void forcePassesThroughToTheWipe() {
+        when(reset.wipe(true)).thenReturn(true);
+        assertThat(cmd.execute("--yes", "--force")).isZero();
+        verify(reset).wipe(true);
+    }
+
+    @Test
+    void runningImportExits1AndMentionsForce() {
+        when(reset.wipe(false)).thenThrow(new ImportRunningException());
+        assertThat(cmd.execute("--yes")).isOne();
+        assertThat(err.toString()).contains("--force").contains("Nothing was deleted");
+        assertThat(out.toString()).isEmpty();
+    }
+
+    @Test
+    void failedFileCleanupExits1() {
+        when(reset.wipe(false)).thenReturn(false);
+        assertThat(cmd.execute("--yes")).isOne();
+        assertThat(err.toString()).contains("cleaning up the files failed");
+        assertThat(out.toString()).doesNotContain("setup token");
     }
 }

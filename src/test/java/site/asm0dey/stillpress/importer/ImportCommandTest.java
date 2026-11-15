@@ -1,61 +1,116 @@
 package site.asm0dey.stillpress.importer;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import module java.base;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import picocli.CommandLine;
-import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.store.SettingRepository;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class ImportCommandTest {
-    @Inject
-    CommandLine.IFactory factory;
-    @Inject
-    TestStore store;
-    @Inject
-    SettingRepository settings;
+    @Mock
+    WordPressImporter importer;
+    @Mock
+    ImportGuard guard;
     @TempDir
     Path tmp;
     StringWriter out = new StringWriter();
     StringWriter err = new StringWriter();
 
-    @Test
-    void importWritesDoneAndASecondImportExits1() throws Exception {
-        store.reset();
-        var wxr = sampleFile();
-        assertThat(run("--wxr", wxr.toString())).isZero();
-        assertThat(out.toString()).startsWith("Imported 9 items");
-        assertThat(settings.get(ImportGuard.STATE)).contains("done");
-        assertThat(run("--wxr", wxr.toString())).isOne();
-        assertThat(err.toString()).contains("an import is already done");
+    private static ImportReport report(int items) {
+        return new ImportReport(
+                items,
+                0,
+                0,
+                0,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
     }
 
-    @Test
-    void runningImportElsewhereExits1() throws Exception {
-        store.reset();
-        settings.put(ImportGuard.STATE, "running");
-        assertThat(run("--wxr", sampleFile().toString())).isOne();
-        assertThat(err.toString()).contains("an import is already running");
-        assertThat(settings.get(ImportGuard.STATE)).as("left alone").contains("running");
+    private Path wxr() throws IOException {
+        return Files.writeString(tmp.resolve("export.xml"), "<rss/>");
     }
 
-    private Path sampleFile() throws IOException {
-        var wxr = tmp.resolve("export.xml");
-        try (var in = TestStore.sample()) {
-            Files.copy(in, wxr, StandardCopyOption.REPLACE_EXISTING);
-        }
-        return wxr;
-    }
-
-    private int run(String... args) {
-        var cmd = new CommandLine(ImportCommand.class, factory);
+    private CommandLine command() {
+        var cmd = new CommandLine(new ImportCommand(importer, guard));
         cmd.setOut(new PrintWriter(out, true));
         cmd.setErr(new PrintWriter(err, true));
-        return cmd.execute(args);
+        return cmd;
+    }
+
+    @Test
+    void importPrintsTheReportAndMarksTheGuardDone() throws Exception {
+        when(importer.importWxr(any(), eq(Integer.MAX_VALUE), eq(ImportOptions.DEFAULTS))).thenReturn(report(9));
+        assertThat(command().execute("--wxr", wxr().toString())).isZero();
+        assertThat(out.toString()).startsWith("Imported 9 items");
+        verify(guard).begin();
+        verify(guard).done();
+    }
+
+    @Test
+    void mediaLimitAndSiteOptionsReachTheImporter() throws Exception {
+        var options = new ImportOptions(5, "rubrika", "metka", 20);
+        when(importer.importWxr(any(), eq(100), eq(options))).thenReturn(report(1));
+        assertThat(command()
+            .execute(
+                    "--wxr",
+                    wxr().toString(),
+                    "--media-limit",
+                    "100",
+                    "--posts-per-page",
+                    "5",
+                    "--category-base",
+                    "rubrika",
+                    "--tag-base",
+                    "metka",
+                    "--posts-per-rss",
+                    "20"
+            )
+        )
+            .isZero();
+    }
+
+    @Test
+    void guardRefusalExits1WithItsMessageAndImportsNothing() throws Exception {
+        doThrow(new AlreadyImportedException("an import is already done")).when(guard).begin();
+        assertThat(command().execute("--wxr", wxr().toString())).isOne();
+        assertThat(err.toString()).contains("an import is already done");
+        verify(importer, never()).importWxr(any(), anyInt(), any());
+        verify(guard, never()).done();
+    }
+
+    @Test
+    void importerRefusalMarksTheGuardFailedAndExits1() throws Exception {
+        when(importer.importWxr(any(), anyInt(), any())).thenThrow(new AlreadyImportedException("site has content"));
+        assertThat(command().execute("--wxr", wxr().toString())).isOne();
+        assertThat(err.toString()).contains("site has content");
+        verify(guard).failed("site has content");
+        verify(guard, never()).done();
+    }
+
+    @Test
+    void importerCrashMarksTheGuardFailedAndExits1() throws Exception {
+        when(importer.importWxr(any(), anyInt(), any())).thenThrow(new IllegalStateException("boom"));
+        assertThat(command().execute("--wxr", wxr().toString())).isOne();
+        assertThat(err.toString()).contains("boom");
+        verify(guard).failed("boom");
+        verify(guard, never()).done();
     }
 
     @Test
