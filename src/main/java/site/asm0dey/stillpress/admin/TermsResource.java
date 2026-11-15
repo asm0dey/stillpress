@@ -15,7 +15,7 @@ import module java.base;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.content.TermService;
-import site.asm0dey.stillpress.store.Term;
+import site.asm0dey.stillpress.db.tables.pojos.Term;
 import site.asm0dey.stillpress.store.TermRepository;
 
 /**

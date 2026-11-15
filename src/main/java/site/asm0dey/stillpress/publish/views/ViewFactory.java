@@ -7,7 +7,7 @@ import site.asm0dey.stillpress.blocks.ClassicContent;
 import site.asm0dey.stillpress.blocks.RenderContext;
 import site.asm0dey.stillpress.db.tables.records.CommentRecord;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
-import site.asm0dey.stillpress.store.Term;
+import site.asm0dey.stillpress.db.tables.pojos.Term;
 import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.CommentRepository;
@@ -54,7 +54,7 @@ public class ViewFactory {
         var encoded = Permalinks.encode(permalink);
         var all = terms.forItem(r.getId());
         var author = r.getAuthorId() == null
-                ? Optional.<site.asm0dey.stillpress.store.Author>empty()
+                ? Optional.<site.asm0dey.stillpress.db.tables.pojos.Author>empty()
                 : authors.findById(r.getAuthorId());
         return new ItemView(
                 r.getId(),

@@ -9,6 +9,7 @@ import static site.asm0dey.stillpress.db.Tables.TOTP_FACTOR;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import org.jooq.DSLContext;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
 
 /**
  * Server-side sessions. The cookie carries a random token; the database keeps only its SHA-256.
@@ -46,7 +47,7 @@ public class SessionRepository {
             .select(AUTHOR.fields())
             .from(SESSION.join(AUTHOR).on(AUTHOR.ID.eq(SESSION.USER_ID)))
             .where(SESSION.ID.eq(hash(rawToken)), SESSION.EXPIRES_AT.gt(now()))
-            .fetchOptional(r -> AuthorRepository.author(r.into(AUTHOR)));
+            .fetchOptional(r -> r.into(AUTHOR).into(Author.class));
     }
 
     public void delete(String rawToken) {

@@ -3,7 +3,7 @@ package site.asm0dey.stillpress.content;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import module java.base;
-import site.asm0dey.stillpress.store.Term;
+import site.asm0dey.stillpress.db.tables.pojos.Term;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;

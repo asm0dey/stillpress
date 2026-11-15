@@ -9,7 +9,7 @@ import org.jooq.DSLContext;
 import org.jooq.Records;
 import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.content.Slugs;
-import site.asm0dey.stillpress.db.tables.records.TermRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Term;
 
 @ApplicationScoped
 public class TermRepository {
@@ -27,22 +27,18 @@ public class TermRepository {
             .on(ITEM_TERM.TERM_ID.eq(TERM.ID))
             .where(ITEM_TERM.ITEM_ID.eq(itemId))
             .orderBy(TERM.TAXONOMY, TERM.NAME)
-            .fetch(r -> term(r.into(TERM)));
+            .fetch(r -> r.into(TERM).into(Term.class));
     }
 
     public Optional<Term> findById(long id) {
-        return db.selectFrom(TERM).where(TERM.ID.eq(id)).fetchOptional(TermRepository::term);
+        return db.selectFrom(TERM).where(TERM.ID.eq(id)).fetchOptionalInto(Term.class);
     }
 
     public Optional<Term> findBySlug(String taxonomy, String slug) {
         return db
             .selectFrom(TERM)
             .where(TERM.TAXONOMY.eq(taxonomy), TERM.SLUG.eq(slug))
-            .fetchOptional(TermRepository::term);
-    }
-
-    private static Term term(TermRecord r) {
-        return new Term(r.getId(), r.getTaxonomy(), r.getName(), r.getSlug(), r.getParentId(), r.getDescription());
+            .fetchOptionalInto(Term.class);
     }
 
     /**
@@ -61,11 +57,11 @@ public class TermRepository {
         r.setSlug(slug);
         r.setParentId(parentId);
         r.store();
-        return term(r);
+        return r.into(Term.class);
     }
 
     public List<Term> byTaxonomy(String taxonomy) {
-        return db.selectFrom(TERM).where(TERM.TAXONOMY.eq(taxonomy)).orderBy(TERM.NAME).fetch(TermRepository::term);
+        return db.selectFrom(TERM).where(TERM.TAXONOMY.eq(taxonomy)).orderBy(TERM.NAME).fetchInto(Term.class);
     }
 
     public Set<Long> idsForItem(long itemId, String taxonomy) {
@@ -103,7 +99,7 @@ public class TermRepository {
     }
 
     public List<Term> all() {
-        return db.selectFrom(TERM).fetch(TermRepository::term);
+        return db.selectFrom(TERM).fetchInto(Term.class);
     }
 
     /**

@@ -7,7 +7,7 @@ import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
-import site.asm0dey.stillpress.store.Passkey;
+import site.asm0dey.stillpress.db.tables.pojos.Passkey;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.TwoFactorRepository;
 

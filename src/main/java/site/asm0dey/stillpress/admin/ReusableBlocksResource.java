@@ -17,7 +17,7 @@ import site.asm0dey.stillpress.content.ReusableBlockService;
 import site.asm0dey.stillpress.content.Revisions;
 import site.asm0dey.stillpress.db.tables.records.ReusableBlockRecord;
 import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
-import site.asm0dey.stillpress.store.Author;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.ReusableBlockRepository;
 

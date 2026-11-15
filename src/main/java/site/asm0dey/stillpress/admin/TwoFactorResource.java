@@ -20,7 +20,7 @@ import site.asm0dey.stillpress.account.SessionIdentityProvider;
 import site.asm0dey.stillpress.account.Totp;
 import site.asm0dey.stillpress.account.TwoFactorPolicy;
 import site.asm0dey.stillpress.content.ItemService;
-import site.asm0dey.stillpress.store.Passkey;
+import site.asm0dey.stillpress.db.tables.pojos.Passkey;
 import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 /**

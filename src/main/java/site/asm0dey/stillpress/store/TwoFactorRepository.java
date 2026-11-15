@@ -10,8 +10,8 @@ import org.jooq.DSLContext;
 import org.jooq.exception.DataAccessException;
 import org.jooq.exception.SQLStateClass;
 import org.jooq.impl.DSL;
-import site.asm0dey.stillpress.db.tables.records.PasskeyRecord;
-import site.asm0dey.stillpress.db.tables.records.TotpFactorRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Passkey;
+import site.asm0dey.stillpress.db.tables.pojos.TotpFactor;
 
 /**
  * Second-factor rows: one TOTP seed (stored encrypted by {@code Secrets}) and any number of passkeys per user.
@@ -25,14 +25,7 @@ public class TwoFactorRepository {
     }
 
     public Optional<TotpFactor> totp(long userId) {
-        return db
-            .selectFrom(TOTP_FACTOR)
-            .where(TOTP_FACTOR.USER_ID.eq(userId))
-            .fetchOptional(TwoFactorRepository::totpFactor);
-    }
-
-    private static TotpFactor totpFactor(TotpFactorRecord r) {
-        return new TotpFactor(r.getUserId(), r.getCiphertext(), r.getConfirmed(), r.getLastStep());
+        return db.selectFrom(TOTP_FACTOR).where(TOTP_FACTOR.USER_ID.eq(userId)).fetchOptionalInto(TotpFactor.class);
     }
 
     /**
@@ -126,28 +119,11 @@ public class TwoFactorRepository {
             .selectFrom(PASSKEY)
             .where(PASSKEY.USER_ID.eq(userId))
             .orderBy(PASSKEY.CREATED_AT, PASSKEY.CREDENTIAL_ID)
-            .fetch(TwoFactorRepository::passkeyOf);
+            .fetchInto(Passkey.class);
     }
 
     public Optional<Passkey> passkey(String credentialId) {
-        return db
-            .selectFrom(PASSKEY)
-            .where(PASSKEY.CREDENTIAL_ID.eq(credentialId))
-            .fetchOptional(TwoFactorRepository::passkeyOf);
-    }
-
-    private static Passkey passkeyOf(PasskeyRecord r) {
-        return new Passkey(
-                r.getCredentialId(),
-                r.getUserId(),
-                r.getName(),
-                r.getPublicKey(),
-                r.getAlgorithm(),
-                r.getAaguid(),
-                r.getSignCount(),
-                r.getCreatedAt(),
-                r.getLastUsedAt()
-        );
+        return db.selectFrom(PASSKEY).where(PASSKEY.CREDENTIAL_ID.eq(credentialId)).fetchOptionalInto(Passkey.class);
     }
 
     /**
@@ -219,6 +195,6 @@ public class TwoFactorRepository {
      * Any stored TOTP seed: enough to tell which keyset the seeds belong to.
      */
     public Optional<TotpFactor> firstTotp() {
-        return db.selectFrom(TOTP_FACTOR).limit(1).fetchOptional(TwoFactorRepository::totpFactor);
+        return db.selectFrom(TOTP_FACTOR).limit(1).fetchOptionalInto(TotpFactor.class);
     }
 }

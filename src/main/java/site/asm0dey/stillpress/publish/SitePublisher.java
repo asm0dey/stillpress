@@ -5,7 +5,7 @@ import io.quarkus.qute.Engine;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import site.asm0dey.stillpress.config.DataDir;
-import site.asm0dey.stillpress.store.Term;
+import site.asm0dey.stillpress.db.tables.pojos.Term;
 import site.asm0dey.stillpress.publish.views.ArchiveView;
 import site.asm0dey.stillpress.publish.views.EntryView;
 import site.asm0dey.stillpress.publish.views.ItemView;

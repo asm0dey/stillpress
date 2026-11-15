@@ -6,7 +6,7 @@ import module java.base;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
-import site.asm0dey.stillpress.db.tables.records.MediaRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Media;
 
 @ApplicationScoped
 public class MediaRepository {
@@ -17,25 +17,11 @@ public class MediaRepository {
     }
 
     public Optional<Media> findBySource(String sourceUrl) {
-        return db.selectFrom(MEDIA).where(MEDIA.SOURCE_URL.eq(sourceUrl)).fetchOptional(MediaRepository::media);
+        return db.selectFrom(MEDIA).where(MEDIA.SOURCE_URL.eq(sourceUrl)).fetchOptionalInto(Media.class);
     }
 
     public Optional<Media> findById(long id) {
-        return db.selectFrom(MEDIA).where(MEDIA.ID.eq(id)).fetchOptional(MediaRepository::media);
-    }
-
-    private static Media media(MediaRecord r) {
-        return new Media(
-                r.getId(),
-                r.getPath(),
-                r.getMimeType(),
-                r.getWidth(),
-                r.getHeight(),
-                r.getTitle(),
-                r.getAltText(),
-                r.getSizeBytes(),
-                r.getUploadedBy()
-        );
+        return db.selectFrom(MEDIA).where(MEDIA.ID.eq(id)).fetchOptionalInto(Media.class);
     }
 
     public record Page(List<Media> items, int total) {}
@@ -60,7 +46,7 @@ public class MediaRepository {
             .set(MEDIA.UPLOADED_BY, uploadedBy)
             .set(MEDIA.CREATED_AT, now)
             .returning()
-            .fetchSingle(MediaRepository::media);
+            .fetchSingleInto(Media.class);
     }
 
     /**
@@ -87,7 +73,7 @@ public class MediaRepository {
             .orderBy(MEDIA.ID.desc())
             .limit(perPage)
             .offset((Math.max(page, 1) - 1) * perPage)
-            .fetch(MediaRepository::media);
+            .fetchInto(Media.class);
         return new Page(items, total);
     }
 

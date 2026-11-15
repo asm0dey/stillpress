@@ -33,7 +33,7 @@ import site.asm0dey.stillpress.account.Totp;
 import site.asm0dey.stillpress.account.TwoFactorPolicy;
 import site.asm0dey.stillpress.mail.Mail;
 import site.asm0dey.stillpress.mail.SiteMail;
-import site.asm0dey.stillpress.store.Author;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;

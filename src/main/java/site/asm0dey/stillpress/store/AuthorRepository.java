@@ -12,7 +12,7 @@ import org.jooq.Field;
 import org.jooq.exception.DataAccessException;
 import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
 import site.asm0dey.stillpress.importer.Nicename;
 
 /**
@@ -23,11 +23,11 @@ public class AuthorRepository {
     private final DSLContext db;
 
     public Optional<Author> findById(long id) {
-        return db.selectFrom(AUTHOR).where(AUTHOR.ID.eq(id)).fetchOptional(AuthorRepository::author);
+        return db.selectFrom(AUTHOR).where(AUTHOR.ID.eq(id)).fetchOptionalInto(Author.class);
     }
 
     public Optional<Author> findByLogin(String login) {
-        return db.selectFrom(AUTHOR).where(AUTHOR.LOGIN.eq(login)).fetchOptional(AuthorRepository::author);
+        return db.selectFrom(AUTHOR).where(AUTHOR.LOGIN.eq(login)).fetchOptionalInto(Author.class);
     }
 
     public Set<String> slugs() {
@@ -35,7 +35,7 @@ public class AuthorRepository {
     }
 
     public List<Author> all() {
-        return db.selectFrom(AUTHOR).fetch(AuthorRepository::author);
+        return db.selectFrom(AUTHOR).fetchInto(Author.class);
     }
 
     /**
@@ -48,7 +48,7 @@ public class AuthorRepository {
             .select(AUTHOR.fields())
             .select(TWO_FACTOR)
             .from(AUTHOR)
-            .fetch(r -> new WithTwoFactor(author(r.into(AUTHOR)), r.get(TWO_FACTOR)));
+            .fetch(r -> new WithTwoFactor(r.into(AUTHOR).into(Author.class), r.get(TWO_FACTOR)));
     }
 
     private static final Field<Boolean> TWO_FACTOR = DSL
@@ -75,7 +75,7 @@ public class AuthorRepository {
             .where(AUTHOR.ROLE.in(Role.ADMINISTRATOR.id(), Role.EDITOR.id()))
             .and(AUTHOR.EMAIL.isNotNull())
             .and(AUTHOR.EMAIL.ne(""))
-            .fetch(AuthorRepository::author);
+            .fetchInto(Author.class);
     }
 
     /**
@@ -88,7 +88,7 @@ public class AuthorRepository {
             .where(AUTHOR.LOGIN.eq(s).or(AUTHOR.EMAIL_LOWER.eq(lowerEmail(s))))
             .orderBy(when(AUTHOR.LOGIN.eq(s), 0).otherwise(1))
             .limit(3)
-            .fetch(AuthorRepository::author);
+            .fetchInto(Author.class);
         if (!rows.isEmpty() && rows.getFirst().login().equals(s)) {
             return Optional.of(rows.getFirst());
         }
@@ -114,7 +114,7 @@ public class AuthorRepository {
             }
             throw new Taken(isEmailConflict(e), e);
         }
-        return author(r);
+        return r.into(Author.class);
     }
 
     /**
@@ -127,20 +127,6 @@ public class AuthorRepository {
             super(cause);
             this.email = email;
         }
-    }
-
-    static Author author(AuthorRecord r) {
-        return new Author(
-                r.getId(),
-                r.getLogin(),
-                r.getDisplayName(),
-                r.getEmail(),
-                r.getSlug(),
-                r.getRole(),
-                r.getPasswordHash(),
-                r.getLocale(),
-                r.getSourceId()
-        );
     }
 
     /**

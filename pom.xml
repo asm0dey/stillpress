@@ -364,6 +364,10 @@
                                                     </schema>
                                                 </schemata>
                                             </database>
+                                            <generate>
+                                                <pojos>true</pojos>
+                                                <pojosAsJavaRecordClasses>true</pojosAsJavaRecordClasses>
+                                            </generate>
                                             <target>
                                                 <packageName>site.asm0dey.stillpress.db</packageName>
                                                 <directory>${project.build.directory}/generated-sources/jooq</directory>

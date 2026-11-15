@@ -17,7 +17,7 @@ import io.quarkus.security.identity.SecurityIdentity;
 import site.asm0dey.stillpress.content.Capabilities;
 import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.content.MediaService;
-import site.asm0dey.stillpress.store.Media;
+import site.asm0dey.stillpress.db.tables.pojos.Media;
 import site.asm0dey.stillpress.store.MediaRepository;
 import site.asm0dey.stillpress.wpapi.OEmbedProxy;
 

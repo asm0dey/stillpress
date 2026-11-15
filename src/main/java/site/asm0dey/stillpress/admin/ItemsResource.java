@@ -21,7 +21,7 @@ import site.asm0dey.stillpress.content.Permalinker;
 import site.asm0dey.stillpress.content.Revisions;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
-import site.asm0dey.stillpress.store.Author;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.TermRepository;

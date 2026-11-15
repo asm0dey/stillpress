@@ -12,7 +12,7 @@ import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;
-import site.asm0dey.stillpress.store.Media;
+import site.asm0dey.stillpress.db.tables.pojos.Media;
 import site.asm0dey.stillpress.store.MediaRepository;
 
 /**
