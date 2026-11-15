@@ -72,6 +72,7 @@ class SiteMailTest {
     @Test
     void outsideATransactionSendsAtOnce() {
         mail.sendAfterCommit(new Mail("reader@example.org", "now", "sent"));
+        assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
         assertThat(SMTP.getReceivedMessages())
             .extracting(m -> m.getSubject())
             .containsExactly("now");
@@ -84,6 +85,7 @@ class SiteMailTest {
             .requiringNew()
             .run(() -> mail.sendAfterCommit(new Mail("reader@example.org", "lost", "lost"))))
             .doesNotThrowAnyException();
+        awaitLastError();
         var error = settings.get("mail_last_error").orElseThrow();
         assertThat(Instant.parse(error.substring(0, error.indexOf(' ')))).isBefore(Instant.now().plusSeconds(1));
         assertThat(error.substring(error.indexOf(' ') + 1)).isNotBlank();
@@ -93,6 +95,7 @@ class SiteMailTest {
     void failureOutsideATransactionIsRecordedNotThrown() {
         closedPort();
         assertThatCode(() -> mail.sendAfterCommit(new Mail("reader@example.org", "lost", "lost"))).doesNotThrowAnyException();
+        awaitLastError();
         assertThat(settings.get("mail_last_error")).isNotEmpty();
     }
 
@@ -148,6 +151,26 @@ class SiteMailTest {
                     Ссылка действует 7 дн.
                     """
             );
+    }
+
+    @Test
+    void afterCommitDoesNotWaitForSmtp() throws IOException {
+        // the kernel completes the TCP handshake into the backlog and nothing ever answers, like a hung SMTP server
+        try (var silent = new ServerSocket(0)) {
+            settings.put("smtp_port", String.valueOf(silent.getLocalPort()));
+            mail.reload();
+            var started = System.nanoTime();
+            QuarkusTransaction
+                .requiringNew()
+                .run(() -> mail.sendAfterCommit(new Mail("reader@example.org", "hung", "hung")));
+            assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(500));
+        }
+        // the client gives up on the closed server; the next test reloads anyway
+        mail.reload();
+    }
+
+    private void awaitLastError() {
+        TestStore.await(() -> settings.get("mail_last_error").isPresent(), 10);
     }
 
     private void closedPort() {

@@ -61,21 +61,10 @@ public class SiteMail {
      * @throws MailFailedException when SMTP is not set up or the server does not take the mail
      */
     public void send(Mail m) {
-        var c = client().orElseThrow(() -> new MailFailedException("SMTP is not configured"));
-        var message = new MailMessage().setFrom(c.from()).setTo(m.to()).setSubject(m.subject()).setText(m.body());
         try {
-            c.client().sendMail(message).toCompletionStage().toCompletableFuture().get(
-                    TIMEOUT.toSeconds(),
-                    TimeUnit.SECONDS
-            );
+            start(m).get();
         } catch (ExecutionException e) {
-            var cause = e.getCause();
-            throw new MailFailedException(Objects.requireNonNullElse(
-                    cause.getMessage(),
-                    cause.getClass().getSimpleName()
-            ));
-        } catch (TimeoutException e) {
-            throw new MailFailedException("No answer from the SMTP server in " + TIMEOUT.toSeconds() + " s");
+            throw new MailFailedException(reason(e.getCause()));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new MailFailedException("Interrupted while sending");
@@ -83,8 +72,9 @@ public class SiteMail {
     }
 
     /**
-     * Sends once the current transaction commits, and not at all if it rolls back; outside a transaction, now. A
-     * failure never reaches the caller: it is logged and kept in {@value #LAST_ERROR} for the admin.
+     * Sends once the current transaction commits, and not at all if it rolls back; outside a transaction, now. Never
+     * waits for the SMTP server, and a failure never reaches the caller: it is logged and kept in {@value #LAST_ERROR}
+     * for the admin.
      */
     public void sendAfterCommit(Mail m) {
         // CDI calls a transactional observer at once when no transaction is active
@@ -93,13 +83,50 @@ public class SiteMail {
 
     void deliver(@Observes(during = TransactionPhase.AFTER_SUCCESS) Mail m) {
         try {
-            send(m);
-        } catch (RuntimeException e) {
-            LOG.warnf("Mail \"%s\" was not sent: %s", m.subject(), e.getMessage());
-            QuarkusTransaction
-                .requiringNew()
-                .run(() -> settings.put(LAST_ERROR, Instant.now() + " " + e.getMessage()));
+            start(m)
+                .whenComplete((ok, e) -> {
+                    if (e != null) {
+                        // completes on the event loop (or the timeout thread): the database write goes to a worker
+                        vertx.executeBlocking(() -> {
+                            failed(m, reason(e));
+                            return null;
+                        });
+                    }
+                });
+        } catch (MailFailedException e) {
+            failed(m, e.getMessage());
         }
+    }
+
+    /**
+     * The send, bounded by the 30 s timeout, so a server that never answers still ends in a failure.
+     *
+     * @throws MailFailedException when SMTP is not set up
+     */
+    private CompletableFuture<?> start(Mail m) {
+        var c = client().orElseThrow(() -> new MailFailedException("SMTP is not configured"));
+        var message = new MailMessage().setFrom(c.from()).setTo(m.to()).setSubject(m.subject()).setText(m.body());
+        return c
+            .client()
+            .sendMail(message)
+            .toCompletionStage()
+            .toCompletableFuture()
+            .orTimeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+    }
+
+    private static String reason(Throwable e) {
+        var cause = e instanceof CompletionException && e.getCause() != null ? e.getCause() : e;
+        if (cause instanceof TimeoutException) {
+            return "No answer from the SMTP server in " + TIMEOUT.toSeconds() + " s";
+        }
+        return Objects.requireNonNullElse(cause.getMessage(), cause.getClass().getSimpleName());
+    }
+
+    private void failed(Mail m, String reason) {
+        LOG.warnf("Mail \"%s\" was not sent: %s", m.subject(), reason);
+        QuarkusTransaction
+            .requiringNew()
+            .run(() -> settings.put(LAST_ERROR, Instant.now() + " " + reason));
     }
 
     /**
