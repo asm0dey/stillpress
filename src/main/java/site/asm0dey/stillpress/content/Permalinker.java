@@ -1,15 +1,12 @@
 package site.asm0dey.stillpress.content;
 
-import static site.asm0dey.stillpress.db.Tables.AUTHOR;
-import static site.asm0dey.stillpress.db.Tables.ITEM;
-import static site.asm0dey.stillpress.db.Tables.ITEM_TERM;
-import static site.asm0dey.stillpress.db.Tables.TERM;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
-import org.jooq.DSLContext;
-import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.db.tables.records.ItemRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
+import site.asm0dey.stillpress.db.tables.pojos.Item;
+import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.RedirectRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TermRepository;
@@ -20,20 +17,23 @@ import site.asm0dey.stillpress.store.TermRepository;
 @ApplicationScoped
 public class Permalinker {
     private static final int MAX_ATTEMPTS = 1000;
-    private final DSLContext db;
+    private final ItemRepository items;
+    private final AuthorRepository authors;
     private final SettingRepository settings;
     private final RedirectRepository redirects;
     private final TermRepository terms;
     private final TermService termService;
 
     Permalinker(
-            DSLContext db,
+            ItemRepository items,
+            AuthorRepository authors,
             SettingRepository settings,
             RedirectRepository redirects,
             TermRepository terms,
             TermService termService
     ) {
-        this.db = db;
+        this.items = items;
+        this.authors = authors;
         this.settings = settings;
         this.redirects = redirects;
         this.terms = terms;
@@ -50,33 +50,39 @@ public class Permalinker {
     /**
      * The item's date in the site's time zone, null when it has none.
      */
-    public LocalDateTime localDate(ItemRecord r) {
-        if (r.getPublishedLocal() != null) {
-            return r.getPublishedLocal();
+    public LocalDateTime localDate(Item r) {
+        return localDate(r.publishedLocal(), r.publishedAt());
+    }
+
+    public LocalDateTime localDate(LocalDateTime publishedLocal, LocalDateTime publishedAt) {
+        if (publishedLocal != null) {
+            return publishedLocal;
         }
-        return r.getPublishedAt() == null
+        return publishedAt == null
                 ? null
-                : r.getPublishedAt().atOffset(ZoneOffset.UTC).atZoneSameInstant(zone()).toLocalDateTime();
+                : publishedAt.atOffset(ZoneOffset.UTC).atZoneSameInstant(zone()).toLocalDateTime();
     }
 
     /**
      * Gives {@code r} its slug and permalink as WordPress would: posts from the site's {@code permalink_structure},
      * pages from their ancestors' slugs. The slug is made unique among items of the same type (and the permalink
-     * among all) with {@code -2}, {@code -3}... The caller stores the record; the redirects are written here: on the
-     * first permalink the shortlinks {@code ?p=} (and {@code ?page_id=} for pages), on a change old path to new.
+     * among all) with {@code -2}, {@code -3}... Stores both and returns the stored item; the redirects are written
+     * here too: on the first permalink the shortlinks {@code ?p=} (and {@code ?page_id=} for pages), on a change old
+     * path to new.
      */
-    public void assignPermalink(ItemRecord r) {
-        var old = r.getPermalink();
-        var base = r.getSlug() == null || r.getSlug().isBlank()
-                ? Slugs.title(Objects.requireNonNullElse(r.getTitle(), ""))
-                : r.getSlug();
+    public Item assignPermalink(Item r) {
+        var old = r.permalink();
+        var base =
+                r.slug() == null || r.slug().isBlank()
+                ? Slugs.title(Objects.requireNonNullElse(r.title(), ""))
+                : r.slug();
         if (base.isEmpty()) {
-            base = String.valueOf(r.getSourceId());
+            base = String.valueOf(r.sourceId());
         }
         ensureCategory(r);
         var slug = base;
         var permalink = permalink(r, slug);
-        for (int n = 2; slugTaken(r, slug) || taken(permalink, r.getId()); n++) {
+        for (int n = 2; items.slugTaken(r.type(), slug, r.id()) || items.permalinkTaken(permalink, r.id()); n++) {
             if (n > MAX_ATTEMPTS) {
                 // a structure with neither %postname% nor %post_id% never gets unique
                 throw new IllegalStateException("No free permalink for '"
@@ -88,16 +94,16 @@ public class Permalinker {
             slug = base + "-" + n;
             permalink = permalink(r, slug);
         }
-        r.setSlug(slug);
-        r.setPermalink(permalink);
-        if (old == null && r.getSourceId() != null) {
-            redirects.put("?p=" + r.getSourceId(), permalink);
-            if ("page".equals(r.getType())) {
-                redirects.put("?page_id=" + r.getSourceId(), permalink);
+        var stored = items.setPath(r.id(), slug, permalink);
+        if (old == null && r.sourceId() != null) {
+            redirects.put("?p=" + r.sourceId(), permalink);
+            if ("page".equals(r.type())) {
+                redirects.put("?page_id=" + r.sourceId(), permalink);
             }
         } else if (old != null && !old.equals(permalink)) {
             redirects.put(old, permalink);
         }
+        return stored;
     }
 
     /**
@@ -106,45 +112,28 @@ public class Permalinker {
      * created on first use and remembered in the setting. Never at setup: the import guard needs an empty
      * {@code term} table.
      */
-    public boolean ensureCategory(ItemRecord r) {
-        if (!"post".equals(r.getType()) || r.getId() == null || !terms.idsForItem(r.getId(), "category").isEmpty()) {
+    public boolean ensureCategory(Item r) {
+        if (!"post".equals(r.type()) || r.id() == null || !terms.idsForItem(r.id(), "category").isEmpty()) {
             return false;
         }
-        terms.setForItem(r.getId(), "category", List.of(defaultCategory()));
+        terms.setForItem(r.id(), "category", List.of(defaultCategory()));
         return true;
     }
 
     /**
-     * {@link #ensureCategory(ItemRecord)} for many items at once: the posts among {@code itemIds} left without a
+     * {@link #ensureCategory(Item)} for many items at once: the posts among {@code itemIds} left without a
      * category get the default one. Returns its id when any did.
      */
     public Optional<Long> ensureCategory(Collection<Long> itemIds) {
         if (itemIds.isEmpty()) {
             return Optional.empty();
         }
-        var bare = db
-            .select(ITEM.ID)
-            .from(ITEM)
-            .where(
-                    ITEM.ID.in(itemIds),
-                    ITEM.TYPE.eq("post"),
-                    DSL.notExists(DSL
-                        .selectOne()
-                        .from(ITEM_TERM)
-                        .join(TERM)
-                        .on(TERM.ID.eq(ITEM_TERM.TERM_ID))
-                        .where(ITEM_TERM.ITEM_ID.eq(ITEM.ID), TERM.TAXONOMY.eq("category"))
-                    )
-            )
-            .fetch(ITEM.ID);
+        var bare = terms.uncategorizedPosts(itemIds);
         if (bare.isEmpty()) {
             return Optional.empty();
         }
         var category = defaultCategory();
-        db
-            .insertInto(ITEM_TERM, ITEM_TERM.ITEM_ID, ITEM_TERM.TERM_ID)
-            .select(DSL.select(ITEM.ID, DSL.val(category)).from(ITEM).where(ITEM.ID.in(bare)))
-            .execute();
+        terms.addToItems(bare, category);
         return Optional.of(category);
     }
 
@@ -170,57 +159,39 @@ public class Permalinker {
         return term.id();
     }
 
-    public String uniqueSlug(ItemRecord r, String base) {
+    public String uniqueSlug(Item r, String base) {
         var slug = base;
-        for (int n = 2; slugTaken(r, slug); n++) {
+        for (int n = 2; items.slugTaken(r.type(), slug, r.id()); n++) {
             slug = base + "-" + n;
         }
         return slug;
     }
 
-    /**
-     * WordPress's {@code wp_unique_post_slug}: unique among items of the same type, whatever their date.
-     */
-    private boolean slugTaken(ItemRecord r, String slug) {
-        return db.fetchExists(
-                ITEM,
-                ITEM.TYPE.eq(r.getType()),
-                ITEM.SLUG.eq(slug),
-                r.getId() == null ? ITEM.ID.isNotNull() : ITEM.ID.ne(r.getId())
-        );
-    }
-
-    private boolean taken(String permalink, Long id) {
-        return db.fetchExists(ITEM, ITEM.PERMALINK.eq(permalink), id == null ? ITEM.ID.isNotNull() : ITEM.ID.ne(id));
-    }
-
-    private String permalink(ItemRecord r, String slug) {
-        if ("page".equals(r.getType())) {
+    private String permalink(Item r, String slug) {
+        if ("page".equals(r.type())) {
             var parts = new ArrayDeque<String>();
             parts.addFirst(slug);
             var seen = new HashSet<Long>();
-            for (var p = r.getParentId(); p != null && seen.add(p); ) {
-                var parent = db.select(ITEM.SLUG, ITEM.PARENT_ID).from(ITEM).where(ITEM.ID.eq(p)).fetchOne();
+            for (var p = r.parentId(); p != null && seen.add(p); ) {
+                var parent = items.find(p).orElse(null);
                 if (parent == null) {
                     break;
                 }
-                parts.addFirst(parent.get(ITEM.SLUG));
-                p = parent.get(ITEM.PARENT_ID);
+                parts.addFirst(parent.slug());
+                p = parent.parentId();
             }
             return "/" + String.join("/", parts) + "/";
         }
         var structure = settings.get("permalink_structure").orElse(PermalinkStructure.DEFAULT);
         var local = Objects.requireNonNullElseGet(localDate(r), () -> LocalDateTime.now(zone()));
-        var author = r.getAuthorId() == null
-                ? null
-                : db.select(AUTHOR.SLUG).from(AUTHOR).where(AUTHOR.ID.eq(r.getAuthorId())).fetchOne(AUTHOR.SLUG);
+        var author = r.authorId() == null ? null : authors.findById(r.authorId()).map(Author::slug).orElse(null);
         return PermalinkStructure.render(
                 structure,
                 new PermalinkStructure.Fields(
-                        Objects.requireNonNullElse(r.getSourceId(), 0L),
+                        Objects.requireNonNullElse(r.sourceId(), 0L),
                         slug,
                         local,
-                        categoryPath(r.getId()),
+                        categoryPath(r.id()),
                         Objects.requireNonNullElse(author, ""),
                         null
                 )
@@ -236,17 +207,12 @@ public class Permalinker {
      * when the post has none.
      */
     private String categoryPath(Long itemId) {
-        var first = itemId == null
-                ? null
-                : db
-            .select(TERM.ID)
-            .from(TERM)
-            .join(ITEM_TERM)
-            .on(ITEM_TERM.TERM_ID.eq(TERM.ID))
-            .where(ITEM_TERM.ITEM_ID.eq(itemId), TERM.TAXONOMY.eq("category"))
-            .orderBy(TERM.ID)
-            .limit(1)
-            .fetchOne(TERM.ID);
+        var first =
+                itemId == null ? null : terms
+            .idsForItem(itemId, "category")
+            .stream()
+            .min(Long::compare)
+            .orElse(null);
         return first == null ? "uncategorized" : termPath(first);
     }
 
@@ -257,12 +223,12 @@ public class Permalinker {
         var parts = new ArrayDeque<String>();
         var seen = new HashSet<Long>();
         for (Long t = termId; t != null && seen.add(t); ) {
-            var term = db.select(TERM.SLUG, TERM.PARENT_ID).from(TERM).where(TERM.ID.eq(t)).fetchOne();
+            var term = terms.findById(t).orElse(null);
             if (term == null) {
                 break;
             }
-            parts.addFirst(term.get(TERM.SLUG));
-            t = term.get(TERM.PARENT_ID);
+            parts.addFirst(term.slug());
+            t = term.parentId();
         }
         return String.join("/", parts);
     }

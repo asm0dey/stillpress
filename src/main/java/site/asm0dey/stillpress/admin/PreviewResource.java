@@ -53,8 +53,8 @@ public class PreviewResource {
         if (!Capabilities.canEdit(a.role(), a.userId(), r)) {
             return Response.status(403).build();
         }
-        // the record is changed in memory only and never stored
-        revisions.overlayAutosave(r, a.userId());
+        // the overlay is made in memory only and never stored
+        r = revisions.overlayAutosave(r, a.userId());
         var html = engine
             .getTemplate("plain/single")
             .data("site", views.site())

@@ -37,7 +37,7 @@ class ViewFactorySanitizeTest {
                     COMMENT.STATUS
             )
             .values(
-                    item.getId(),
+                    item.id(),
                     "Eve",
                     "javascript:alert(1)",
                     "<script>alert(1)</script><a href=\"javascript:x\">k</a>ok",

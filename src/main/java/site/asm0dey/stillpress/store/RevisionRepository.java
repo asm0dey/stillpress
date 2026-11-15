@@ -1,12 +1,13 @@
 package site.asm0dey.stillpress.store;
 
+import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.REVISION;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
-import site.asm0dey.stillpress.db.tables.records.ItemRecord;
-import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Item;
+import site.asm0dey.stillpress.db.tables.pojos.Revision;
 
 /**
  * Saved revisions and per-user autosaves of items and reusable blocks.
@@ -68,35 +69,41 @@ public class RevisionRepository {
 
     /**
      * Lays {@code userId}'s autosave of the item over its title, body and excerpt when the autosave is newer. The
-     * record is changed in memory only and never stored.
+     * overlay is made in memory only and never stored.
      */
-    public void overlayAutosave(ItemRecord item, long userId) {
-        autosave("item", item.getId(), userId)
-            .filter(s -> item.getModifiedAt() == null || s.getCreatedAt().isAfter(item.getModifiedAt()))
-            .ifPresent(s -> {
-                item.setTitle(s.getTitle());
-                item.setBody(s.getBody());
-                item.setExcerpt(s.getExcerpt());
-            });
+    public Item overlayAutosave(Item item, long userId) {
+        return autosave("item", item.id(), userId)
+            .filter(s -> item.modifiedAt() == null || s.createdAt().isAfter(item.modifiedAt()))
+            .map(s -> {
+                var r = db.newRecord(ITEM, item);
+                r.setTitle(s.title());
+                r.setBody(s.body());
+                r.setExcerpt(s.excerpt());
+                return r.into(Item.class);
+            })
+            .orElse(item);
     }
 
-    public Optional<RevisionRecord> autosave(String objectType, long objectId, long userId) {
-        return db.selectFrom(REVISION).where(autosaveOf(objectType, objectId, userId)).fetchOptional();
+    public Optional<Revision> autosave(String objectType, long objectId, long userId) {
+        return db
+            .selectFrom(REVISION)
+            .where(autosaveOf(objectType, objectId, userId))
+            .fetchOptionalInto(Revision.class);
     }
 
     /**
      * Newest first, without autosaves.
      */
-    public List<RevisionRecord> list(String objectType, long objectId) {
+    public List<Revision> list(String objectType, long objectId) {
         return db
             .selectFrom(REVISION)
             .where(of(objectType, objectId), REVISION.AUTOSAVE.isFalse())
             .orderBy(REVISION.ID.desc())
-            .fetch();
+            .fetchInto(Revision.class);
     }
 
-    public Optional<RevisionRecord> find(long id) {
-        return db.selectFrom(REVISION).where(REVISION.ID.eq(id)).fetchOptional();
+    public Optional<Revision> find(long id) {
+        return db.selectFrom(REVISION).where(REVISION.ID.eq(id)).fetchOptionalInto(Revision.class);
     }
 
     private static org.jooq.Condition of(String objectType, long objectId) {

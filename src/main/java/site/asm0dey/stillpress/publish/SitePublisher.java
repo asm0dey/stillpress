@@ -557,7 +557,7 @@ public class SitePublisher {
         var byItem = new HashMap<Long, ItemView>();
         items
             .findByIds(ids)
-            .forEach(r -> byItem.put(r.getId(), views.item(r)));
+            .forEach(r -> byItem.put(r.id(), views.item(r)));
         var entries = new ArrayList<SiteComment>();
         for (var c : newest) {
             var item = byItem.get(c.getItemId());

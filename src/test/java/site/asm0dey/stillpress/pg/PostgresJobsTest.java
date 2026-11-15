@@ -45,7 +45,7 @@ class PostgresJobsTest {
                     .requiringNew()
                     .call(() -> {
                         start.await(10, TimeUnit.SECONDS);
-                        var id = items.create("post", author).getSourceId();
+                        var id = items.create("post", author).sourceId();
                         // keep the transaction open so the other insert meets this uncommitted id
                         Thread.sleep(300);
                         return id;

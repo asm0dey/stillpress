@@ -5,8 +5,8 @@ import static site.asm0dey.stillpress.account.Role.CONTRIBUTOR;
 import static site.asm0dey.stillpress.account.Role.EDITOR;
 import module java.base;
 import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.db.tables.records.ItemRecord;
-import site.asm0dey.stillpress.db.tables.records.ReusableBlockRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Item;
+import site.asm0dey.stillpress.db.tables.pojos.ReusableBlock;
 
 /**
  * WordPress's default role capabilities; the one place that decides who may do what.
@@ -22,28 +22,28 @@ public final class Capabilities {
         return r == ADMINISTRATOR || r == EDITOR;
     }
 
-    private static boolean own(long userId, ItemRecord item) {
-        return item.getAuthorId() != null && item.getAuthorId() == userId;
+    private static boolean own(long userId, Item item) {
+        return item.authorId() != null && item.authorId() == userId;
     }
 
     /**
      * Seeing an item in the admin: one's own, or anything for editors.
      */
-    public static boolean canView(Role r, long userId, ItemRecord item) {
+    public static boolean canView(Role r, long userId, Item item) {
         return editor(r) || own(userId, item);
     }
 
-    public static boolean canEdit(Role r, long userId, ItemRecord item) {
+    public static boolean canEdit(Role r, long userId, Item item) {
         if (editor(r)) {
             return true;
         }
-        if (!"post".equals(item.getType()) || !own(userId, item)) {
+        if (!"post".equals(item.type()) || !own(userId, item)) {
             return false;
         }
-        return r != CONTRIBUTOR || UNPUBLISHED.contains(item.getStatus());
+        return r != CONTRIBUTOR || UNPUBLISHED.contains(item.status());
     }
 
-    public static boolean canSetStatus(Role r, long userId, ItemRecord item, String status) {
+    public static boolean canSetStatus(Role r, long userId, Item item, String status) {
         if (!canEdit(r, userId, item)) {
             return false;
         }
@@ -53,14 +53,14 @@ public final class Capabilities {
     /**
      * Trash and restore: editors any, authors their own, contributors their own unpublished (or trashed) ones.
      */
-    public static boolean canTrash(Role r, long userId, ItemRecord item) {
+    public static boolean canTrash(Role r, long userId, Item item) {
         if (editor(r)) {
             return true;
         }
-        if (!"post".equals(item.getType()) || !own(userId, item)) {
+        if (!"post".equals(item.type()) || !own(userId, item)) {
             return false;
         }
-        return r != CONTRIBUTOR || UNPUBLISHED.contains(item.getStatus()) || "trash".equals(item.getStatus());
+        return r != CONTRIBUTOR || UNPUBLISHED.contains(item.status()) || "trash".equals(item.status());
     }
 
     /**
@@ -92,8 +92,8 @@ public final class Capabilities {
         return r != CONTRIBUTOR;
     }
 
-    public static boolean canEditBlock(Role r, long userId, ReusableBlockRecord block) {
-        return editor(r) || r != CONTRIBUTOR && block.getAuthorId() != null && block.getAuthorId() == userId;
+    public static boolean canEditBlock(Role r, long userId, ReusableBlock block) {
+        return editor(r) || r != CONTRIBUTOR && block.authorId() != null && block.authorId() == userId;
     }
 
     public static boolean canUpload(Role r) {

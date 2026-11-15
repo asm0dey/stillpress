@@ -27,6 +27,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jooq.DSLContext;
 import site.asm0dey.stillpress.content.Permalinker;
+import site.asm0dey.stillpress.store.ItemRepository;
 
 /**
  * Background work backed by the {@code scheduled_tasks} table: publishing and go-live of scheduled items. The
@@ -46,6 +47,7 @@ public class Jobs {
     private final PublishQueue queue;
     private final SitePublisher publisher;
     private final Permalinker permalinks;
+    private final ItemRepository items;
     private final DSLContext db;
     private final Duration sweepInterval;
     private final Duration pollingInterval;
@@ -72,6 +74,7 @@ public class Jobs {
             PublishQueue queue,
             SitePublisher publisher,
             Permalinker permalinks,
+            ItemRepository items,
             DSLContext db,
             @ConfigProperty(name = "stillpress.publish.sweep-interval", defaultValue = "1m") Duration sweepInterval,
             @ConfigProperty(name = "stillpress.publish.polling-interval", defaultValue = "10s") Duration pollingInterval
@@ -83,6 +86,7 @@ public class Jobs {
         this.queue = queue;
         this.publisher = publisher;
         this.permalinks = permalinks;
+        this.items = items;
         this.db = db;
         this.sweepInterval = sweepInterval;
         this.pollingInterval = pollingInterval;
@@ -208,10 +212,8 @@ public class Jobs {
                     )
                     .execute();
                 if (changed == 1) {
-                    var r = db.selectFrom(ITEM).where(ITEM.ID.eq(id)).fetchOne();
                     // first permalink, or a re-dated post's new date-derived one (with a redirect from the old)
-                    permalinks.assignPermalink(r);
-                    r.update();
+                    permalinks.assignPermalink(items.find(id).orElseThrow());
                     queue.item(id);
                     requestPublish();
                 }

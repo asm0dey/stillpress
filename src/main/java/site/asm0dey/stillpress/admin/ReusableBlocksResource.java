@@ -15,9 +15,9 @@ import site.asm0dey.stillpress.content.Capabilities;
 import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.content.ReusableBlockService;
 import site.asm0dey.stillpress.content.Revisions;
-import site.asm0dey.stillpress.db.tables.records.ReusableBlockRecord;
-import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
 import site.asm0dey.stillpress.db.tables.pojos.Author;
+import site.asm0dey.stillpress.db.tables.pojos.ReusableBlock;
+import site.asm0dey.stillpress.db.tables.pojos.Revision;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.ReusableBlockRepository;
 
@@ -92,17 +92,17 @@ public class ReusableBlocksResource {
     public List<BlockLine> list(@QueryParam("content") boolean content) {
         var a = actor();
         var all = blocks.all();
-        var usedBy = usedBy(all.stream().map(ReusableBlockRecord::getSourceId).collect(Collectors.toSet()));
+        var usedBy = usedBy(all.stream().map(ReusableBlock::sourceId).collect(Collectors.toSet()));
         var names = authorNames();
         return all
             .stream()
             .map(b -> new BlockLine(
-                    b.getSourceId(),
-                    b.getTitle(),
-                    content ? b.getContent() : null,
-                    names.get(b.getAuthorId()),
-                    b.getModifiedAt(),
-                    usedBy.getOrDefault(b.getSourceId(), 0),
+                    b.sourceId(),
+                    b.title(),
+                    content ? b.content() : null,
+                    names.get(b.authorId()),
+                    b.modifiedAt(),
+                    usedBy.getOrDefault(b.sourceId(), 0),
                     Capabilities.canEditBlock(a.role(), a.userId(), b)
             ))
             .toList();
@@ -153,7 +153,7 @@ public class ReusableBlocksResource {
         find(id);
         return revisions
             .autosaveOf(TYPE, id, actor().userId())
-            .map(r -> new AutosaveView(r.getTitle(), r.getBody(), r.getCreatedAt()))
+            .map(r -> new AutosaveView(r.title(), r.body(), r.createdAt()))
             .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
     }
 
@@ -165,7 +165,7 @@ public class ReusableBlocksResource {
         return revisions
             .list(TYPE, id)
             .stream()
-            .map(r -> new ItemsResource.RevisionLine(r.getId(), names.get(r.getAuthorId()), r.getCreatedAt()))
+            .map(r -> new ItemsResource.RevisionLine(r.id(), names.get(r.authorId()), r.createdAt()))
             .toList();
     }
 
@@ -174,15 +174,9 @@ public class ReusableBlocksResource {
     public RevisionView revision(@PathParam("id") long id, @PathParam("rid") long rid) {
         var r = revisions
             .find(rid)
-            .filter(v -> TYPE.equals(v.getObjectType()) && v.getObjectId() == id && !v.getAutosave())
+            .filter(v -> TYPE.equals(v.objectType()) && v.objectId() == id && !v.autosave())
             .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
-        return new RevisionView(
-                r.getId(),
-                r.getTitle(),
-                r.getBody(),
-                r.getCreatedAt(),
-                authorNames().get(r.getAuthorId())
-        );
+        return new RevisionView(r.id(), r.title(), r.body(), r.createdAt(), authorNames().get(r.authorId()));
     }
 
     @POST
@@ -193,30 +187,30 @@ public class ReusableBlocksResource {
         return view(saved.block(), a, saved.republished());
     }
 
-    private ReusableBlockRecord find(long id) {
+    private ReusableBlock find(long id) {
         return blocks
             .find(id)
             .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
     }
 
-    private BlockView view(ReusableBlockRecord b, ItemService.Actor a) {
+    private BlockView view(ReusableBlock b, ItemService.Actor a) {
         return view(b, a, null);
     }
 
-    private BlockView view(ReusableBlockRecord b, ItemService.Actor a, Integer republished) {
+    private BlockView view(ReusableBlock b, ItemService.Actor a, Integer republished) {
         var autosave = revisions
-            .autosaveOf(TYPE, b.getSourceId(), a.userId())
-            .map(RevisionRecord::getCreatedAt)
-            .filter(at -> b.getModifiedAt() == null || at.isAfter(b.getModifiedAt()))
+            .autosaveOf(TYPE, b.sourceId(), a.userId())
+            .map(Revision::createdAt)
+            .filter(at -> b.modifiedAt() == null || at.isAfter(b.modifiedAt()))
             .map(ItemsResource.AutosaveRef::new)
             .orElse(null);
         return new BlockView(
-                b.getSourceId(),
-                b.getTitle(),
-                b.getContent(),
-                b.getAuthorId() == null ? null : authorNames().get(b.getAuthorId()),
-                b.getModifiedAt(),
-                usedBy(Set.of(b.getSourceId())).getOrDefault(b.getSourceId(), 0),
+                b.sourceId(),
+                b.title(),
+                b.content(),
+                b.authorId() == null ? null : authorNames().get(b.authorId()),
+                b.modifiedAt(),
+                usedBy(Set.of(b.sourceId())).getOrDefault(b.sourceId(), 0),
                 Capabilities.canEditBlock(a.role(), a.userId(), b),
                 autosave,
                 republished

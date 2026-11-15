@@ -5,9 +5,10 @@ import module java.base;
 import site.asm0dey.stillpress.blocks.BlockRenderer;
 import site.asm0dey.stillpress.blocks.ClassicContent;
 import site.asm0dey.stillpress.blocks.RenderContext;
-import site.asm0dey.stillpress.db.tables.records.CommentRecord;
-import site.asm0dey.stillpress.db.tables.records.ItemRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
+import site.asm0dey.stillpress.db.tables.pojos.Item;
 import site.asm0dey.stillpress.db.tables.pojos.Term;
+import site.asm0dey.stillpress.db.tables.records.CommentRecord;
 import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.CommentRepository;
@@ -49,21 +50,19 @@ public class ViewFactory {
         );
     }
 
-    public ItemView item(ItemRecord r) {
-        var permalink = Objects.requireNonNullElse(r.getPermalink(), "/");
+    public ItemView item(Item r) {
+        var permalink = Objects.requireNonNullElse(r.permalink(), "/");
         var encoded = Permalinks.encode(permalink);
-        var all = terms.forItem(r.getId());
-        var author = r.getAuthorId() == null
-                ? Optional.<site.asm0dey.stillpress.db.tables.pojos.Author>empty()
-                : authors.findById(r.getAuthorId());
+        var all = terms.forItem(r.id());
+        var author = r.authorId() == null ? Optional.<Author>empty() : authors.findById(r.authorId());
         return new ItemView(
-                r.getId(),
-                Objects.requireNonNullElse(r.getTitle(), ""),
+                r.id(),
+                Objects.requireNonNullElse(r.title(), ""),
                 encoded,
                 homeUrl() + encoded,
-                html(r.getBody(), r.getBodyFormat()),
-                html(r.getExcerpt(), "classic"),
-                instant(r.getPublishedAt()),
+                html(r.body(), r.bodyFormat()),
+                html(r.excerpt(), "classic"),
+                instant(r.publishedAt()),
                 author
                     .map(a -> Objects.requireNonNullElse(a.displayName(), a.login()))
                     .orElse(""),
@@ -72,8 +71,8 @@ public class ViewFactory {
                     .orElse(null),
                 links(all, "category"),
                 links(all, "post_tag"),
-                threaded(comments.approvedFor(r.getId())),
-                r.getGuid()
+                threaded(comments.approvedFor(r.id())),
+                r.guid()
         );
     }
 

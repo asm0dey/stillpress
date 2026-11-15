@@ -4,7 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import module java.base;
 import site.asm0dey.stillpress.blocks.BlockRenderer;
-import site.asm0dey.stillpress.db.tables.records.ReusableBlockRecord;
+import site.asm0dey.stillpress.db.tables.pojos.ReusableBlock;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;
@@ -46,7 +46,7 @@ public class ReusableBlockService {
      * {@code expectedModifiedAt}.
      */
     @Transactional
-    public ReusableBlockRecord save(
+    public ReusableBlock save(
             Long ref,
             String title,
             String content,
@@ -59,7 +59,7 @@ public class ReusableBlockService {
     /**
      * A saved block and how many published items its save queued for republishing.
      */
-    public record Saved(ReusableBlockRecord block, int republished) {}
+    public record Saved(ReusableBlock block, int republished) {}
 
     /**
      * {@link #save} of an existing block, with the number of items it republishes.
@@ -67,17 +67,14 @@ public class ReusableBlockService {
     @Transactional
     public Saved update(long ref, String title, String content, LocalDateTime expectedModifiedAt, ItemService.Actor a) {
         var r = editable(ref, a);
-        if (!Objects.equals(r.getModifiedAt(), expectedModifiedAt)) {
+        if (!Objects.equals(r.modifiedAt(), expectedModifiedAt)) {
             throw new ItemService.Refused(409, "conflict", null);
         }
         // the items showing the block are published with the new content
         html.block(a.role(), ref, title, content, () -> blocks.itemsUsing(withContainers(ref)));
         guard.close();
-        Optional.ofNullable(title).ifPresent(r::setTitle);
-        Optional.ofNullable(content).ifPresent(r::setContent);
-        r.setModifiedAt(now());
-        r.update();
-        revisions.saved(OBJECT_TYPE, ref, r.getTitle(), r.getContent(), "blocks", null, a.userId());
+        r = blocks.update(r.id(), title != null ? title : r.title(), content != null ? content : r.content(), now());
+        revisions.saved(OBJECT_TYPE, ref, r.title(), r.content(), "blocks", null, a.userId());
         revisions.deleteAutosave(OBJECT_TYPE, ref, a.userId());
         // the publish run drops the queued items' fragments (SitePublisher.run: fragments.delete(batch.items()))
         var published = blocks
@@ -106,15 +103,15 @@ public class ReusableBlockService {
      */
     @Transactional
     public Saved restoreRevision(long ref, long revisionId, ItemService.Actor a) {
-        var current = editable(ref, a).getModifiedAt();
+        var current = editable(ref, a).modifiedAt();
         var rev = revisions
             .find(revisionId)
-            .filter(v -> OBJECT_TYPE.equals(v.getObjectType()) && v.getObjectId() == ref && !v.getAutosave())
+            .filter(v -> OBJECT_TYPE.equals(v.objectType()) && v.objectId() == ref && !v.autosave())
             .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
-        return update(ref, rev.getTitle(), rev.getBody(), current, a);
+        return update(ref, rev.title(), rev.body(), current, a);
     }
 
-    private ReusableBlockRecord create(String title, String content, ItemService.Actor a) {
+    private ReusableBlock create(String title, String content, ItemService.Actor a) {
         if (!Capabilities.canCreateBlock(a.role())) {
             throw forbidden();
         }
@@ -127,9 +124,9 @@ public class ReusableBlockService {
                 now()
         );
         // items may already show the new public id; a refusal rolls the insert back
-        var ref = r.getSourceId();
+        var ref = r.sourceId();
         html.block(a.role(), ref, title, content, () -> blocks.itemsUsing(withContainers(ref)));
-        revisions.saved(OBJECT_TYPE, r.getSourceId(), r.getTitle(), r.getContent(), "blocks", null, a.userId());
+        revisions.saved(OBJECT_TYPE, r.sourceId(), r.title(), r.content(), "blocks", null, a.userId());
         return r;
     }
 
@@ -140,7 +137,7 @@ public class ReusableBlockService {
         var contains = blocks
             .all()
             .stream()
-            .collect(Collectors.toMap(b -> b.getSourceId(), b -> ReusableBlockRepository.refsIn(b.getContent())));
+            .collect(Collectors.toMap(b -> b.sourceId(), b -> ReusableBlockRepository.refsIn(b.content())));
         var affected = new HashSet<>(Set.of(ref));
         var frontier = Set.of(ref);
         for (int depth = 0; depth < BlockRenderer.MAX_DEPTH && !frontier.isEmpty(); depth++) {
@@ -156,7 +153,7 @@ public class ReusableBlockService {
         return affected;
     }
 
-    private ReusableBlockRecord editable(long ref, ItemService.Actor a) {
+    private ReusableBlock editable(long ref, ItemService.Actor a) {
         // the lock keeps two saves (or autosaves) of one block from interleaving
         var r = blocks
             .lock(ref)

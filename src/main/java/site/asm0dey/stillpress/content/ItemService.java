@@ -1,17 +1,10 @@
 package site.asm0dey.stillpress.content;
 
-import static org.jooq.impl.DSL.concat;
-import static org.jooq.impl.DSL.max;
-import static org.jooq.impl.DSL.select;
-import static org.jooq.impl.DSL.val;
-import static site.asm0dey.stillpress.db.Tables.ITEM;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import module java.base;
-import org.jooq.DSLContext;
-import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.db.tables.records.ItemRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Item;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.mail.ReviewNotifications;
 import site.asm0dey.stillpress.publish.Jobs;
@@ -19,7 +12,6 @@ import site.asm0dey.stillpress.publish.PublishQueue;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.FragmentRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
-import site.asm0dey.stillpress.store.PublicIds;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TermRepository;
 
@@ -30,7 +22,6 @@ import site.asm0dey.stillpress.store.TermRepository;
 @ApplicationScoped
 public class ItemService {
     private static final Set<String> STATUSES = Set.of("draft", "pending", "future", "publish", "private");
-    private final DSLContext db;
     private final SettingRepository settings;
     private final ItemRepository items;
     private final TermRepository terms;
@@ -45,7 +36,6 @@ public class ItemService {
     private final ReviewNotifications reviewNotifications;
 
     ItemService(
-            DSLContext db,
             SettingRepository settings,
             ItemRepository items,
             TermRepository terms,
@@ -59,7 +49,6 @@ public class ItemService {
             HtmlCheck html,
             ReviewNotifications reviewNotifications
     ) {
-        this.db = db;
         this.settings = settings;
         this.items = items;
         this.terms = terms;
@@ -135,57 +124,14 @@ public class ItemService {
         }
     }
 
-    @Transactional
-    public ItemRecord create(String type, long authorId) {
-        guard.close();
-        return PublicIds.insertUntilFree(() -> insertNew(type, authorId));
-    }
-
-    /**
-     * WordPress-style public id: one past the highest, imported ids included, computed in the insert itself.
-     */
     // the lookbehind keeps the regex linear
     @SuppressWarnings("java:S8786")
-    private Optional<ItemRecord> insertNew(String type, long authorId) {
-        var next = DSL.<Long>coalesce(max(ITEM.SOURCE_ID), 0L).plus(1);
+    @Transactional
+    public Item create(String type, long authorId) {
+        guard.close();
         var home = settings.get("home_url").orElse("").replaceAll("(?<!/)/+$", "");
         var commentStatus = settings.get("default_comment_status").orElse("open");
-        return db
-            .insertInto(
-                    ITEM,
-                    ITEM.TYPE,
-                    ITEM.STATUS,
-                    ITEM.TITLE,
-                    ITEM.BODY,
-                    ITEM.BODY_FORMAT,
-                    ITEM.EXCERPT,
-                    ITEM.AUTHOR_ID,
-                    ITEM.MODIFIED_AT,
-                    ITEM.COMMENT_STATUS,
-                    ITEM.MENU_ORDER,
-                    ITEM.SOURCE_ID,
-                    ITEM.GUID
-            )
-            .select(select(
-                    val(type),
-                    val("draft"),
-                    val(""),
-                    val(""),
-                    val("blocks"),
-                    val(""),
-                    val(authorId),
-                    val(now()),
-                    val(commentStatus),
-                    val(0),
-                    next,
-                    concat(val(home + "/?p="), next.cast(String.class))
-            )
-                .from(ITEM)
-            )
-            .onConflict(ITEM.SOURCE_ID)
-            .doNothing()
-            .returning()
-            .fetchOptional();
+        return items.create(type, authorId, home, commentStatus, now());
     }
 
     /**
@@ -193,11 +139,11 @@ public class ItemService {
      * {@code expectedModifiedAt}, 403 past the actor's capabilities, 400 for invalid values.
      */
     @Transactional
-    public ItemRecord update(long id, Update u, Actor a) {
+    public Item update(long id, Update u, Actor a) {
         var r = items
             .lock(id)
             .orElseThrow(() -> new Refused(404, "not_found", null));
-        if (!Objects.equals(r.getModifiedAt(), u.expectedModifiedAt())) {
+        if (!Objects.equals(r.modifiedAt(), u.expectedModifiedAt())) {
             throw new Refused(409, "conflict", null);
         }
         if (!Capabilities.canEdit(a.role(), a.userId(), r)) {
@@ -206,34 +152,35 @@ public class ItemService {
         // the state as stored after this save, so a status- or format-only change is judged too
         html.item(
                 a.role(),
-                or(u.title(), r.getTitle()),
-                or(u.body(), r.getBody()),
-                or(u.bodyFormat(), r.getBodyFormat()),
-                or(u.excerpt(), r.getExcerpt())
+                or(u.title(), r.title()),
+                or(u.body(), r.body()),
+                or(u.bodyFormat(), r.bodyFormat()),
+                or(u.excerpt(), r.excerpt())
         );
         guard.close();
-        var wasPublished = "publish".equals(r.getStatus());
-        var wasPending = "pending".equals(r.getStatus());
+        var wasPublished = "publish".equals(r.status());
+        var wasPending = "pending".equals(r.status());
         var now = now();
+        var publishedAt = r.publishedAt();
+        var publishedLocal = r.publishedLocal();
         var dateChanged = u.localDate() != null && !u.localDate().equals(permalinks.localDate(r));
         if (dateChanged) {
-            r.setPublishedLocal(u.localDate());
-            r.setPublishedAt(u
+            publishedLocal = u.localDate();
+            publishedAt = u
                 .localDate()
                 .atZone(permalinks.zone())
                 .withZoneSameInstant(ZoneOffset.UTC)
-                .toLocalDateTime()
-            );
+                .toLocalDateTime();
         }
-        var status = Objects.requireNonNullElse(u.status(), r.getStatus());
+        var status = Objects.requireNonNullElse(u.status(), r.status());
         if (!STATUSES.contains(status)) {
             throw invalid("status");
         }
-        if ("publish".equals(status) && r.getPublishedAt() == null) {
-            r.setPublishedAt(now);
-            r.setPublishedLocal(permalinks.localDate(r));
+        if ("publish".equals(status) && publishedAt == null) {
+            publishedAt = now;
+            publishedLocal = permalinks.localDate(publishedLocal, publishedAt);
         }
-        var future = r.getPublishedAt() != null && r.getPublishedAt().isAfter(now);
+        var future = publishedAt != null && publishedAt.isAfter(now);
         if ("publish".equals(status) && future) {
             status = "future";
         } else if ("future".equals(status) && !future) {
@@ -242,7 +189,7 @@ public class ItemService {
         if (!Capabilities.canSetStatus(a.role(), a.userId(), r, status)) {
             throw forbidden();
         }
-        var authorChanged = u.authorId() != null && !u.authorId().equals(r.getAuthorId());
+        var authorChanged = u.authorId() != null && !u.authorId().equals(r.authorId());
         if (authorChanged) {
             if (!Capabilities.canReassign(a.role())) {
                 throw forbidden();
@@ -250,7 +197,6 @@ public class ItemService {
             if (authors.findById(u.authorId()).isEmpty()) {
                 throw invalid("authorId");
             }
-            r.setAuthorId(u.authorId());
         }
         if (u.commentStatus() != null && !Set.of("open", "closed").contains(u.commentStatus())) {
             throw invalid("commentStatus");
@@ -259,26 +205,18 @@ public class ItemService {
             throw invalid("bodyFormat");
         }
         // null keeps the parent, 0 clears it
-        var parent = u.parentId() == null ? r.getParentId() : u.parentId() == 0 ? null : u.parentId();
-        var parentChanged = "page".equals(r.getType()) && !Objects.equals(parent, r.getParentId());
+        var parent = u.parentId() == null ? r.parentId() : u.parentId() == 0 ? null : u.parentId();
+        var parentChanged = "page".equals(r.type()) && !Objects.equals(parent, r.parentId());
         if (parentChanged
                 && parent != null
-                && (parent == id || items.find(parent).filter(p -> "page".equals(p.getType())).isEmpty())) {
+                && (parent == id || items.find(parent).filter(p -> "page".equals(p.type())).isEmpty())) {
             throw invalid("parentId");
         }
-        Optional.ofNullable(u.title()).ifPresent(r::setTitle);
-        Optional.ofNullable(u.body()).ifPresent(r::setBody);
-        Optional.ofNullable(u.bodyFormat()).ifPresent(r::setBodyFormat);
-        Optional.ofNullable(u.excerpt()).ifPresent(r::setExcerpt);
-        Optional.ofNullable(u.commentStatus()).ifPresent(r::setCommentStatus);
-        Optional.ofNullable(u.menuOrder()).ifPresent(r::setMenuOrder);
-        if (parentChanged) {
-            r.setParentId(parent);
-        }
-        var slugChanged = u.slug() != null && !u.slug().equals(r.getSlug());
+        var slug = r.slug();
+        var slugChanged = u.slug() != null && !u.slug().equals(r.slug());
         if (slugChanged) {
             var base = Slugs.title(u.slug());
-            r.setSlug(base.isEmpty() ? null : permalinks.uniqueSlug(r, base));
+            slug = base.isEmpty() ? null : permalinks.uniqueSlug(r, base);
         }
         var categoriesChanged = false;
         if (u.categories() != null) {
@@ -289,9 +227,26 @@ public class ItemService {
         if (u.tags() != null) {
             terms.setForItem(id, "post_tag", u.tags());
         }
-        r.setStatus(status);
+        var saved = items.update(
+                id,
+                new ItemRepository.Edit(
+                        status,
+                        or(u.title(), r.title()),
+                        slug,
+                        or(u.body(), r.body()),
+                        or(u.bodyFormat(), r.bodyFormat()),
+                        or(u.excerpt(), r.excerpt()),
+                        authorChanged ? u.authorId() : r.authorId(),
+                        parentChanged ? parent : r.parentId(),
+                        publishedAt,
+                        publishedLocal,
+                        or(u.commentStatus(), r.commentStatus()),
+                        or(u.menuOrder(), r.menuOrder()),
+                        now
+                )
+        );
         if ("publish".equals(status)) {
-            categoriesChanged |= permalinks.ensureCategory(r);
+            categoriesChanged |= permalinks.ensureCategory(saved);
         }
         // the permalink is fixed at first publish and moves only with what it is built from
         var pathChanged = slugChanged
@@ -299,15 +254,13 @@ public class ItemService {
                 || parentChanged
                 || categoriesChanged && permalinks.uses("%category%")
                 || authorChanged && permalinks.uses("%author%");
-        if ("publish".equals(status) && (r.getPermalink() == null || pathChanged)) {
-            permalinks.assignPermalink(r);
+        if ("publish".equals(status) && (saved.permalink() == null || pathChanged)) {
+            saved = permalinks.assignPermalink(saved);
         }
-        r.setModifiedAt(now);
-        r.update();
         if ("pending".equals(status) && !wasPending) {
-            reviewNotifications.pendingReview(r.getId(), r.getTitle(), a.userId());
+            reviewNotifications.pendingReview(saved.id(), saved.title(), a.userId());
         }
-        revisions.saved("item", id, r.getTitle(), r.getBody(), r.getBodyFormat(), r.getExcerpt(), a.userId());
+        revisions.saved("item", id, saved.title(), saved.body(), saved.bodyFormat(), saved.excerpt(), a.userId());
         revisions.deleteAutosave("item", id, a.userId());
         fragments.delete(List.of(id));
         if ("publish".equals(status) || wasPublished) {
@@ -315,19 +268,19 @@ public class ItemService {
             jobs.requestPublish();
         }
         if ("future".equals(status)) {
-            jobs.scheduleGoLive(id, r.getPublishedAt().toInstant(ZoneOffset.UTC));
+            jobs.scheduleGoLive(id, saved.publishedAt().toInstant(ZoneOffset.UTC));
         }
-        return r;
+        return saved;
     }
 
     /**
      * An ordinary {@link #update} with the revision's title, body and excerpt and the item's current status.
      */
     @Transactional
-    public ItemRecord restoreRevision(long id, long revisionId, Actor a) {
+    public Item restoreRevision(long id, long revisionId, Actor a) {
         var rev = revisions
             .find(revisionId)
-            .filter(v -> "item".equals(v.getObjectType()) && v.getObjectId() == id && !v.getAutosave())
+            .filter(v -> "item".equals(v.objectType()) && v.objectId() == id && !v.autosave())
             .orElseThrow(() -> new Refused(404, "not_found", null));
         var r = items
             .find(id)
@@ -335,20 +288,20 @@ public class ItemService {
         return update(
                 id,
                 new Update(
-                        rev.getTitle(),
+                        rev.title(),
                         null,
-                        rev.getBody(),
-                        rev.getBodyFormat(),
-                        rev.getExcerpt(),
-                        r.getStatus(),
-                        null,
-                        null,
+                        rev.body(),
+                        rev.bodyFormat(),
+                        rev.excerpt(),
+                        r.status(),
                         null,
                         null,
                         null,
                         null,
                         null,
-                        r.getModifiedAt()
+                        null,
+                        null,
+                        r.modifiedAt()
                 ),
                 a
         );
@@ -364,7 +317,7 @@ public class ItemService {
             throw forbidden();
         }
         // the preview renders an autosave in the item's stored format
-        html.item(a.role(), title, body, r.getBodyFormat(), excerpt);
+        html.item(a.role(), title, body, r.bodyFormat(), excerpt);
         guard.close();
         revisions.autosave("item", id, a.userId(), title, body, excerpt);
     }
@@ -389,18 +342,16 @@ public class ItemService {
         if (!Capabilities.canTrash(a.role(), a.userId(), r)) {
             throw forbidden();
         }
-        if (trash == "trash".equals(r.getStatus())) {
+        if (trash == "trash".equals(r.status())) {
             throw invalid("status");
         }
         if (!trash) {
             // reusable blocks it shows may have changed while it was in the trash
-            html.item(a.role(), r.getTitle(), r.getBody(), r.getBodyFormat(), r.getExcerpt());
+            html.item(a.role(), r.title(), r.body(), r.bodyFormat(), r.excerpt());
         }
         guard.close();
-        var wasPublished = "publish".equals(r.getStatus());
-        r.setStatus(trash ? "trash" : "draft");
-        r.setModifiedAt(now());
-        r.update();
+        var wasPublished = "publish".equals(r.status());
+        items.setStatus(id, trash ? "trash" : "draft", now());
         if (wasPublished) {
             fragments.delete(List.of(id));
             queue.item(id);

@@ -253,7 +253,7 @@ class IncrementalPublishTest {
                 case "default category" -> {
                     var r = items.create("post", admin);
                     items.update(
-                            r.getId(),
+                            r.id(),
                             new ItemService.Update(
                                     "Fresh",
                                     null,
@@ -268,7 +268,7 @@ class IncrementalPublishTest {
                                     null,
                                     null,
                                     null,
-                                    r.getModifiedAt()
+                                    r.modifiedAt()
                             ),
                             actor
                     );
@@ -278,7 +278,7 @@ class IncrementalPublishTest {
                 case "restore" -> items.restore(post, actor);
                 case "block save" -> {
                     var b = blocks.find(6001L).orElseThrow();
-                    blockService.save(6001L, b.getTitle(), "<p>Changed block</p>", b.getModifiedAt(), actor);
+                    blockService.save(6001L, b.title(), "<p>Changed block</p>", b.modifiedAt(), actor);
                 }
                 default -> throw new IllegalArgumentException(change);
             }

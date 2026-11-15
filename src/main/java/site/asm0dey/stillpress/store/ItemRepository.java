@@ -1,8 +1,12 @@
 package site.asm0dey.stillpress.store;
 
+import static org.jooq.impl.DSL.concat;
 import static org.jooq.impl.DSL.field;
+import static org.jooq.impl.DSL.max;
 import static org.jooq.impl.DSL.notExists;
+import static org.jooq.impl.DSL.select;
 import static org.jooq.impl.DSL.selectOne;
+import static org.jooq.impl.DSL.val;
 import static site.asm0dey.stillpress.db.Tables.*;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
@@ -10,7 +14,7 @@ import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Records;
 import org.jooq.impl.DSL;
-import site.asm0dey.stillpress.db.tables.records.ItemRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Item;
 
 @ApplicationScoped
 public class ItemRepository {
@@ -23,12 +27,12 @@ public class ItemRepository {
     /**
      * Published, non-password-protected posts and pages, newest first.
      */
-    public List<ItemRecord> findPublished() {
+    public List<Item> findPublished() {
         return db
             .selectFrom(ITEM)
             .where(ITEM.STATUS.eq("publish"), ITEM.TYPE.in("post", "page"), ITEM.PASSWORD_PROTECTED.isFalse())
             .orderBy(ITEM.PUBLISHED_AT.desc())
-            .fetch();
+            .fetchInto(Item.class);
     }
 
     /**
@@ -42,8 +46,8 @@ public class ItemRepository {
             .fetch(ITEM.ID);
     }
 
-    public Optional<ItemRecord> findByPermalink(String decodedPath) {
-        return db.selectFrom(ITEM).where(ITEM.PERMALINK.eq(decodedPath)).fetchOptional();
+    public Optional<Item> findByPermalink(String decodedPath) {
+        return db.selectFrom(ITEM).where(ITEM.PERMALINK.eq(decodedPath)).fetchOptionalInto(Item.class);
     }
 
     public int count() {
@@ -112,12 +116,13 @@ public class ItemRepository {
     /**
      * Full records for the given ids, in the order of {@code ids}.
      */
-    public List<ItemRecord> findByIds(List<Long> ids) {
-        var byId = new HashMap<Long, ItemRecord>();
+    public List<Item> findByIds(List<Long> ids) {
+        var byId = new HashMap<Long, Item>();
         db
             .selectFrom(ITEM)
             .where(ITEM.ID.in(ids))
-            .forEach(r -> byId.put(r.getId(), r));
+            .fetchInto(Item.class)
+            .forEach(r -> byId.put(r.id(), r));
         return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
     }
 
@@ -200,11 +205,130 @@ public class ItemRepository {
     /**
      * Locks the row for the rest of the transaction, so concurrent saves of one item run one after the other.
      */
-    public Optional<ItemRecord> lock(long id) {
-        return db.selectFrom(ITEM).where(ITEM.ID.eq(id)).forUpdate().fetchOptional();
+    public Optional<Item> lock(long id) {
+        return db.selectFrom(ITEM).where(ITEM.ID.eq(id)).forUpdate().fetchOptionalInto(Item.class);
     }
 
-    public Optional<ItemRecord> find(long id) {
-        return db.selectFrom(ITEM).where(ITEM.ID.eq(id)).fetchOptional();
+    public Optional<Item> find(long id) {
+        return db.selectFrom(ITEM).where(ITEM.ID.eq(id)).fetchOptionalInto(Item.class);
+    }
+
+    /**
+     * A new draft of {@code type} with the next public id; {@code home} prefixes its {@code ?p=} guid.
+     */
+    public Item create(String type, long authorId, String home, String commentStatus, LocalDateTime now) {
+        return PublicIds.insertUntilFree(() -> insertNew(type, authorId, home, commentStatus, now));
+    }
+
+    /**
+     * WordPress-style public id: one past the highest, imported ids included, computed in the insert itself.
+     */
+    private Optional<Item> insertNew(String type, long authorId, String home, String commentStatus, LocalDateTime now) {
+        var next = DSL.<Long>coalesce(max(ITEM.SOURCE_ID), 0L).plus(1);
+        return db
+            .insertInto(
+                    ITEM,
+                    ITEM.TYPE,
+                    ITEM.STATUS,
+                    ITEM.TITLE,
+                    ITEM.BODY,
+                    ITEM.BODY_FORMAT,
+                    ITEM.EXCERPT,
+                    ITEM.AUTHOR_ID,
+                    ITEM.MODIFIED_AT,
+                    ITEM.COMMENT_STATUS,
+                    ITEM.MENU_ORDER,
+                    ITEM.SOURCE_ID,
+                    ITEM.GUID
+            )
+            .select(select(
+                    val(type),
+                    val("draft"),
+                    val(""),
+                    val(""),
+                    val("blocks"),
+                    val(""),
+                    val(authorId),
+                    val(now),
+                    val(commentStatus),
+                    val(0),
+                    next,
+                    concat(val(home + "/?p="), next.cast(String.class))
+            )
+                .from(ITEM)
+            )
+            .onConflict(ITEM.SOURCE_ID)
+            .doNothing()
+            .returning()
+            .fetchOptionalInto(Item.class);
+    }
+
+    /**
+     * What an editor's save writes; the permalink is set apart, by {@link #setPath}.
+     */
+    public record Edit(
+            String status,
+            String title,
+            String slug,
+            String body,
+            String bodyFormat,
+            String excerpt,
+            Long authorId,
+            Long parentId,
+            LocalDateTime publishedAt,
+            LocalDateTime publishedLocal,
+            String commentStatus,
+            Integer menuOrder,
+            LocalDateTime modifiedAt
+    ) {}
+
+    public Item update(long id, Edit e) {
+        return db
+            .update(ITEM)
+            .set(ITEM.STATUS, e.status())
+            .set(ITEM.TITLE, e.title())
+            .set(ITEM.SLUG, e.slug())
+            .set(ITEM.BODY, e.body())
+            .set(ITEM.BODY_FORMAT, e.bodyFormat())
+            .set(ITEM.EXCERPT, e.excerpt())
+            .set(ITEM.AUTHOR_ID, e.authorId())
+            .set(ITEM.PARENT_ID, e.parentId())
+            .set(ITEM.PUBLISHED_AT, e.publishedAt())
+            .set(ITEM.PUBLISHED_LOCAL, e.publishedLocal())
+            .set(ITEM.COMMENT_STATUS, e.commentStatus())
+            .set(ITEM.MENU_ORDER, e.menuOrder())
+            .set(ITEM.MODIFIED_AT, e.modifiedAt())
+            .where(ITEM.ID.eq(id))
+            .returning()
+            .fetchSingleInto(Item.class);
+    }
+
+    public Item setPath(long id, String slug, String permalink) {
+        return db
+            .update(ITEM)
+            .set(ITEM.SLUG, slug)
+            .set(ITEM.PERMALINK, permalink)
+            .where(ITEM.ID.eq(id))
+            .returning()
+            .fetchSingleInto(Item.class);
+    }
+
+    public void setStatus(long id, String status, LocalDateTime modifiedAt) {
+        db.update(ITEM).set(ITEM.STATUS, status).set(ITEM.MODIFIED_AT, modifiedAt).where(ITEM.ID.eq(id)).execute();
+    }
+
+    /**
+     * WordPress's {@code wp_unique_post_slug}: unique among items of the same type, whatever their date.
+     */
+    public boolean slugTaken(String type, String slug, Long exceptId) {
+        return db.fetchExists(ITEM, ITEM.TYPE.eq(type), ITEM.SLUG.eq(slug), other(exceptId));
+    }
+
+    public boolean permalinkTaken(String permalink, Long exceptId) {
+        return db.fetchExists(ITEM, ITEM.PERMALINK.eq(permalink), other(exceptId));
+    }
+
+    private static Condition other(Long exceptId) {
+        return exceptId == null ? ITEM.ID.isNotNull() : ITEM.ID.ne(exceptId);
     }
 }

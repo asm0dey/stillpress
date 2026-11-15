@@ -11,7 +11,7 @@ import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.blocks.Block;
 import site.asm0dey.stillpress.blocks.BlockParser;
-import site.asm0dey.stillpress.db.tables.records.ReusableBlockRecord;
+import site.asm0dey.stillpress.db.tables.pojos.ReusableBlock;
 
 /**
  * Reusable blocks, addressed everywhere (REST, {@code wp:block {"ref":N}}) by their WordPress post id, {@code source_id}.
@@ -40,29 +40,47 @@ public class ReusableBlockRepository {
             .fetchOptional(REUSABLE_BLOCK.CONTENT);
     }
 
-    public List<ReusableBlockRecord> all() {
-        return db.selectFrom(REUSABLE_BLOCK).orderBy(REUSABLE_BLOCK.SOURCE_ID).fetch();
+    public List<ReusableBlock> all() {
+        return db.selectFrom(REUSABLE_BLOCK).orderBy(REUSABLE_BLOCK.SOURCE_ID).fetchInto(ReusableBlock.class);
     }
 
-    public Optional<ReusableBlockRecord> find(long ref) {
-        return db.selectFrom(REUSABLE_BLOCK).where(REUSABLE_BLOCK.SOURCE_ID.eq(ref)).fetchOptional();
+    public Optional<ReusableBlock> find(long ref) {
+        return db
+            .selectFrom(REUSABLE_BLOCK)
+            .where(REUSABLE_BLOCK.SOURCE_ID.eq(ref))
+            .fetchOptionalInto(ReusableBlock.class);
     }
 
     /**
      * Locks the row for the rest of the transaction, so concurrent saves of one block run one after the other.
      */
-    public Optional<ReusableBlockRecord> lock(long ref) {
-        return db.selectFrom(REUSABLE_BLOCK).where(REUSABLE_BLOCK.SOURCE_ID.eq(ref)).forUpdate().fetchOptional();
+    public Optional<ReusableBlock> lock(long ref) {
+        return db
+            .selectFrom(REUSABLE_BLOCK)
+            .where(REUSABLE_BLOCK.SOURCE_ID.eq(ref))
+            .forUpdate()
+            .fetchOptionalInto(ReusableBlock.class);
     }
 
-    public ReusableBlockRecord create(String title, String content, long authorId, LocalDateTime now) {
+    public ReusableBlock update(long id, String title, String content, LocalDateTime modifiedAt) {
+        return db
+            .update(REUSABLE_BLOCK)
+            .set(REUSABLE_BLOCK.TITLE, title)
+            .set(REUSABLE_BLOCK.CONTENT, content)
+            .set(REUSABLE_BLOCK.MODIFIED_AT, modifiedAt)
+            .where(REUSABLE_BLOCK.ID.eq(id))
+            .returning()
+            .fetchSingleInto(ReusableBlock.class);
+    }
+
+    public ReusableBlock create(String title, String content, long authorId, LocalDateTime now) {
         return PublicIds.insertUntilFree(() -> insertNew(title, content, authorId, now));
     }
 
     /**
      * WordPress-style public id: one past the highest, imported ids included, computed in the insert itself.
      */
-    private Optional<ReusableBlockRecord> insertNew(String title, String content, long authorId, LocalDateTime now) {
+    private Optional<ReusableBlock> insertNew(String title, String content, long authorId, LocalDateTime now) {
         var next = DSL.<Long>coalesce(max(REUSABLE_BLOCK.SOURCE_ID), 0L).plus(1);
         return db
             .insertInto(
@@ -77,7 +95,7 @@ public class ReusableBlockRepository {
             .onConflict(REUSABLE_BLOCK.SOURCE_ID)
             .doNothing()
             .returning()
-            .fetchOptional();
+            .fetchOptionalInto(ReusableBlock.class);
     }
 
     /**

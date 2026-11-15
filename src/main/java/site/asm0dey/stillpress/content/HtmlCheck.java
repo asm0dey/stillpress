@@ -56,9 +56,9 @@ public class HtmlCheck {
         var body = new ArrayList<>(body(content, "blocks", lookup));
         if (content != null && body.isEmpty()) {
             for (var i : items.findByIds(uses.get().stream().map(ReusableBlockRepository.Use::itemId).toList())) {
-                var where = "in \"" + Objects.requireNonNullElse(i.getTitle(), "") + "\": ";
-                var owner = editorOwned(i.getAuthorId()) ? EDITORS_ITEM : "";
-                rendered(i.getBody(), i.getBodyFormat(), lookup).forEach(v -> body.add(where + v + owner));
+                var where = "in \"" + Objects.requireNonNullElse(i.title(), "") + "\": ";
+                var owner = editorOwned(i.authorId()) ? EDITORS_ITEM : "";
+                rendered(i.body(), i.bodyFormat(), lookup).forEach(v -> body.add(where + v + owner));
             }
         }
         var found = new LinkedHashMap<String, List<String>>();
@@ -124,7 +124,7 @@ public class HtmlCheck {
     private boolean editorOwnedBlock(long ref) {
         return blocks
             .find(ref)
-            .map(b -> editorOwned(b.getAuthorId()))
+            .map(b -> editorOwned(b.authorId()))
             .orElse(false);
     }
 

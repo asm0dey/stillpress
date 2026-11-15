@@ -53,7 +53,7 @@ public class RedirectsResource {
         }
         if (items
             .findByPermalink(n.from())
-            .filter(i -> "publish".equals(i.getStatus()))
+            .filter(i -> "publish".equals(i.status()))
             .isPresent()) {
             return Response.status(409).entity(Map.of("error", "shadows_item", "field", "from")).build();
         }

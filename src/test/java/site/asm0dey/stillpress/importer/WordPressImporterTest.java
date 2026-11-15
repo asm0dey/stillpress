@@ -69,7 +69,7 @@ class WordPressImporterTest {
         assertThat(report.unknownBlocks()).isEmpty();
         assertThat(report.unknownShortcodes()).isEmpty();
         assertThat(items.findByPermalink(MONTH)).isPresent();
-        assertThat(items.findByPermalink(MONTH).orElseThrow().getBody()).doesNotContain("wp-content/uploads");
+        assertThat(items.findByPermalink(MONTH).orElseThrow().body()).doesNotContain("wp-content/uploads");
         assertThat(redirects.find("?p=5994").orElseThrow().to()).isEqualTo(MONTH);
         assertThat(redirects.find("?p=102")).as("password-protected target").isEmpty();
         assertThat(redirects.find("?p=101")).as("draft").isEmpty();
@@ -89,25 +89,25 @@ class WordPressImporterTest {
         assertThat(settings.get("title")).contains("Блог");
         assertThat(settings.get("posts_per_page")).contains("10");
         var month = items.findByPermalink(MONTH).orElseThrow();
-        assertThat(month.getBodyFormat()).isEqualTo("blocks");
-        assertThat(month.getGuid()).isEqualTo("https://blog.example.ru/?p=5994");
-        assertThat(month.getBody()).contains("/media/2023/01/");
-        assertThat(comments.approvedFor(month.getId())).hasSize(2);
-        assertThat(comments.approvedFor(month.getId()).get(1).getParentId())
-            .isEqualTo(comments.approvedFor(month.getId()).get(0).getId());
-        assertThat(terms.forItem(month.getId()))
+        assertThat(month.bodyFormat()).isEqualTo("blocks");
+        assertThat(month.guid()).isEqualTo("https://blog.example.ru/?p=5994");
+        assertThat(month.body()).contains("/media/2023/01/");
+        assertThat(comments.approvedFor(month.id())).hasSize(2);
+        assertThat(comments.approvedFor(month.id()).get(1).getParentId())
+            .isEqualTo(comments.approvedFor(month.id()).get(0).getId());
+        assertThat(terms.forItem(month.id()))
             .extracting(r -> r.slug())
             .containsExactlyInAnyOrder("travel", "europe", "kids");
         assertThat(db.fetchValue(TERM.PARENT_ID, TERM.SLUG.eq("europe")))
             .isEqualTo(db.fetchValue(TERM.ID, TERM.SLUG.eq("travel")));
         var qa = items.findByPermalink("/2020/05/10/qa/").orElseThrow();
-        assertThat(qa.getBodyFormat()).isEqualTo("classic");
-        assertThat(db.fetchValue(ITEM.PARENT_ID, ITEM.SOURCE_ID.eq(7L))).isEqualTo(qa.getId());
+        assertThat(qa.bodyFormat()).isEqualTo("classic");
+        assertThat(db.fetchValue(ITEM.PARENT_ID, ITEM.SOURCE_ID.eq(7L))).isEqualTo(qa.id());
         assertThat(db.fetchValue(ITEM.PERMALINK, ITEM.SOURCE_ID.eq(101L))).isNull();
         assertThat(blocks.content(6001L)).hasValueSatisfying(c -> assertThat(c).contains("Подпишитесь!"));
         assertThat(db.fetchValue(COMMENT.STATUS, COMMENT.SOURCE_ID.eq(3L))).isEqualTo("spam");
         assertThat(items.findPublished())
-            .extracting(r -> r.getSourceId())
+            .extracting(r -> r.sourceId())
             .containsExactlyInAnyOrder(5994L, 103L, 100L, 2L);
         assertThat(db.fetchValue(ITEM.PUBLISHED_LOCAL, ITEM.SOURCE_ID.eq(103L))).isEqualTo(LocalDateTime.of(
                 2023,
@@ -161,7 +161,7 @@ class WordPressImporterTest {
         assertThat(mama.displayName()).as("filled where null").isEqualTo("Мама");
         assertThat(mama.sourceId()).isEqualTo(1L);
         assertThat(users.findByLoginOrEmail("papa").orElseThrow().role()).isEqualTo("author");
-        assertThat(items.findByPermalink(MONTH).orElseThrow().getAuthorId()).isNotNull();
+        assertThat(items.findByPermalink(MONTH).orElseThrow().authorId()).isNotNull();
     }
 
     @Test
@@ -209,7 +209,7 @@ class WordPressImporterTest {
     void missingMediaReportedNotFatal() throws Exception {
         var report = importer.importWxr(sample());
         assertThat(report.missingMedia()).anyMatch(u -> u.endsWith("/2020/05/c.jpg"));
-        assertThat(items.findByPermalink("/2020/05/10/qa/").orElseThrow().getBody()).contains("/2020/05/c.jpg");
+        assertThat(items.findByPermalink("/2020/05/10/qa/").orElseThrow().body()).contains("/2020/05/c.jpg");
     }
 
     @Test
@@ -223,7 +223,7 @@ class WordPressImporterTest {
             .anyMatch(u -> u.endsWith("/2020/05/c.jpg"));
         assertThat(report.missingMedia()).doesNotContainAnyElementsOf(report.skippedMedia());
         assertThat(report.missingMedia()).noneMatch(u -> u.endsWith("/2020/05/c.jpg"));
-        assertThat(items.findByPermalink("/2020/05/10/qa/").orElseThrow().getBody()).contains("/2020/05/c.jpg");
+        assertThat(items.findByPermalink("/2020/05/10/qa/").orElseThrow().body()).contains("/2020/05/c.jpg");
         assertThat(report.toText(1)).contains("Skipped media (limit 1)");
     }
 

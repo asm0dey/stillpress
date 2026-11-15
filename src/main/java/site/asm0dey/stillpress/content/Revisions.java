@@ -2,7 +2,7 @@ package site.asm0dey.stillpress.content;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
-import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Revision;
 import site.asm0dey.stillpress.store.RevisionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 
@@ -43,15 +43,15 @@ public class Revisions {
         repo.deleteAutosave(objectType, objectId, userId);
     }
 
-    public Optional<RevisionRecord> autosaveOf(String objectType, long objectId, long userId) {
+    public Optional<Revision> autosaveOf(String objectType, long objectId, long userId) {
         return repo.autosave(objectType, objectId, userId);
     }
 
-    public List<RevisionRecord> list(String objectType, long objectId) {
+    public List<Revision> list(String objectType, long objectId) {
         return repo.list(objectType, objectId);
     }
 
-    public Optional<RevisionRecord> find(long id) {
+    public Optional<Revision> find(long id) {
         return repo.find(id);
     }
 }

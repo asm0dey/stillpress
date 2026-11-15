@@ -10,7 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.account.Role;
-import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Revision;
 import site.asm0dey.stillpress.store.AuthorRepository;
 
 @QuarkusTest
@@ -40,19 +40,19 @@ class RevisionsTest {
         }
         var kept = revisions.list("item", 42);
         assertThat(kept).hasSize(25);
-        assertThat(kept.getFirst().getTitle()).isEqualTo("save 30");
-        assertThat(kept.getLast().getTitle()).isEqualTo("save 6");
+        assertThat(kept.getFirst().title()).isEqualTo("save 30");
+        assertThat(kept.getLast().title()).isEqualTo("save 6");
     }
 
     @Test
     void autosaveIsReplacedNotAccumulatedAndDeletedOnSave() {
         var item = items.create("post", userId);
-        revisions.autosave("item", item.getId(), userId, "one", "b1", "");
-        revisions.autosave("item", item.getId(), userId, "two", "b2", "");
+        revisions.autosave("item", item.id(), userId, "one", "b1", "");
+        revisions.autosave("item", item.id(), userId, "two", "b2", "");
         assertThat(db.fetchCount(REVISION, REVISION.AUTOSAVE.isTrue())).isEqualTo(1);
-        assertThat(revisions.autosaveOf("item", item.getId(), userId).map(RevisionRecord::getTitle)).contains("two");
+        assertThat(revisions.autosaveOf("item", item.id(), userId).map(Revision::title)).contains("two");
         items.update(
-                item.getId(),
+                item.id(),
                 new ItemService.Update(
                         "saved",
                         null,
@@ -67,17 +67,17 @@ class RevisionsTest {
                         null,
                         null,
                         null,
-                        item.getModifiedAt()
+                        item.modifiedAt()
                 ),
                 new ItemService.Actor(userId, Role.AUTHOR)
         );
-        assertThat(revisions.autosaveOf("item", item.getId(), userId)).isEmpty();
+        assertThat(revisions.autosaveOf("item", item.id(), userId)).isEmpty();
     }
 
     @Test
     void autosaveIsNotARevision() {
         revisions.autosave("item", 42, userId, "draft", "b", "");
         assertThat(revisions.list("item", 42)).isEmpty();
-        assertThat(revisions.autosaveOf("item", 42, userId).map(RevisionRecord::getTitle)).contains("draft");
+        assertThat(revisions.autosaveOf("item", 42, userId).map(Revision::title)).contains("draft");
     }
 }

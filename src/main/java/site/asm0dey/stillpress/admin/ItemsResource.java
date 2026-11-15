@@ -19,9 +19,9 @@ import site.asm0dey.stillpress.content.Capabilities;
 import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.content.Permalinker;
 import site.asm0dey.stillpress.content.Revisions;
-import site.asm0dey.stillpress.db.tables.records.ItemRecord;
-import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
 import site.asm0dey.stillpress.db.tables.pojos.Author;
+import site.asm0dey.stillpress.db.tables.pojos.Item;
+import site.asm0dey.stillpress.db.tables.pojos.Revision;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.TermRepository;
@@ -198,7 +198,7 @@ public class ItemsResource {
         viewable(id, a);
         return revisions
             .autosaveOf("item", id, a.userId())
-            .map(r -> new AutosaveView(r.getTitle(), r.getBody(), r.getExcerpt(), r.getCreatedAt()))
+            .map(r -> new AutosaveView(r.title(), r.body(), r.excerpt(), r.createdAt()))
             .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
     }
 
@@ -210,7 +210,7 @@ public class ItemsResource {
         return revisions
             .list("item", id)
             .stream()
-            .map(r -> new RevisionLine(r.getId(), names.get(r.getAuthorId()), r.getCreatedAt()))
+            .map(r -> new RevisionLine(r.id(), names.get(r.authorId()), r.createdAt()))
             .toList();
     }
 
@@ -220,16 +220,16 @@ public class ItemsResource {
         // shortcut: item revisions only; reusable blocks get theirs with the block editor
         var r = revisions
             .find(rid)
-            .filter(v -> "item".equals(v.getObjectType()) && !v.getAutosave())
+            .filter(v -> "item".equals(v.objectType()) && !v.autosave())
             .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
-        viewable(r.getObjectId(), actor());
+        viewable(r.objectId(), actor());
         return new RevisionView(
-                r.getId(),
-                r.getTitle(),
-                r.getBody(),
-                r.getExcerpt(),
-                r.getCreatedAt(),
-                authorNames().get(r.getAuthorId())
+                r.id(),
+                r.title(),
+                r.body(),
+                r.excerpt(),
+                r.createdAt(),
+                authorNames().get(r.authorId())
         );
     }
 
@@ -240,7 +240,7 @@ public class ItemsResource {
         return view(service.restoreRevision(id, rid, a), a);
     }
 
-    private ItemRecord viewable(long id, ItemService.Actor a) {
+    private Item viewable(long id, ItemService.Actor a) {
         var r = items
             .find(id)
             .orElseThrow(() -> new ItemService.Refused(404, "not_found", null));
@@ -250,36 +250,36 @@ public class ItemsResource {
         return r;
     }
 
-    private ItemView view(ItemRecord r, ItemService.Actor a) {
+    private ItemView view(Item r, ItemService.Actor a) {
         var byTaxonomy = terms
-            .forItem(r.getId())
+            .forItem(r.id())
             .stream()
             .collect(Collectors.groupingBy(t -> t.taxonomy(), Collectors.mapping(t -> t.id(), Collectors.toList())));
         var autosave = revisions
-            .autosaveOf("item", r.getId(), a.userId())
-            .map(RevisionRecord::getCreatedAt)
-            .filter(at -> r.getModifiedAt() == null || at.isAfter(r.getModifiedAt()))
+            .autosaveOf("item", r.id(), a.userId())
+            .map(Revision::createdAt)
+            .filter(at -> r.modifiedAt() == null || at.isAfter(r.modifiedAt()))
             .map(AutosaveRef::new)
             .orElse(null);
         return new ItemView(
-                r.getId(),
-                r.getType(),
-                r.getTitle(),
-                r.getSlug(),
-                r.getStatus(),
-                r.getBody(),
-                r.getBodyFormat(),
-                r.getExcerpt(),
+                r.id(),
+                r.type(),
+                r.title(),
+                r.slug(),
+                r.status(),
+                r.body(),
+                r.bodyFormat(),
+                r.excerpt(),
                 permalinks.localDate(r),
-                r.getPermalink(),
+                r.permalink(),
                 byTaxonomy.getOrDefault("category", List.of()),
                 byTaxonomy.getOrDefault("post_tag", List.of()),
-                r.getAuthorId(),
-                r.getAuthorId() == null ? null : authorNames().get(r.getAuthorId()),
-                r.getParentId(),
-                r.getCommentStatus(),
-                r.getMenuOrder(),
-                r.getModifiedAt(),
+                r.authorId(),
+                r.authorId() == null ? null : authorNames().get(r.authorId()),
+                r.parentId(),
+                r.commentStatus(),
+                r.menuOrder(),
+                r.modifiedAt(),
                 autosave,
                 Capabilities.canEdit(a.role(), a.userId(), r)
         );

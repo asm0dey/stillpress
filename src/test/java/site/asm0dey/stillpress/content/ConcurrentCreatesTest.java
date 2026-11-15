@@ -27,14 +27,14 @@ class ConcurrentCreatesTest {
 
     @Test
     void sixteenConcurrentItemCreatesGetDistinctIds() throws Exception {
-        assertDistinct(author -> items.create("post", author).getSourceId());
+        assertDistinct(author -> items.create("post", author).sourceId());
     }
 
     @Test
     void sixteenConcurrentBlockCreatesGetDistinctIds() throws Exception {
         assertDistinct(author -> blocks
             .create("Block", "<!-- wp:paragraph -->", author, LocalDateTime.now())
-            .getSourceId());
+            .sourceId());
     }
 
     @Test

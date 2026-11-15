@@ -98,6 +98,37 @@ public class TermRepository {
         }
     }
 
+    /**
+     * The posts among {@code itemIds} without a category.
+     */
+    public List<Long> uncategorizedPosts(Collection<Long> itemIds) {
+        return db
+            .select(ITEM.ID)
+            .from(ITEM)
+            .where(
+                    ITEM.ID.in(itemIds),
+                    ITEM.TYPE.eq("post"),
+                    DSL.notExists(DSL
+                        .selectOne()
+                        .from(ITEM_TERM)
+                        .join(TERM)
+                        .on(TERM.ID.eq(ITEM_TERM.TERM_ID))
+                        .where(ITEM_TERM.ITEM_ID.eq(ITEM.ID), TERM.TAXONOMY.eq("category"))
+                    )
+            )
+            .fetch(ITEM.ID);
+    }
+
+    /**
+     * Gives every item in {@code itemIds} the term, in one statement.
+     */
+    public void addToItems(Collection<Long> itemIds, long termId) {
+        db
+            .insertInto(ITEM_TERM, ITEM_TERM.ITEM_ID, ITEM_TERM.TERM_ID)
+            .select(DSL.select(ITEM.ID, DSL.val(termId)).from(ITEM).where(ITEM.ID.in(itemIds)))
+            .execute();
+    }
+
     public List<Term> all() {
         return db.selectFrom(TERM).fetchInto(Term.class);
     }

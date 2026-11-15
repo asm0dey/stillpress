@@ -7,13 +7,15 @@ import static site.asm0dey.stillpress.account.Role.CONTRIBUTOR;
 import static site.asm0dey.stillpress.account.Role.EDITOR;
 import module java.base;
 import org.junit.jupiter.api.Test;
+import site.asm0dey.stillpress.db.tables.pojos.Item;
+import site.asm0dey.stillpress.db.tables.pojos.ReusableBlock;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.db.tables.records.ReusableBlockRecord;
 
 class CapabilitiesTest {
-    private final ItemRecord draftPostBy1 = item("post", "draft", 1L);
-    private final ItemRecord publishedPostBy1 = item("post", "publish", 1L);
-    private final ItemRecord pageBy1 = item("page", "draft", 1L);
+    private final Item draftPostBy1 = item("post", "draft", 1L);
+    private final Item publishedPostBy1 = item("post", "publish", 1L);
+    private final Item pageBy1 = item("page", "draft", 1L);
 
     @Test
     void contributorCannotPublishButMaySubmitForReview() {
@@ -47,8 +49,9 @@ class CapabilitiesTest {
 
     @Test
     void blocksAndUploads() {
-        var blockBy1 = new ReusableBlockRecord();
-        blockBy1.setAuthorId(1L);
+        var block = new ReusableBlockRecord();
+        block.setAuthorId(1L);
+        var blockBy1 = block.into(ReusableBlock.class);
         assertThat(Capabilities.canCreateBlock(CONTRIBUTOR)).isFalse();
         assertThat(Capabilities.canEditBlock(AUTHOR, 1, blockBy1)).isTrue();
         assertThat(Capabilities.canEditBlock(AUTHOR, 2, blockBy1)).isFalse();
@@ -66,11 +69,11 @@ class CapabilitiesTest {
         assertThat(Capabilities.canTrash(EDITOR, 2, publishedPostBy1)).isTrue();
     }
 
-    private static ItemRecord item(String type, String status, Long authorId) {
+    private static Item item(String type, String status, Long authorId) {
         var r = new ItemRecord();
         r.setType(type);
         r.setStatus(status);
         r.setAuthorId(authorId);
-        return r;
+        return r.into(Item.class);
     }
 }

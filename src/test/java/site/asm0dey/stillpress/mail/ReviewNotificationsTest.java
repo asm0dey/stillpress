@@ -57,7 +57,7 @@ class ReviewNotificationsTest {
     @Test
     void contributorSubmitMailsAdminsAndEditors() throws Exception {
         var item = items.create("post", contributorId);
-        submit(item.getId(), "Hello", contributorId, Role.CONTRIBUTOR);
+        submit(item.id(), "Hello", contributorId, Role.CONTRIBUTOR);
         assertThat(SMTP.waitForIncomingEmail(5000, 2)).isTrue();
         assertThat(SMTP.getReceivedMessages())
             .extracting(m -> m.getAllRecipients()[0].toString())
@@ -66,21 +66,21 @@ class ReviewNotificationsTest {
         assertThat(first.getSubject()).isEqualTo("Pending review on Blog: Hello");
         assertThat(first.getContent().toString())
             .contains("Newbie submitted \"Hello\"")
-            .contains("https://blog.example.org/admin/edit/" + item.getId());
+            .contains("https://blog.example.org/admin/edit/" + item.id());
     }
 
     @Test
     void resavingPendingSendsNothing() throws Exception {
         var item = items.create("post", contributorId);
-        submit(item.getId(), "Hello", contributorId, Role.CONTRIBUTOR);
+        submit(item.id(), "Hello", contributorId, Role.CONTRIBUTOR);
         SMTP.waitForIncomingEmail(5000, 2);
         SMTP.purgeEmailFromAllMailboxes();
         var stored = items.update(
-                item.getId(),
-                update("Hello again", "pending", modifiedAt(item.getId())),
+                item.id(),
+                update("Hello again", "pending", modifiedAt(item.id())),
                 new ItemService.Actor(contributorId, Role.CONTRIBUTOR)
         );
-        assertThat(stored.getTitle()).isEqualTo("Hello again");
+        assertThat(stored.title()).isEqualTo("Hello again");
         assertThat(SMTP.waitForIncomingEmail(1000, 1)).isFalse();
         assertThat(SMTP.getReceivedMessages()).isEmpty();
     }
@@ -88,7 +88,7 @@ class ReviewNotificationsTest {
     @Test
     void editorSubmittingOwnPostSkipsThemselves() {
         var item = items.create("post", editorId);
-        submit(item.getId(), "Mine", editorId, Role.EDITOR);
+        submit(item.id(), "Mine", editorId, Role.EDITOR);
         assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
         assertThat(SMTP.getReceivedMessages())
             .extracting(m -> m.getAllRecipients()[0].toString())
@@ -98,9 +98,9 @@ class ReviewNotificationsTest {
     @Test
     void rollbackSendsNothing() {
         var item = items.create("post", contributorId);
-        var stale = modifiedAt(item.getId()).minusDays(1);
+        var stale = modifiedAt(item.id()).minusDays(1);
         assertThatThrownBy(() -> items.update(
-                item.getId(),
+                item.id(),
                 update("Hello", "pending", stale),
                 new ItemService.Actor(contributorId, Role.CONTRIBUTOR)
         ))
@@ -112,7 +112,7 @@ class ReviewNotificationsTest {
     @Test
     void crlfInTitleCannotInjectHeaders() throws Exception {
         var item = items.create("post", contributorId);
-        submit(item.getId(), "Hi\r\nBcc: evil@example.org", contributorId, Role.CONTRIBUTOR);
+        submit(item.id(), "Hi\r\nBcc: evil@example.org", contributorId, Role.CONTRIBUTOR);
         assertThat(SMTP.waitForIncomingEmail(5000, 2)).isTrue();
         assertThat(SMTP.getReceivedMessages())
             .extracting(m -> m.getAllRecipients().length + ":" + m.getAllRecipients()[0])
@@ -124,7 +124,7 @@ class ReviewNotificationsTest {
     }
 
     private LocalDateTime modifiedAt(long id) {
-        return repo.find(id).orElseThrow().getModifiedAt();
+        return repo.find(id).orElseThrow().modifiedAt();
     }
 
     private void submit(long id, String title, long userId, Role role) {

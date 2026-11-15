@@ -63,18 +63,18 @@ class ReusableBlockServiceTest {
             .from(REUSABLE_BLOCK)
             .fetchSingle(max(REUSABLE_BLOCK.SOURCE_ID));
         var created = service.save(null, "New", "<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->", null, editor);
-        assertThat(created.getSourceId()).isEqualTo(imported + 1);
+        assertThat(created.sourceId()).isEqualTo(imported + 1);
     }
 
     @Test
     void editEnqueuesEveryItemUsingItIncludingNested() {
         var b = service.save(null, "B", "<!-- wp:paragraph --><p>b</p><!-- /wp:paragraph -->", null, editor);
-        var a = service.save(null, "A", "<!-- wp:block {\"ref\":" + b.getSourceId() + "} /-->", null, editor);
-        var x = publishedItem("<!-- wp:block {\"ref\":" + a.getSourceId() + "} /-->");
-        var y = publishedItem("<!-- wp:block {\"ref\":" + b.getSourceId() + "} /-->");
+        var a = service.save(null, "A", "<!-- wp:block {\"ref\":" + b.sourceId() + "} /-->", null, editor);
+        var x = publishedItem("<!-- wp:block {\"ref\":" + a.sourceId() + "} /-->");
+        var y = publishedItem("<!-- wp:block {\"ref\":" + b.sourceId() + "} /-->");
         var z = publishedItem("<!-- wp:paragraph --><p>z</p><!-- /wp:paragraph -->");
         db.deleteFrom(PUBLISH_QUEUE).execute();
-        assertThat(queuedAfterSaving(b.getSourceId(), editor))
+        assertThat(queuedAfterSaving(b.sourceId(), editor))
             .containsExactlyInAnyOrder(String.valueOf(x), String.valueOf(y))
             .doesNotContain(String.valueOf(z));
     }
@@ -100,12 +100,12 @@ class ReusableBlockServiceTest {
     @Test
     void authorEditsOwnBlockButNotOthers() {
         var b = service.save(null, "Mine", "one", null, author1);
-        assertThat(b.getAuthorId()).isEqualTo(author1.userId());
-        var saved = service.save(b.getSourceId(), "Mine", "two", b.getModifiedAt(), author1);
-        assertThat(saved.getContent()).isEqualTo("two");
-        assertThatThrownBy(() -> service.save(b.getSourceId(), "Taken", "three", saved.getModifiedAt(), author2))
+        assertThat(b.authorId()).isEqualTo(author1.userId());
+        var saved = service.save(b.sourceId(), "Mine", "two", b.modifiedAt(), author1);
+        assertThat(saved.content()).isEqualTo("two");
+        assertThatThrownBy(() -> service.save(b.sourceId(), "Taken", "three", saved.modifiedAt(), author2))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(403));
-        assertThat(blocks.find(b.getSourceId()).orElseThrow().getContent()).isEqualTo("two");
+        assertThat(blocks.find(b.sourceId()).orElseThrow().content()).isEqualTo("two");
     }
 
     @Test
@@ -118,13 +118,13 @@ class ReusableBlockServiceTest {
     @Test
     void staleExpectedModifiedAtIs409() {
         var b = service.save(null, "T", "one", null, author1);
-        service.save(b.getSourceId(), "T", "two", b.getModifiedAt(), author1);
-        assertThatThrownBy(() -> service.save(b.getSourceId(), "T", "three", b.getModifiedAt(), author1))
+        service.save(b.sourceId(), "T", "two", b.modifiedAt(), author1);
+        assertThatThrownBy(() -> service.save(b.sourceId(), "T", "three", b.modifiedAt(), author1))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(409));
-        assertThat(blocks.find(b.getSourceId()).orElseThrow().getContent()).isEqualTo("two");
-        assertThatThrownBy(() -> service.save(b.getSourceId(), "T", "four", null, author1))
+        assertThat(blocks.find(b.sourceId()).orElseThrow().content()).isEqualTo("two");
+        assertThatThrownBy(() -> service.save(b.sourceId(), "T", "four", null, author1))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(409));
-        assertThat(blocks.find(b.getSourceId()).orElseThrow().getContent()).isEqualTo("two");
+        assertThat(blocks.find(b.sourceId()).orElseThrow().content()).isEqualTo("two");
     }
 
     @Test
@@ -132,14 +132,14 @@ class ReusableBlockServiceTest {
         ownerless(500);
         assertThatThrownBy(() -> service.save(500L, "T", "by author", null, author1))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(403));
-        assertThat(service.save(500L, "T", "by editor", null, editor).getContent()).isEqualTo("by editor");
+        assertThat(service.save(500L, "T", "by editor", null, editor).content()).isEqualTo("by editor");
     }
 
     private List<String> queuedAfterSaving(long ref, ItemService.Actor a) {
         // read inside the save's transaction: the publish it requests runs after commit and drains the queue
         return QuarkusTransaction.requiringNew().call(() -> {
             var b = blocks.find(ref).orElseThrow();
-            service.save(ref, b.getTitle(), b.getContent() + " ", b.getModifiedAt(), a);
+            service.save(ref, b.title(), b.content() + " ", b.modifiedAt(), a);
             return db
                 .select(PUBLISH_QUEUE.REF)
                 .from(PUBLISH_QUEUE)
@@ -149,7 +149,7 @@ class ReusableBlockServiceTest {
     }
 
     private long publishedItem(String body) {
-        var id = items.create("post", editor.userId()).getId();
+        var id = items.create("post", editor.userId()).id();
         db
             .update(ITEM)
             .set(ITEM.BODY, body)
