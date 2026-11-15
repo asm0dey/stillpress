@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { __ } from '@wordpress/i18n';
 import { asApiError, type ApiError, CSRF_MESSAGE, api } from '../api.ts';
 import { Field } from '../Field.tsx';
@@ -7,6 +7,7 @@ import { CAPTCHA_FAILED, useCaptcha } from '../Captcha.tsx';
 
 export default function SetPassword() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [errors, setErrors] = useState<{ password?: string; confirm?: string; captcha?: string }>({});
@@ -21,8 +22,10 @@ export default function SetPassword() {
     }
     setErrors({});
     try {
-      await api('/set-password', { method: 'POST', body: { token: params.get('token'), password, ...captcha.fields } });
-      setState('done');
+      const r = await api<{ enroll?: boolean } | undefined>('/set-password', { method: 'POST', body: { token: params.get('token'), password, ...captcha.fields } });
+      // mandatory 2FA: the new session goes straight to enrollment
+      if (r?.enroll) void navigate('/two-factor', { replace: true });
+      else setState('done');
     } catch (e) {
       const err = asApiError(e);
       captcha.failed(err);

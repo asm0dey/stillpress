@@ -1,8 +1,9 @@
-import { type ReactNode, StrictMode, Suspense, lazy, useEffect, useState } from 'react';
+import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { __ } from '@wordpress/i18n';
-import { type SessionUser, api, asApiError, mayOpen } from './api.ts';
+import { type SessionUser, api } from './api.ts';
+import Gate from './Gate.tsx';
 import { browserLocale, loadLocale, loadWordPressLocale } from './i18n/index.ts';
 import './theme.css';
 import Setup from './pages/Setup.tsx';
@@ -28,43 +29,6 @@ const Editor = lazy(() => loadWordPressLocale().then(() => import('./editor/Edit
 const BlockEditor = lazy(() => loadWordPressLocale().then(() => import('./editor/BlockEditor.tsx')));
 // the diff library comes with the revisions screens only
 const Revisions = lazy(() => import('./pages/Revisions.tsx'));
-
-const PUBLIC = ['/setup', '/login', '/set-password', '/forgot-password'];
-/**
- * Sends a fresh install to the wizard, an anonymous visitor to the login page and a role to the dashboard from a
- * screen it may not use. Checks again on every navigation, rendering nothing until the check lands.
- */
-function Gate({ children }: { children: ReactNode }) {
-  const { pathname, search } = useLocation();
-  const navigate = useNavigate();
-  // the path the last check let through; a new path renders nothing until its own check lands
-  const [passed, setPassed] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      let target: string | null = null;
-      try {
-        const { required } = await api<{ required: boolean }>('/setup');
-        if (required) {
-          if (pathname !== '/setup') target = '/setup';
-        } else if (pathname === '/setup') {
-          target = '/';
-        } else if (!PUBLIC.includes(pathname)) {
-          const { role } = await api<SessionUser>('/session');
-          if (!mayOpen(role, pathname)) target = '/';
-        }
-      } catch (e) {
-        if (asApiError(e).status === 401) target = '/login?next=' + encodeURIComponent(pathname + search);
-      }
-      if (cancelled) return;
-      // render nothing until the redirect lands, so a protected page never mounts for an anonymous visitor
-      if (target) void navigate(target, { replace: true });
-      else setPassed(pathname);
-    })();
-    return () => { cancelled = true; };
-  }, [pathname]);
-  return passed === pathname ? children : null;
-}
 
 // the signed-in user's language, or the browser's before anyone has signed in; loaded before anything renders
 void api<SessionUser>('/session').then((s) => s.locale, () => browserLocale()).then(loadLocale)

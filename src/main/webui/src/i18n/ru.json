@@ -1266,5 +1266,32 @@
  ],
  "The site key doesn't match this secret key.": [
   "Ключ сайта не подходит к этому секретному ключу."
+ ],
+ "Your sign-in timed out. Enter your password again.": [
+  "Время входа истекло. Введите пароль ещё раз."
+ ],
+ "The code is incorrect.": [
+  "Код неверный."
+ ],
+ "The passkey was not accepted.": [
+  "Ключ доступа не принят."
+ ],
+ "Confirm it is you": [
+  "Подтвердите, что это вы"
+ ],
+ "Code": [
+  "Код"
+ ],
+ "The 6-digit code from your authenticator app.": [
+  "6-значный код из приложения-аутентификатора."
+ ],
+ "Confirm": [
+  "Подтвердить"
+ ],
+ "Use a passkey": [
+  "Использовать ключ доступа"
+ ],
+ "Sign in with passkey": [
+  "Войти с ключом доступа"
  ]
 }

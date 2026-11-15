@@ -36,7 +36,14 @@ export function isApiError(e: unknown): e is ApiError {
 export const asApiError = (e: unknown): ApiError => (isApiError(e) ? e : { status: 0 });
 
 /** GET /session */
-export interface SessionUser { id: number; login: string; displayName: string; email: string; role: Role; locale: Locale }
+export interface SessionUser { id: number; login: string; displayName: string; email: string; role: Role; locale: Locale; enrollRequired: boolean }
+/** 200 from POST /login when a second step is needed */
+export interface SecondStep { totp: boolean; passkey: boolean }
+export interface Passkey { id: number; name: string; createdAt: string; lastUsedAt: string | null }
+/** GET /2fa */
+export interface Factors { totp: boolean; passkeys: Passkey[]; required: boolean }
+/** POST /2fa/totp */
+export interface TotpEnrollment { secret: string; uri: string; qrSvg: string }
 /** GET /site */
 export interface Site {
   title: string; homeUrl: string; language: string; items: number; comments: number; importAllowed: boolean;

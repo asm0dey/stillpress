@@ -74,3 +74,15 @@ test('an expired session token on the language change says to reload', async () 
   await t.user.selectOptions(view.getByLabelText('Language'), 'ru');
   expect((await view.findByRole('alert')).textContent).toBe('Your session token has expired. Reload the page and try again.');
 });
+
+test('enrollRequiredGoesToTwoFactor', async () => {
+  fakeApi({ 'GET /setup': { body: { required: false } }, 'GET /session': { body: { role: 'author', enrollRequired: true } } });
+  const { default: Gate } = await import('./Gate.tsx');
+  const { MemoryRouter, Route, Routes } = t.router;
+  const view = t.rtl.render(
+    <MemoryRouter initialEntries={['/posts']}>
+      <Gate><Routes><Route path="/posts" element={<p>posts</p>} /><Route path="/two-factor" element={<p>two factor</p>} /></Routes></Gate>
+    </MemoryRouter>,
+  );
+  expect(await view.findByText('two factor')).toBeTruthy();
+});
