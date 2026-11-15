@@ -58,6 +58,8 @@ public class Jobs {
     DSLContext db;
     @ConfigProperty(name = "stillpress.publish.sweep-interval", defaultValue = "1m")
     Duration sweepInterval;
+    @ConfigProperty(name = "stillpress.publish.polling-interval", defaultValue = "10s")
+    Duration pollingInterval;
     // a failing run retries a minute later instead of spinning
     private final Task<Void> publishSite = Tasks
         .oneTime(PUBLISH_SITE)
@@ -94,7 +96,7 @@ public class Jobs {
             .create(dataSource, publishSite, goLive)
             .startTasks(publishSweep)
             .threads(2)
-            .pollingInterval(Duration.ofSeconds(10))
+            .pollingInterval(pollingInterval)
             .serializer(new JacksonSerializer())
             .alwaysPersistTimestampInUTC()
             .build();

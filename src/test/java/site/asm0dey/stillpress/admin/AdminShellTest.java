@@ -5,12 +5,24 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.startsWith;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
+import module java.base;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
 
 @QuarkusTest
+@TestProfile(AdminShellTest.WithUi.class)
 class AdminShellTest {
+    // the only test that needs the built UI; elsewhere Quinoa is off, so other profiles do not rebuild it
+    public static class WithUi implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of("quarkus.quinoa", "true");
+        }
+    }
+
     @Inject
     TestStore store;
     @Inject
