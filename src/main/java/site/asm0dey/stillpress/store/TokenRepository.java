@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.exception.IntegrityConstraintViolationException;
 import site.asm0dey.stillpress.db.tables.records.UserTokenRecord;
 
 /**
@@ -19,13 +20,31 @@ public class TokenRepository {
     @Inject
     DSLContext db;
 
+    /**
+     * The user's one live token of this purpose, replacing any earlier one.
+     */
     @Transactional
     public String create(long userId, String purpose, Duration ttl) {
+        return upsert(userId, purpose, ttl, null).orElseThrow();
+    }
+
+    /**
+     * Like {@link #create}, but only when the user has no token of this purpose created at or after {@code since}; the
+     * check and the write are one statement, so concurrent callers cannot both get a token.
+     *
+     * @return the raw token, or empty when a newer one exists
+     */
+    @Transactional
+    public Optional<String> createUnlessIssuedSince(long userId, String purpose, Duration ttl, Instant since) {
+        return upsert(userId, purpose, ttl, LocalDateTime.ofInstant(since, ZoneOffset.UTC));
+    }
+
+    private Optional<String> upsert(long userId, String purpose, Duration ttl, LocalDateTime since) {
         var raw = SessionRepository.randomToken(32);
-        // a new link revokes the earlier ones
-        db.deleteFrom(USER_TOKEN).where(USER_TOKEN.USER_ID.eq(userId), USER_TOKEN.PURPOSE.eq(purpose)).execute();
         var now = SessionRepository.now();
-        db
+        var id = SessionRepository.hash(raw);
+        var expires = now.plus(ttl);
+        var update = db
             .insertInto(
                     USER_TOKEN,
                     USER_TOKEN.ID,
@@ -34,35 +53,38 @@ public class TokenRepository {
                     USER_TOKEN.EXPIRES_AT,
                     USER_TOKEN.CREATED_AT
             )
-            .values(SessionRepository.hash(raw), userId, purpose, now.plus(ttl), now)
-            .execute();
-        return raw;
+            .values(id, userId, purpose, expires, now)
+            .onConflict(USER_TOKEN.USER_ID, USER_TOKEN.PURPOSE)
+            .doUpdate()
+            .set(USER_TOKEN.ID, id)
+            .set(USER_TOKEN.EXPIRES_AT, expires)
+            .set(USER_TOKEN.CREATED_AT, now);
+        var statement = since == null ? update : update.where(USER_TOKEN.CREATED_AT.lt(since));
+        int changed;
+        try {
+            changed = statement.execute();
+        } catch (IntegrityConstraintViolationException e) {
+            // H2 emulates the upsert with MERGE, which loses a race to a concurrent insert with this error; the row is
+            // there now, so the second try takes the update branch (PostgreSQL never gets here)
+            changed = statement.execute();
+        }
+        return changed == 0 ? Optional.empty() : Optional.of(raw);
     }
 
     /**
-     * Whether an unspent token of this purpose was created for the user at or after {@code since}.
-     */
-    public boolean issuedSince(long userId, String purpose, Instant since) {
-        return db.fetchExists(
-                USER_TOKEN,
-                USER_TOKEN.USER_ID.eq(userId),
-                USER_TOKEN.PURPOSE.eq(purpose),
-                USER_TOKEN.CREATED_AT.ge(LocalDateTime.ofInstant(since, ZoneOffset.UTC))
-        );
-    }
-
-    /**
-     * Like {@link #consume}, for a token of any of the purposes.
+     * Deletes the token and returns its user; empty if the token is unknown, expired or for another purpose.
      */
     public Optional<Long> consumeAny(String rawToken, Set<String> purposes) {
         if (rawToken == null) {
             return Optional.empty();
         }
+        // the delete is the claim: concurrent consumers cannot both get the row back
         return db
             .deleteFrom(USER_TOKEN)
             .where(USER_TOKEN.ID.eq(SessionRepository.hash(rawToken)), USER_TOKEN.PURPOSE.in(purposes))
             .returning(USER_TOKEN.USER_ID, USER_TOKEN.EXPIRES_AT)
             .fetchOptional()
+            // expiry is checked here, not in where: the delete also removes an expired token, else it would stay in user_token forever
             .filter(t -> t.getExpiresAt().isAfter(SessionRepository.now()))
             .map(UserTokenRecord::getUserId);
     }
@@ -75,20 +97,9 @@ public class TokenRepository {
     }
 
     /**
-     * Deletes the token and returns its user; empty if the token is unknown, expired or for another purpose.
+     * {@link #consumeAny} for one purpose.
      */
     public Optional<Long> consume(String rawToken, String purpose) {
-        if (rawToken == null) {
-            return Optional.empty();
-        }
-        // the delete is the claim: concurrent consumers cannot both get the row back
-        return db
-            .deleteFrom(USER_TOKEN)
-            .where(USER_TOKEN.ID.eq(SessionRepository.hash(rawToken)), USER_TOKEN.PURPOSE.eq(purpose))
-            .returning(USER_TOKEN.USER_ID, USER_TOKEN.EXPIRES_AT)
-            .fetchOptional()
-            // expiry is checked here, not in where: the delete also removes an expired token, else it would stay in user_token forever
-            .filter(t -> t.getExpiresAt().isAfter(SessionRepository.now()))
-            .map(UserTokenRecord::getUserId);
+        return consumeAny(rawToken, Set.of(purpose));
     }
 }

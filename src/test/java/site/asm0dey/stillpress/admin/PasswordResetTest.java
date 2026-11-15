@@ -72,6 +72,27 @@ class PasswordResetTest {
     }
 
     @Test
+    void concurrentResetsMailOnce() throws Exception {
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var start = new CountDownLatch(1);
+            var codes = IntStream
+                .range(0, 2)
+                .mapToObj(i -> pool.submit(() -> {
+                    start.await();
+                    return reset("ada").statusCode();
+                }))
+                .toList();
+            start.countDown();
+            for (var c : codes) {
+                assertThat(c.get()).isEqualTo(204);
+            }
+        }
+        assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
+        assertThat(SMTP.waitForIncomingEmail(1000, 2)).isFalse();
+        assertThat(SMTP.getReceivedMessages()).hasSize(1);
+    }
+
+    @Test
     void resetLinkIgnoresRequestHost() throws Exception {
         // from localhost, a trusted proxy: the forwarded headers are honoured, yet the link still comes from admin_url
         csrf()
@@ -115,6 +136,7 @@ class PasswordResetTest {
     @Test
     void resetTokenExpiresInAnHour() {
         reset("ada").then().statusCode(204);
+        assertThat(SMTP.waitForIncomingEmail(5000, 1)).isTrue();
         var expires = db
             .select(USER_TOKEN.EXPIRES_AT)
             .from(USER_TOKEN)

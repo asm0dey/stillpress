@@ -1,7 +1,9 @@
 package site.asm0dey.stillpress.admin;
 
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
+import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -14,6 +16,7 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import module java.base;
+import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.account.Captcha;
 import site.asm0dey.stillpress.account.CaptchaFailedException;
@@ -37,9 +40,12 @@ import site.asm0dey.stillpress.store.TokenRepository;
 public class AuthResource {
     // an unknown login is verified against this, so it costs the same as a wrong password
     private static final String DUMMY_HASH = Passwords.hash("no such user, same Argon2id cost");
+    private static final Logger LOG = Logger.getLogger(AuthResource.class);
     private static final int MAX_LOGIN = 100;
     private static final Duration RESET_INTERVAL = Duration.ofMinutes(5);
     private static final Map<String, String> INVALID_CREDENTIALS = Map.of("error", "invalid_credentials");
+    @Inject
+    Vertx vertx;
     @Inject
     LoginLimiter limiter;
     @Inject
@@ -151,32 +157,48 @@ public class AuthResource {
         // after the IP check, so a blocked IP makes no siteverify call; already counted once above
         captcha.verify(r == null ? null : r.captcha(), r == null ? null : r.website(), ip);
         var login = r == null ? null : r.login();
-        if (login != null && login.length() <= MAX_LOGIN && mail.configured()) {
-            users
-                .findByLoginOrEmail(login)
-                .filter(u -> u.getEmail() != null && !u.getEmail().isBlank())
-                .filter(u -> !tokens.issuedSince(
-                        u.getId(),
-                        TokenRepository.SET_PASSWORD,
-                        Instant.now().minus(RESET_INTERVAL)
-                ))
-                .ifPresent(this::mailReset);
+        if (login != null && login.length() <= MAX_LOGIN) {
+            // lookup, throttle and send leave the request path, so the answer takes the same time for every login
+            vertx.executeBlocking(() -> {
+                try {
+                    QuarkusTransaction
+                        .requiringNew()
+                        .run(() -> mailReset(login));
+                } catch (RuntimeException e) {
+                    LOG.warnf(e, "Password reset failed: %s", e.getMessage());
+                }
+                return null;
+            });
         }
         return Response.noContent().build();
     }
 
-    private void mailReset(AuthorRecord u) {
-        var site = settings.get("title").orElse("Stillpress");
-        var texts = SiteMail.texts(adminLocale(u.getLocale(), settings.get("language")));
-        var link = links.issue(u.getId(), TokenRepository.SET_PASSWORD, SetPasswordLink.RESET_TTL);
-        var minutes = (int) SetPasswordLink.RESET_TTL.toMinutes();
-        mail.sendAfterCommit(
-                new Mail(
-                        u.getEmail(),
-                        texts.resetSubject(site),
-                        texts.resetBody(UsersResource.displayName(u), site, link, minutes)
+    private void mailReset(String login) {
+        if (!mail.configured()) {
+            return;
+        }
+        users
+            .findByLoginOrEmail(login)
+            .filter(u -> u.getEmail() != null && !u.getEmail().isBlank())
+            .ifPresent(u -> links
+                .issueUnlessIssuedSince(
+                        u.getId(),
+                        TokenRepository.SET_PASSWORD,
+                        SetPasswordLink.RESET_TTL,
+                        Instant.now().minus(RESET_INTERVAL)
                 )
-        );
+                .ifPresent(link -> {
+                    var site = settings.get("title").orElse("Stillpress");
+                    var texts = SiteMail.texts(adminLocale(u.getLocale(), settings.get("language")));
+                    var minutes = (int) SetPasswordLink.RESET_TTL.toMinutes();
+                    mail.sendAfterCommit(
+                            new Mail(
+                                    u.getEmail(),
+                                    texts.resetSubject(site),
+                                    texts.resetBody(UsersResource.displayName(u), site, link, minutes)
+                            )
+                    );
+                }));
     }
 
     @POST

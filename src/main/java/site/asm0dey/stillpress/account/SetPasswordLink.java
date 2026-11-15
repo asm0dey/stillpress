@@ -19,10 +19,20 @@ public class SetPasswordLink {
     @Inject
     SettingRepository settings;
 
+    public String issue(long userId, String purpose, Duration ttl) {
+        return link(tokens.create(userId, purpose, ttl));
+    }
+
+    /**
+     * Like {@link #issue}, but empty when the user already got a link of this purpose at or after {@code since}.
+     */
+    public Optional<String> issueUnlessIssuedSince(long userId, String purpose, Duration ttl, Instant since) {
+        return tokens.createUnlessIssuedSince(userId, purpose, ttl, since).map(this::link);
+    }
+
     // the lookbehind keeps the regex linear
     @SuppressWarnings("java:S8786")
-    public String issue(long userId, String purpose, Duration ttl) {
-        var token = tokens.create(userId, purpose, ttl);
+    private String link(String token) {
         var base = settings.get("admin_url").orElse("").replaceAll("(?<!/)/+$", "");
         return base + "/admin/set-password?token=" + token;
     }
