@@ -110,4 +110,11 @@ public class RedirectRepository {
     public boolean delete(String from) {
         return db.deleteFrom(REDIRECT).where(REDIRECT.FROM_PATH.eq(from)).execute() == 1;
     }
+
+    /**
+     * A 301 from an import, inserted as is: unlike {@link #put}, no chains are rewritten.
+     */
+    public void insertImported(String from, String to) {
+        db.insertInto(REDIRECT, REDIRECT.FROM_PATH, REDIRECT.TO_PATH, REDIRECT.STATUS_CODE).values(from, to, 301).execute();
+    }
 }

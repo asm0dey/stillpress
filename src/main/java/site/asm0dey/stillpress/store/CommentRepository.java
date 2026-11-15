@@ -56,4 +56,25 @@ public class CommentRepository {
             .limit(limit)
             .fetchInto(Comment.class);
     }
+
+    /**
+     * An imported comment; returns its id. The parent is set apart, by {@link #setParent}.
+     */
+    public long insertImported(Comment c) {
+        var r = db.newRecord(COMMENT);
+        r.setSourceId(c.sourceId());
+        r.setItemId(c.itemId());
+        r.setAuthorName(c.authorName());
+        r.setAuthorEmail(c.authorEmail());
+        r.setAuthorUrl(c.authorUrl());
+        r.setContent(c.content());
+        r.setCreatedAt(c.createdAt());
+        r.setStatus(c.status());
+        r.store();
+        return r.getId();
+    }
+
+    public void setParent(long id, long parentId) {
+        db.update(COMMENT).set(COMMENT.PARENT_ID, parentId).where(COMMENT.ID.eq(id)).execute();
+    }
 }

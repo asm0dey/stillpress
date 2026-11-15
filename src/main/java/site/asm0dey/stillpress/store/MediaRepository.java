@@ -80,4 +80,20 @@ public class MediaRepository {
     public void updateMeta(long id, String title, String altText) {
         db.update(MEDIA).set(MEDIA.TITLE, title).set(MEDIA.ALT_TEXT, altText).where(MEDIA.ID.eq(id)).execute();
     }
+
+    /**
+     * An imported upload; {@code path}, {@code mimeType} and {@code sha256} are null when the source did not have it.
+     */
+    public void insertImported(String sourceUrl, String path, String mimeType, String sha256) {
+        var r = db.newRecord(MEDIA);
+        r.setSourceUrl(sourceUrl);
+        r.setPath(path);
+        r.setMimeType(mimeType);
+        r.setSha256(sha256);
+        r.store();
+    }
+
+    public void linkItem(String sourceUrl, long itemId) {
+        db.update(MEDIA).set(MEDIA.ITEM_ID, itemId).where(MEDIA.SOURCE_URL.eq(sourceUrl)).execute();
+    }
 }

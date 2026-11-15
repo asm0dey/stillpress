@@ -1,22 +1,27 @@
 package site.asm0dey.stillpress.importer;
 
-import static site.asm0dey.stillpress.db.Tables.*;
 import io.quarkus.narayana.jta.runtime.TransactionConfiguration;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import module java.base;
-import org.jooq.DSLContext;
-import org.jooq.Records;
-import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.blocks.Block;
 import site.asm0dey.stillpress.blocks.BlockParser;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.content.PermalinkStructure;
+import site.asm0dey.stillpress.db.tables.pojos.Author;
+import site.asm0dey.stillpress.db.tables.pojos.Comment;
+import site.asm0dey.stillpress.db.tables.pojos.Item;
+import site.asm0dey.stillpress.db.tables.pojos.ReusableBlock;
+import site.asm0dey.stillpress.db.tables.pojos.Term;
 import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.store.CommentRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.MediaRepository;
+import site.asm0dey.stillpress.store.RedirectRepository;
+import site.asm0dey.stillpress.store.ReusableBlockRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
+import site.asm0dey.stillpress.store.TermRepository;
 import site.asm0dey.stillpress.wxr.*;
 
 /**
@@ -34,30 +39,39 @@ public class WordPressImporter {
     // no '&': WordPress strips it from upload names, and it would swallow a following &quot;
     private static final String URL_CHARS = "[^\\s\"'<>()\\[\\]\\\\?#&]+";
     private static final Pattern ANY_UPLOAD = Pattern.compile("(?:https?:)?//" + URL_CHARS + UPLOADS + URL_CHARS);
-    private final DSLContext db;
     private final DataDir dataDir;
     private final MediaFetcher fetcher;
     private final ItemRepository items;
     private final MediaRepository media;
     private final SettingRepository settings;
     private final AuthorRepository authors;
+    private final TermRepository terms;
+    private final CommentRepository comments;
+    private final ReusableBlockRepository reusableBlocks;
+    private final RedirectRepository redirects;
 
     WordPressImporter(
-            DSLContext db,
             DataDir dataDir,
             MediaFetcher fetcher,
             ItemRepository items,
             MediaRepository media,
             SettingRepository settings,
-            AuthorRepository authors
+            AuthorRepository authors,
+            TermRepository terms,
+            CommentRepository comments,
+            ReusableBlockRepository reusableBlocks,
+            RedirectRepository redirects
     ) {
-        this.db = db;
         this.dataDir = dataDir;
         this.fetcher = fetcher;
         this.items = items;
         this.media = media;
         this.settings = settings;
         this.authors = authors;
+        this.terms = terms;
+        this.comments = comments;
+        this.reusableBlocks = reusableBlocks;
+        this.redirects = redirects;
     }
 
     // a multi-GB export with downloads runs far past Narayana's 60 s default
@@ -160,29 +174,47 @@ public class WordPressImporter {
         @Override
         public void author(WxrAuthor a) {
             // an existing user with this login (the wizard's administrator) is the same person: keep role and password
-            var r = db
-                .selectFrom(AUTHOR)
-                .where(AUTHOR.LOGIN.eq(a.login()))
-                .fetchOptional()
-                .orElseGet(() -> {
-                    var n = db.newRecord(AUTHOR);
-                    n.setLogin(a.login());
-                    n.setSlug(uniqueAuthorSlug(a));
-                    return n;
-                });
-            if (r.getDisplayName() == null) {
-                r.setDisplayName(a.displayName());
-            }
-            if (r.getEmail() == null) {
-                r.setEmail(a.email());
+            var r = authors
+                .findByLogin(a.login())
+                .orElseGet(() -> new Author(
+                        null,
+                        a.login(),
+                        null,
+                        null,
+                        uniqueAuthorSlug(a),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                ));
+            var displayName = r.displayName() == null ? a.displayName() : r.displayName();
+            var email = r.email();
+            var emailLower = r.emailLower();
+            if (email == null) {
+                email = a.email();
                 // a later export author whose email differs only in case keeps the email but not the unique key
-                if (!authors.emailTaken(a.email(), r.getId() == null ? -1 : r.getId())) {
-                    r.setEmailLower(AuthorRepository.lowerEmail(a.email()));
+                if (!authors.emailTaken(a.email(), r.id() == null ? -1 : r.id())) {
+                    emailLower = AuthorRepository.lowerEmail(a.email());
                 }
             }
-            r.setSourceId(a.id());
-            r.store();
-            authorIds.put(a.login(), r.getId());
+            authorIds.put(
+                    a.login(),
+                    authors.saveImported(
+                            new Author(
+                                    r.id(),
+                                    r.login(),
+                                    displayName,
+                                    email,
+                                    r.slug(),
+                                    a.id(),
+                                    r.role(),
+                                    r.passwordHash(),
+                                    r.locale(),
+                                    emailLower
+                            )
+                    )
+            );
         }
 
         /**
@@ -202,15 +234,11 @@ public class WordPressImporter {
 
         @Override
         public void term(WxrTerm t) {
-            var r = db.newRecord(TERM);
-            r.setSourceId(t.id());
-            r.setTaxonomy(t.taxonomy());
-            r.setName(t.name());
-            r.setSlug(Permalinks.decode(t.slug()));
-            r.setDescription(t.description());
-            r.store();
+            var id = terms.insertImported(
+                    new Term(null, t.id(), t.taxonomy(), t.name(), Permalinks.decode(t.slug()), null, t.description())
+            );
             if (t.parentSlug() != null && !t.parentSlug().isBlank()) {
-                pendingTerms.add(new PendingTerm(r.getId(), t.taxonomy(), Permalinks.decode(t.parentSlug())));
+                pendingTerms.add(new PendingTerm(id, t.taxonomy(), Permalinks.decode(t.parentSlug())));
             }
         }
 
@@ -219,19 +247,21 @@ public class WordPressImporter {
             switch (i.postType()) {
                 case "post", "page", "attachment" -> importItem(i);
                 case "wp_block" -> {
-                    var r = db.newRecord(REUSABLE_BLOCK);
-                    r.setSourceId(i.postId());
-                    r.setTitle(i.title());
-                    r.setAuthorId(authorIds.get(i.creator()));
-                    r.setContent(localize(i.content()).rewrite(Objects.requireNonNullElse(i.content(), "")));
-                    reportLeftovers(r.getContent());
-                    // the editor needs a modified time for its concurrency check
-                    r.setModifiedAt(
-                            i.modifiedGmt() != null ? utc(i.modifiedGmt()) : LocalDateTime
-                                .now(ZoneOffset.UTC)
-                                .truncatedTo(ChronoUnit.MICROS)
+                    var content = localize(i.content()).rewrite(Objects.requireNonNullElse(i.content(), ""));
+                    reportLeftovers(content);
+                    reusableBlocks.insertImported(
+                            new ReusableBlock(
+                                    null,
+                                    i.postId(),
+                                    i.title(),
+                                    content,
+                                    // the editor needs a modified time for its concurrency check
+                                    i.modifiedGmt() != null ? utc(i.modifiedGmt()) : LocalDateTime
+                                        .now(ZoneOffset.UTC)
+                                        .truncatedTo(ChronoUnit.MICROS),
+                                    authorIds.get(i.creator())
+                            )
                     );
-                    r.store();
                     reusableCount++;
                 }
                 default -> skippedPostTypes.add(i.postType());
@@ -266,47 +296,49 @@ public class WordPressImporter {
                 unparseableLinks.add(i.postId() + ": " + i.link());
             }
 
-            var r = db.newRecord(ITEM);
-            r.setSourceId(i.postId());
-            r.setType(i.postType());
-            r.setStatus(i.status());
-            r.setPasswordProtected(i.password() != null && !i.password().isBlank());
-            r.setTitle(i.title());
-            r.setSlug(Permalinks.decode(i.postName()));
-            r.setPermalink(permalink);
-            r.setBody(rewriter.rewrite(content));
-            r.setBodyFormat(blocks ? "blocks" : "classic");
-            r.setExcerpt(rewriter.rewrite(i.excerpt()));
-            reportLeftovers(r.getBody(), r.getExcerpt());
-            r.setAuthorId(authorIds.get(i.creator()));
-            r.setPublishedAt(utc(i.postDateGmt()));
-            r.setPublishedLocal(i.postDate());
-            r.setModifiedAt(utc(i.modifiedGmt()));
-            r.setGuid(i.guid());
-            r.setCommentStatus(i.commentStatus());
-            r.setMenuOrder(i.menuOrder());
-            if (i.attachmentUrl() != null) {
-                r.setMimeType(URLConnection.guessContentTypeFromName(i.attachmentUrl()));
-            }
-            r.store();
-            long id = r.getId();
+            boolean isProtected = i.password() != null && !i.password().isBlank();
+            var body = rewriter.rewrite(content);
+            var excerpt = rewriter.rewrite(i.excerpt());
+            reportLeftovers(body, excerpt);
+            long id = items.insertImported(
+                    new Item(
+                            null,
+                            i.postId(),
+                            i.postType(),
+                            i.status(),
+                            isProtected,
+                            i.title(),
+                            Permalinks.decode(i.postName()),
+                            permalink,
+                            body,
+                            blocks ? "blocks" : "classic",
+                            excerpt,
+                            authorIds.get(i.creator()),
+                            null,
+                            utc(i.postDateGmt()),
+                            utc(i.modifiedGmt()),
+                            i.guid(),
+                            i.commentStatus(),
+                            i.menuOrder(),
+                            i.attachmentUrl() == null ? null : URLConnection.guessContentTypeFromName(i.attachmentUrl()),
+                            i.postDate()
+                    )
+            );
             listener.item(++itemCount);
 
             if (attachment != null) {
-                db.update(MEDIA).set(MEDIA.ITEM_ID, id).where(MEDIA.SOURCE_URL.eq(attachment)).execute();
+                media.linkItem(attachment, id);
             }
             linkTerms(id, i.terms());
             importComments(id, i);
             // redirects only lead to pages that will be published
-            if (permalink != null
-                    && !i.postType().equals("attachment")
-                    && publishable(r.getStatus(), r.getPasswordProtected())) {
+            if (permalink != null && !i.postType().equals("attachment") && publishable(i.status(), isProtected)) {
                 redirect("?p=" + i.postId(), permalink);
                 if (i.postType().equals("page")) {
                     redirect("?page_id=" + i.postId(), permalink);
                 }
             }
-            if (Boolean.TRUE.equals(r.getPasswordProtected())) {
+            if (isProtected) {
                 passwordProtected.add(permalink != null ? permalink : "?p=" + i.postId());
             }
             if (i.parentId() != 0) {
@@ -327,18 +359,13 @@ public class WordPressImporter {
             var seen = new HashSet<Long>();
             for (var ref : refs) {
                 var slug = Permalinks.decode(ref.nicename());
-                var termId = db.fetchValue(TERM.ID, TERM.TAXONOMY.eq(ref.domain()).and(TERM.SLUG.eq(slug)));
-                if (termId == null) {
-                    // terms used inline but absent from the header (e.g. post_format) still get a row
-                    var t = db.newRecord(TERM);
-                    t.setTaxonomy(ref.domain());
-                    t.setName(slug);
-                    t.setSlug(slug);
-                    t.store();
-                    termId = t.getId();
-                }
+                // terms used inline but absent from the header (e.g. post_format) still get a row
+                long termId = terms
+                    .findBySlug(ref.domain(), slug)
+                    .map(Term::id)
+                    .orElseGet(() -> terms.insertImported(new Term(null, null, ref.domain(), slug, slug, null, null)));
                 if (seen.add(termId)) {
-                    db.insertInto(ITEM_TERM, ITEM_TERM.ITEM_ID, ITEM_TERM.TERM_ID).values(itemId, termId).execute();
+                    terms.link(itemId, termId);
                 }
             }
         }
@@ -346,35 +373,34 @@ public class WordPressImporter {
         private void importComments(long itemId, WxrItem i) {
             var ids = new HashMap<Long, Long>();
             for (var c : i.comments()) {
-                var r = db.newRecord(COMMENT);
-                r.setSourceId(c.id());
-                r.setItemId(itemId);
-                r.setAuthorName(c.author());
-                r.setAuthorEmail(c.email());
-                r.setAuthorUrl(c.url());
-                r.setContent(Objects.requireNonNullElse(c.content(), ""));
-                r.setCreatedAt(
-                        utc(Objects.requireNonNullElse(
-                                c.dateGmt(),
-                                Objects.requireNonNullElse(i.postDateGmt(), Instant.EPOCH)
-                        ))
+                var id = comments.insertImported(
+                        new Comment(
+                                null,
+                                c.id(),
+                                itemId,
+                                null,
+                                c.author(),
+                                c.email(),
+                                c.url(),
+                                Objects.requireNonNullElse(c.content(), ""),
+                                utc(Objects.requireNonNullElse(
+                                        c.dateGmt(),
+                                        Objects.requireNonNullElse(i.postDateGmt(), Instant.EPOCH)
+                                )),
+                                switch (c.approved()) {
+                                    case "1" -> "approved";
+                                    case "0" -> "hold";
+                                    case null -> "hold";
+                                    default -> c.approved();
+                                }
+                        )
                 );
-                r.setStatus(
-                        switch (c.approved()) {
-                            case "1" -> "approved";
-                            case "0" -> "hold";
-                            case null -> "hold";
-                            default -> c.approved();
-                        }
-                );
-                r.store();
-                ids.put(c.id(), r.getId());
+                ids.put(c.id(), id);
                 commentCount++;
             }
             for (var c : i.comments()) {
                 if (c.parentId() != 0 && ids.containsKey(c.parentId())) {
-                    db.update(COMMENT).set(COMMENT.PARENT_ID, ids.get(c.parentId())).where(COMMENT.ID.eq(ids.get(c.id())
-                    )).execute();
+                    comments.setParent(ids.get(c.id()), ids.get(c.parentId()));
                 }
             }
         }
@@ -465,10 +491,8 @@ public class WordPressImporter {
                 uri = null;
             }
             var bytes = uri == null ? Optional.<byte[]>empty() : fetcher.fetch(uri);
-            var r = db.newRecord(MEDIA);
-            r.setSourceUrl(original);
             if (bytes.isEmpty()) {
-                r.store();
+                media.insertImported(original, null, null, null);
                 return null;
             }
             var decoded = Permalinks.decodedPath(original);
@@ -481,10 +505,7 @@ public class WordPressImporter {
             var sha = sha256(bytes.get());
             var path = "/media/" + month + "/" + sha.substring(0, 12) + "-" + name;
             write(month + "/" + sha.substring(0, 12) + "-" + name, bytes.get());
-            r.setPath(path);
-            r.setMimeType(URLConnection.guessContentTypeFromName(name));
-            r.setSha256(sha);
-            r.store();
+            media.insertImported(original, path, URLConnection.guessContentTypeFromName(name), sha);
             listener.media(++mediaCount);
             return Permalinks.encode(path);
         }
@@ -504,7 +525,7 @@ public class WordPressImporter {
         }
 
         private void redirect(String from, String to) {
-            db.insertInto(REDIRECT, REDIRECT.FROM_PATH, REDIRECT.TO_PATH, REDIRECT.STATUS_CODE).values(from, to, 301).execute();
+            redirects.insertImported(from, to);
         }
 
         /**
@@ -513,26 +534,20 @@ public class WordPressImporter {
         void finish() {
             if (settings.get("permalink_structure").isEmpty()) {
                 PermalinkStructure
-                    .infer(importedPosts())
+                    .infer(items.publishedPostFields())
                     .ifPresent(v -> settings.put("permalink_structure", v));
             }
             for (var t : pendingTerms) {
-                var parent = db.fetchValue(TERM.ID, TERM.TAXONOMY.eq(t.taxonomy()).and(TERM.SLUG.eq(t.parentSlug())));
-                if (parent != null) {
-                    db.update(TERM).set(TERM.PARENT_ID, parent).where(TERM.ID.eq(t.id())).execute();
-                }
+                terms
+                    .findBySlug(t.taxonomy(), t.parentSlug())
+                    .ifPresent(parent -> terms.setParent(t.id(), parent.id()));
             }
             for (var p : pendingItems) {
-                var parent = db
-                    .select(ITEM.ID, ITEM.PERMALINK, ITEM.STATUS, ITEM.PASSWORD_PROTECTED)
-                    .from(ITEM)
-                    .where(ITEM.SOURCE_ID.eq(p.parentSourceId()))
-                    .fetchOptional(Records.mapping(ParentRow::new))
-                    .orElse(null);
+                var parent = items.findParent(p.parentSourceId()).orElse(null);
                 if (parent == null) {
                     continue;
                 }
-                db.update(ITEM).set(ITEM.PARENT_ID, parent.id()).where(ITEM.ID.eq(p.id())).execute();
+                items.setParent(p.id(), parent.id());
                 if (p.type().equals("attachment")
                         && parent.permalink() != null
                         && publishable(parent.status(), parent.passwordProtected())) {
@@ -542,49 +557,6 @@ public class WordPressImporter {
                     redirect("?attachment_id=" + p.sourceId(), parent.permalink());
                 }
             }
-        }
-
-        private record ParentRow(Long id, String permalink, String status, Boolean passwordProtected) {}
-
-        private record TermRow(Long id, String slug, Long parentId) {}
-
-        /**
-         * The published posts with their category (the lowest id, as WordPress picks it) and author.
-         */
-        private List<PermalinkStructure.Fields> importedPosts() {
-            var categories = db
-                .select(TERM.ID, TERM.SLUG, TERM.PARENT_ID)
-                .from(TERM)
-                .where(TERM.TAXONOMY.eq("category"))
-                .fetchMap(TERM.ID, Records.mapping(TermRow::new));
-            var firstCategory = db
-                .select(ITEM_TERM.ITEM_ID, DSL.min(ITEM_TERM.TERM_ID))
-                .from(ITEM_TERM)
-                .join(TERM)
-                .on(TERM.ID.eq(ITEM_TERM.TERM_ID))
-                .where(TERM.TAXONOMY.eq("category"))
-                .groupBy(ITEM_TERM.ITEM_ID)
-                .fetchMap(ITEM_TERM.ITEM_ID, DSL.min(ITEM_TERM.TERM_ID));
-            return db
-                .select(ITEM.ID, ITEM.SOURCE_ID, ITEM.SLUG, ITEM.PUBLISHED_LOCAL, AUTHOR.SLUG, ITEM.PERMALINK)
-                .from(ITEM)
-                .leftJoin(AUTHOR)
-                .on(AUTHOR.ID.eq(ITEM.AUTHOR_ID))
-                .where(ITEM.TYPE.eq("post"), ITEM.STATUS.eq("publish"), ITEM.PUBLISHED_LOCAL.isNotNull())
-                .fetch(Records.mapping((id, sourceId, slug, publishedLocal, authorSlug, permalink) -> {
-                    var path = new ArrayDeque<String>();
-                    for (var t = categories.get(firstCategory.get(id)); t != null; t = categories.get(t.parentId())) {
-                        path.addFirst(t.slug());
-                    }
-                    return new PermalinkStructure.Fields(
-                            Objects.requireNonNullElse(sourceId, 0L),
-                            Objects.requireNonNullElse(slug, ""),
-                            publishedLocal,
-                            String.join("/", path),
-                            Objects.requireNonNullElse(authorSlug, ""),
-                            permalink
-                    );
-                }));
         }
 
         ImportReport report() {

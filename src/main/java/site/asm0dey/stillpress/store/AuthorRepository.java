@@ -229,4 +229,31 @@ public class AuthorRepository {
         }
         return slug;
     }
+
+    /**
+     * Inserts an imported author ({@code id} null) or updates one already there; returns its id. Writes the login,
+     * slug, display name, email, its unique key and source id; role, password and locale stay.
+     */
+    public long saveImported(Author a) {
+        if (a.id() != null) {
+            db
+                .update(AUTHOR)
+                .set(AUTHOR.DISPLAY_NAME, a.displayName())
+                .set(AUTHOR.EMAIL, a.email())
+                .set(AUTHOR.EMAIL_LOWER, a.emailLower())
+                .set(AUTHOR.SOURCE_ID, a.sourceId())
+                .where(AUTHOR.ID.eq(a.id()))
+                .execute();
+            return a.id();
+        }
+        var r = db.newRecord(AUTHOR);
+        r.setLogin(a.login());
+        r.setSlug(a.slug());
+        r.setDisplayName(a.displayName());
+        r.setEmail(a.email());
+        r.setEmailLower(a.emailLower());
+        r.setSourceId(a.sourceId());
+        r.store();
+        return r.getId();
+    }
 }

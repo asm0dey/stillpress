@@ -140,4 +140,17 @@ public class ReusableBlockRepository {
         }
         return out;
     }
+
+    /**
+     * An imported block, keeping its WordPress post id.
+     */
+    public void insertImported(ReusableBlock b) {
+        var r = db.newRecord(REUSABLE_BLOCK);
+        r.setSourceId(b.sourceId());
+        r.setTitle(b.title());
+        r.setAuthorId(b.authorId());
+        r.setContent(b.content());
+        r.setModifiedAt(b.modifiedAt());
+        r.store();
+    }
 }

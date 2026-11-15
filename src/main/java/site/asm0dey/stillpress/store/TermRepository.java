@@ -194,4 +194,26 @@ public class TermRepository {
             .where(ITEM_TERM.TERM_ID.in(termIds), published ? ITEM.STATUS.eq("publish") : DSL.noCondition())
             .fetch(ITEM.ID);
     }
+
+    /**
+     * An imported term; returns its id. The parent is set apart, by {@link #setParent}.
+     */
+    public long insertImported(Term t) {
+        var r = db.newRecord(TERM);
+        r.setSourceId(t.sourceId());
+        r.setTaxonomy(t.taxonomy());
+        r.setName(t.name());
+        r.setSlug(t.slug());
+        r.setDescription(t.description());
+        r.store();
+        return r.getId();
+    }
+
+    public void setParent(long id, long parentId) {
+        db.update(TERM).set(TERM.PARENT_ID, parentId).where(TERM.ID.eq(id)).execute();
+    }
+
+    public void link(long itemId, long termId) {
+        db.insertInto(ITEM_TERM, ITEM_TERM.ITEM_ID, ITEM_TERM.TERM_ID).values(itemId, termId).execute();
+    }
 }

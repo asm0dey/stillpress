@@ -14,6 +14,7 @@ import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Records;
 import org.jooq.impl.DSL;
+import site.asm0dey.stillpress.content.PermalinkStructure;
 import site.asm0dey.stillpress.db.tables.pojos.Item;
 
 @ApplicationScoped
@@ -341,5 +342,90 @@ public class ItemRepository {
 
     private static Condition other(Long exceptId) {
         return exceptId == null ? ITEM.ID.isNotNull() : ITEM.ID.ne(exceptId);
+    }
+
+    /**
+     * An imported item with its WordPress post id; returns its id. The parent is set apart, by {@link #setParent}.
+     */
+    public long insertImported(Item i) {
+        var r = db.newRecord(ITEM);
+        r.setSourceId(i.sourceId());
+        r.setType(i.type());
+        r.setStatus(i.status());
+        r.setPasswordProtected(i.passwordProtected());
+        r.setTitle(i.title());
+        r.setSlug(i.slug());
+        r.setPermalink(i.permalink());
+        r.setBody(i.body());
+        r.setBodyFormat(i.bodyFormat());
+        r.setExcerpt(i.excerpt());
+        r.setAuthorId(i.authorId());
+        r.setPublishedAt(i.publishedAt());
+        r.setPublishedLocal(i.publishedLocal());
+        r.setModifiedAt(i.modifiedAt());
+        r.setGuid(i.guid());
+        r.setCommentStatus(i.commentStatus());
+        r.setMenuOrder(i.menuOrder());
+        r.setMimeType(i.mimeType());
+        r.store();
+        return r.getId();
+    }
+
+    public void setParent(long id, long parentId) {
+        db.update(ITEM).set(ITEM.PARENT_ID, parentId).where(ITEM.ID.eq(id)).execute();
+    }
+
+    /**
+     * What an import needs of an item's parent.
+     */
+    public record Parent(Long id, String permalink, String status, Boolean passwordProtected) {}
+
+    public Optional<Parent> findParent(long sourceId) {
+        return db
+            .select(ITEM.ID, ITEM.PERMALINK, ITEM.STATUS, ITEM.PASSWORD_PROTECTED)
+            .from(ITEM)
+            .where(ITEM.SOURCE_ID.eq(sourceId))
+            .fetchOptional(Records.mapping(Parent::new));
+    }
+
+    private record TermRow(Long id, String slug, Long parentId) {}
+
+    /**
+     * The published posts with their category (the lowest id, as WordPress picks it) and author.
+     */
+    public List<PermalinkStructure.Fields> publishedPostFields() {
+        var categories = db
+            .select(TERM.ID, TERM.SLUG, TERM.PARENT_ID)
+            .from(TERM)
+            .where(TERM.TAXONOMY.eq("category"))
+            .fetchMap(TERM.ID, Records.mapping(TermRow::new));
+        var firstCategory = db
+            .select(ITEM_TERM.ITEM_ID, DSL.min(ITEM_TERM.TERM_ID))
+            .from(ITEM_TERM)
+            .join(TERM)
+            .on(TERM.ID.eq(ITEM_TERM.TERM_ID))
+            .where(TERM.TAXONOMY.eq("category"))
+            .groupBy(ITEM_TERM.ITEM_ID)
+            .fetchMap(ITEM_TERM.ITEM_ID, DSL.min(ITEM_TERM.TERM_ID));
+        return db
+            .select(ITEM.ID, ITEM.SOURCE_ID, ITEM.SLUG, ITEM.PUBLISHED_LOCAL, AUTHOR.SLUG, ITEM.PERMALINK)
+            .from(ITEM)
+            .leftJoin(AUTHOR)
+            .on(AUTHOR.ID.eq(ITEM.AUTHOR_ID))
+            .where(ITEM.TYPE.eq("post"), ITEM.STATUS.eq("publish"), ITEM.PUBLISHED_LOCAL.isNotNull())
+            .fetch(Records.mapping((id, sourceId, slug, publishedLocal, authorSlug, permalink) -> {
+                var path = new ArrayDeque<String>();
+                for (var t = categories.get(firstCategory.get(id)); t != null; t = categories.get(t.parentId())) {
+                    path.addFirst(t.slug());
+                }
+                return new PermalinkStructure.Fields(
+                        Objects.requireNonNullElse(sourceId, 0L),
+                        Objects.requireNonNullElse(slug, ""),
+                        publishedLocal,
+                        String.join("/", path),
+                        Objects.requireNonNullElse(authorSlug, ""),
+                        permalink
+                );
+            }));
     }
 }

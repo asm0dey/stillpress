@@ -1,23 +1,19 @@
 package site.asm0dey.stillpress.content;
 
-import static site.asm0dey.stillpress.db.Tables.*;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import org.jboss.logging.Logger;
-import org.jooq.DSLContext;
-import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.account.TwoFactorPolicy;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.importer.ImportRunningException;
-import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.ReleaseSwitcher;
 import site.asm0dey.stillpress.publish.SitePublisher;
 import site.asm0dey.stillpress.store.PublishLock;
-import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
+import site.asm0dey.stillpress.store.SiteWipe;
 
 /**
  * Wipes an experiment: back to the state right after the wizard's first step ({@link #reset}), or to a fresh install
@@ -35,7 +31,7 @@ public class SiteReset {
     private static final Set<String> KEPT =
             Set.of("title", "language", "home_url", "timezone", TwoFactorPolicy.KEY, LOCK_ROW, ImportGuard.STATE);
     private static final Logger LOG = Logger.getLogger(SiteReset.class);
-    private final DSLContext db;
+    private final SiteWipe siteWipe;
     private final PublishLock lock;
     private final ImportGuard guard;
     private final SitePublisher publisher;
@@ -44,7 +40,7 @@ public class SiteReset {
     private final SiteMail mail;
 
     SiteReset(
-            DSLContext db,
+            SiteWipe siteWipe,
             PublishLock lock,
             ImportGuard guard,
             SitePublisher publisher,
@@ -52,7 +48,7 @@ public class SiteReset {
             SettingRepository settings,
             SiteMail mail
     ) {
-        this.db = db;
+        this.siteWipe = siteWipe;
         this.lock = lock;
         this.guard = guard;
         this.publisher = publisher;
@@ -70,26 +66,7 @@ public class SiteReset {
      * @throws ImportRunningException while an import runs; nothing changes
      */
     public boolean reset(long keepAdministratorId, String keepSession) {
-        return run(false, () -> {
-            clearContent();
-            db
-                .deleteFrom(SESSION)
-                .where(keepSession == null ? DSL.noCondition() : SESSION.ID.ne(SessionRepository.hash(keepSession)))
-                .execute();
-            // factors reference the users; the kept administrator keeps theirs
-            db.deleteFrom(TOTP_FACTOR).where(TOTP_FACTOR.USER_ID.ne(keepAdministratorId)).execute();
-            db.deleteFrom(PASSKEY).where(PASSKEY.USER_ID.ne(keepAdministratorId)).execute();
-            db.deleteFrom(AUTHOR).where(AUTHOR.ID.ne(keepAdministratorId)).execute();
-            db.update(AUTHOR).setNull(AUTHOR.SOURCE_ID).execute();
-            db.deleteFrom(SETTING).where(SETTING.KEY.notIn(KEPT)).execute();
-            // the SMTP and CAPTCHA secrets go with the settings that use them
-            db.deleteFrom(SECRET).execute();
-            var insert = db.insertInto(SETTING, SETTING.KEY, SETTING.VALUE);
-            for (var e : SETUP_DEFAULTS.entrySet()) {
-                insert = insert.values(e.getKey(), e.getValue());
-            }
-            insert.execute();
-        });
+        return run(false, () -> siteWipe.reset(keepAdministratorId, keepSession, KEPT, SETUP_DEFAULTS));
     }
 
     /**
@@ -106,15 +83,7 @@ public class SiteReset {
      *        crash is cleared instead of refusing
      */
     public boolean wipe(boolean force) {
-        return run(force, () -> {
-            clearContent();
-            db.deleteFrom(TOTP_FACTOR).execute();
-            db.deleteFrom(PASSKEY).execute();
-            db.deleteFrom(SESSION).execute();
-            db.deleteFrom(AUTHOR).execute();
-            db.deleteFrom(SETTING).where(SETTING.KEY.notIn(LOCK_ROW, ImportGuard.STATE)).execute();
-            db.deleteFrom(SECRET).execute();
-        });
+        return run(force, () -> siteWipe.wipe(Set.of(LOCK_ROW, ImportGuard.STATE)));
     }
 
     private enum Outcome {
@@ -165,33 +134,6 @@ public class SiteReset {
             throw new ImportRunningException();
         }
         return outcome == Outcome.DONE;
-    }
-
-    /**
-     * Content and everything hanging off it, in foreign-key order. Leaves authors, sessions and settings to the caller.
-     */
-    private void clearContent() {
-        // self-references first, so whole-table deletes never trip an FK on any database
-        db.update(COMMENT).setNull(COMMENT.PARENT_ID).execute();
-        db.update(ITEM).setNull(ITEM.PARENT_ID).execute();
-        db.update(TERM).setNull(TERM.PARENT_ID).execute();
-        db.deleteFrom(ITEM_TERM).execute();
-        db.deleteFrom(ITEM_FRAGMENT).execute();
-        db.deleteFrom(PUBLISHED_ITEM).execute();
-        db.deleteFrom(PUBLISH_QUEUE).execute();
-        // the recurring sweep stays; a picked publish is waiting for the lock this holds, and finds an empty queue
-        db
-            .deleteFrom(SCHEDULED_TASKS)
-            .where(SCHEDULED_TASKS.TASK_NAME.ne(Jobs.PUBLISH_SWEEP), SCHEDULED_TASKS.PICKED.isFalse())
-            .execute();
-        db.deleteFrom(REVISION).execute();
-        db.deleteFrom(COMMENT).execute();
-        db.deleteFrom(MEDIA).execute();
-        db.deleteFrom(ITEM).execute();
-        db.deleteFrom(TERM).execute();
-        db.deleteFrom(USER_TOKEN).execute();
-        db.deleteFrom(REUSABLE_BLOCK).execute();
-        db.deleteFrom(REDIRECT).execute();
     }
 
     /**
