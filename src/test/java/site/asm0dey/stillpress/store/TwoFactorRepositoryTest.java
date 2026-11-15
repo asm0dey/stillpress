@@ -50,6 +50,26 @@ class TwoFactorRepositoryTest {
     }
 
     @Test
+    void concurrentFirstPutsNeitherFailNorDuplicate() throws Exception {
+        var start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var futures = IntStream
+                .range(0, 2)
+                .mapToObj(i -> pool.submit(() -> {
+                    start.await();
+                    return factors.putTotp(id, "c" + i);
+                }))
+                .toList();
+            start.countDown();
+            for (var f : futures) {
+                assertThat(f.get()).isTrue();
+            }
+        }
+        assertThat(factors.totp(id)).hasValueSatisfying(t -> assertThat(t.getConfirmed()).isFalse());
+        assertThat(factors.firstTotp()).isPresent();
+    }
+
+    @Test
     void putTotpNeverReplacesAConfirmedFactor() {
         factors.putTotp(id, "one");
         assertThat(factors.confirmTotp(id, "one", 5)).isTrue();

@@ -8,6 +8,8 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.exception.DataAccessException;
+import org.jooq.exception.SQLStateClass;
 import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.db.tables.records.PasskeyRecord;
 import site.asm0dey.stillpress.db.tables.records.TotpFactorRecord;
@@ -26,28 +28,41 @@ public class TwoFactorRepository {
 
     /**
      * An unconfirmed row with {@code last_step = 0}, replacing an earlier unconfirmed one. False, with the row
-     * untouched, when a confirmed factor exists: the insert is ignored on the user_id primary key.
+     * untouched, when a confirmed factor exists. Safe against a concurrent first put: the loser retries the update.
      */
     @Transactional
     public boolean putTotp(long userId, String ciphertext) {
         var now = SessionRepository.now();
-        var updated = db
+        var update = db
             .update(TOTP_FACTOR)
             .set(TOTP_FACTOR.CIPHERTEXT, ciphertext)
             .set(TOTP_FACTOR.LAST_STEP, 0L)
             .set(TOTP_FACTOR.CREATED_AT, now)
-            .where(TOTP_FACTOR.USER_ID.eq(userId), TOTP_FACTOR.CONFIRMED.isFalse())
-            .execute();
-        return updated == 1
-                || db
-            .insertInto(TOTP_FACTOR)
-            .set(TOTP_FACTOR.USER_ID, userId)
-            .set(TOTP_FACTOR.CIPHERTEXT, ciphertext)
-            .set(TOTP_FACTOR.CONFIRMED, false)
-            .set(TOTP_FACTOR.LAST_STEP, 0L)
-            .set(TOTP_FACTOR.CREATED_AT, now)
-            .onDuplicateKeyIgnore()
-            .execute() == 1;
+            .where(TOTP_FACTOR.USER_ID.eq(userId), TOTP_FACTOR.CONFIRMED.isFalse());
+        if (update.execute() == 1) {
+            return true;
+        }
+        try {
+            var inserted = db
+                .insertInto(TOTP_FACTOR)
+                .set(TOTP_FACTOR.USER_ID, userId)
+                .set(TOTP_FACTOR.CIPHERTEXT, ciphertext)
+                .set(TOTP_FACTOR.CONFIRMED, false)
+                .set(TOTP_FACTOR.LAST_STEP, 0L)
+                .set(TOTP_FACTOR.CREATED_AT, now)
+                .onConflictDoNothing()
+                .execute();
+            if (inserted == 1) {
+                return true;
+            }
+        } catch (DataAccessException e) {
+            // H2 emulates the conflict clause with MERGE, which throws when a concurrent insert wins
+            if (e.sqlStateClass() != SQLStateClass.C23_INTEGRITY_CONSTRAINT_VIOLATION) {
+                throw e;
+            }
+        }
+        // a concurrent insert won: replace its row while it is unconfirmed; a confirmed factor stands
+        return update.execute() == 1;
     }
 
     /**
