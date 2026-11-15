@@ -6,7 +6,7 @@ Plan: `2026-11-15-stillpress-02c-2-two-factor.md`. Commits `83ccc83..0c38ea4` on
 
 Done. Users add an authenticator app (TOTP) and passkeys on the Two-factor screen. Login asks for a code or a passkey after the password, and "Sign in with passkey" signs in with a passkey alone. Administrators can make 2FA mandatory. A user without a factor is then fenced to `/two-factor` until they add one. An administrator clears a lost device from Users, and `stillpress user reset-2fa` does it from the server. The 02c-1 carry-over items are closed (see the roadmap).
 
-- `mise exec -- mvn -q spotless:apply verify` on `f80a16f`: BUILD SUCCESS, 736 tests, 0 failures, 0 skipped. The PostgreSQL tests (`Postgres*Test`, Dev Services) run inside the same `verify`. On `0c38ea4` (after the fix): BUILD SUCCESS, 736 tests, 0 failures.
+- `mise exec -- mvn -q spotless:apply verify` on `f80a16f`: BUILD SUCCESS, 736 tests, 0 failures, 0 skipped. The PostgreSQL tests (`Postgres*Test`, Dev Services) run inside the same `verify`; at this point none of them touched the new 2FA SQL (the final review added that, below). On `0c38ea4` (after the fix): BUILD SUCCESS, 736 tests, 0 failures.
 - The acceptance run found one bug (the enrollment redirect, below). It is fixed in `0c38ea4` with a test.
 
 ## Acceptance
@@ -71,18 +71,28 @@ The packaged jar (`java -jar target/quarkus-app/quarkus-run.jar serve`) ran with
 
 - **The enrollment redirect never happened** (fixed, `0c38ea4`). The fence (`EnrollmentGate`) answered `GET /admin/api/setup` with 403 `enroll_2fa`. The admin `Gate` calls that endpoint before `/session` and treats only 401 as a redirect, so a user without a factor got every screen rendered with failing API calls instead of `/two-factor`. No test covered it: the back-end tests checked the fence one endpoint at a time, and the front-end tests stub `/setup`. `MandatoryTwoFactorTest.enrollRequiredSessionIsFencedToEnrollment` now asserts 200 for `GET /admin/api/setup`. It failed with 403 before the fix.
 - **db-scheduler "Expected one execution to be removed, but removed 0. Indicates a bug" (task `publish-site`) predates db-scheduler 17.** A full `mvn test` was run in temporary worktrees at `f3a8be1` (db-scheduler 16.12.0, before the v17 bump `f4140a1`) and at `f80a16f` (17.1.0). Both log the line once, during `CaptchaEnforcementTest`, right after a publish finished. So it isn't from the upgrade. It looks like a test-cleanup race: `TestStore.clear()` deletes `scheduled_tasks` while a publish execution is completing. The publish-only test classes don't log it at either commit. In the `f3a8be1` run, `PostgresAccountsTest` also failed to boot Quarkus once. That is unrelated (the commit passed CI when it landed) and wasn't followed up.
-- **Set-password from a browser that holds an enrollment session** answers 403 `enroll_2fa`, because `POST /admin/api/set-password` isn't open in the fence. This was seen only when two links were opened one after the other in one cookie jar, with mandatory 2FA on. It's a minor, and it's in the hardening backlog.
+- **Set-password from a browser that holds an enrollment session** answered 403 `enroll_2fa`, because `POST /admin/api/set-password` wasn't open in the fence. This was seen only when two links were opened one after the other in one cookie jar, with mandatory 2FA on. The final review widened it to every anonymous sign-in endpoint; fixed there (see "Final review").
 - **Console 400s:** the first `/admin/api/session` or `/setup` GET after a cookie change shows a 400 before the retry (02c-1's one-GET CSRF retry, already in the backlog). A `GET` from outside the UI rotates the CSRF token, so the UI's next PUT gets 400. That's expected.
 
 ## Deferred items
 
-All of these are in the roadmap. The ones the final review won't fix are under "From 02c-2" in the hardening backlog. The ledger's "parked for the final wave" items aren't repeated there:
-
-- Task 2: the retry catches every integrity violation, and the PG comment is wrong; `withoutMailNothingIsSent` can't fail for the right reason; `concurrentResetsMailOnce` could also assert one `user_token` row.
-- Task 4: `Security.tsx` keeps a stale `testToken` on a provider toggle; the widget remounts per keystroke; the `Captcha.tsx:64` init cast loses `Headers` instances; `CAPTCHA_LOAD_FAILED` is defined after use.
-- Task 9: a test that a confirmed-TOTP-only user gets 409 `last_factor` on `DELETE /totp`; the confirm-vs-delete race.
+Every minor the reviews left open, and the two final-review items left for later, is under "From 02c-2" in the roadmap's hardening backlog. What the final review fixed is listed under "Final review" below and is not in the backlog.
 
 Replica notes (in the roadmap under "Replicas"):
 - The spent passkey-challenge set and the limiter are per node.
 - The second-step token and the TOTP replay guard live in the database.
 - The WebAuthn cookie key is derived from the shared keyset.
+
+## Final review
+
+Fixed in the wave after the whole-branch review (commits `e68d2c1..db748db`, plus this docs commit). `mise exec -- mvn -q spotless:apply verify` on `db748db`: BUILD SUCCESS, 743 tests, 0 failures, 0 skipped; `bun run test` 126 passed; `bunx tsc --noEmit` clean.
+
+- The enrollment fence lets the anonymous endpoints through: `POST /admin/api/login`, `/login/totp`, `/login/passkey-step`, `/login/passkey`, `/password-reset`, `/set-password` and `GET /admin/api/altcha/challenge`. A browser holding an enrollment session can sign in as someone else, reset a password or use a set-password link. `POST /admin/api/setup` stays fenced. Set-password with an enrollment session present issues the token user's session; the other user's enrollment session is untouched.
+- Passkey verification holds one worker: `Passkeys` is `@Blocking` and returns a lazy `Uni`, so the extension's `runPotentiallyBlocking` runs the lookup inline on the calling worker (and hands it to a worker only from the event loop, for the challenge routes). Our thread-hopping helper is gone.
+- PostgreSQL coverage of the new SQL: `PostgresAccountsTest.twoFactorSql` runs `putTotp`, `confirmTotp`, `advanceTotp`, `addPasskey`, `factorCount`/`hasFactor`, the `TWO_FACTOR` EXISTS in `allWithTwoFactor`, `deleteAllWithoutSecondFactor` and `createUnlessIssuedSince` (twice; the second is empty) on PostgreSQL 18 via Dev Services. The other PostgreSQL tests cover accounts, sessions and tokens, jobs, the import guard and import plus publish.
+- `DELETE /admin/api/2fa/totp` deletes only while the seed is in the `confirmed` state it read, and reads again otherwise, so a confirm landing in between can't remove a confirmed last factor unchecked. New tests: a confirmed authenticator as the only factor gives 409 `last_factor`; a user with only an unconfirmed seed is signed out when the policy turns on.
+- Re-sending `required: true` while mandatory 2FA is already on no longer signs out the users who are mid-enrollment.
+- A passkey whose credential id is longer than the column (255) is 400 `invalid_passkey`, not 500.
+- A site reset keeps `require_2fa`, as the kept administrator keeps their factors.
+- Admin UI: changing the CAPTCHA provider drops the Turnstile test token; the second sign-in step has "Use a different account"; `Passkey.id` is a `string`; the per-host passkey note also advises setting up an authenticator app.
+- Docs: every open minor is in the roadmap backlog under "From 02c-2", with the corrected `Login.tsx:36` and `TwoFactorResource.java:77-82` references, plus re-authentication for factor changes, the unthrottled WebAuthn challenge routes, and a manual passkey ceremony through nginx before cutover.
