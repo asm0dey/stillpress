@@ -1,7 +1,11 @@
 package site.asm0dey.stillpress.store;
 
+import static org.jooq.impl.DSL.notExists;
+import static org.jooq.impl.DSL.selectOne;
 import static site.asm0dey.stillpress.db.Tables.AUTHOR;
+import static site.asm0dey.stillpress.db.Tables.PASSKEY;
 import static site.asm0dey.stillpress.db.Tables.SESSION;
+import static site.asm0dey.stillpress.db.Tables.TOTP_FACTOR;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
@@ -52,6 +56,22 @@ public class SessionRepository {
 
     public void deleteAllFor(long userId) {
         db.deleteFrom(SESSION).where(SESSION.USER_ID.eq(userId)).execute();
+    }
+
+    /**
+     * Signs out every user who has neither a passkey nor a confirmed authenticator, in one statement.
+     */
+    public void deleteAllWithoutSecondFactor() {
+        db
+            .deleteFrom(SESSION)
+            .where(
+                    notExists(selectOne().from(PASSKEY).where(PASSKEY.USER_ID.eq(SESSION.USER_ID))),
+                    notExists(selectOne()
+                        .from(TOTP_FACTOR)
+                        .where(TOTP_FACTOR.USER_ID.eq(SESSION.USER_ID), TOTP_FACTOR.CONFIRMED.isTrue())
+                    )
+            )
+            .execute();
     }
 
     static LocalDateTime now() {

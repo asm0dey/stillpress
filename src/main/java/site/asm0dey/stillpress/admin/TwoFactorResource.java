@@ -7,6 +7,7 @@ import io.quarkus.security.webauthn.WebAuthnSecurity;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -19,6 +20,7 @@ import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.jooq.exception.IntegrityConstraintViolationException;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
 import site.asm0dey.stillpress.account.Totp;
+import site.asm0dey.stillpress.account.TwoFactorPolicy;
 import site.asm0dey.stillpress.content.ItemService;
 import site.asm0dey.stillpress.db.tables.records.PasskeyRecord;
 import site.asm0dey.stillpress.store.TwoFactorRepository;
@@ -38,6 +40,8 @@ public class TwoFactorResource {
     TwoFactorRepository factors;
     @Inject
     WebAuthnSecurity webAuthn;
+    @Inject
+    TwoFactorPolicy policy;
 
     public record PasskeyView(String id, String name, String createdAt, String lastUsedAt) {}
 
@@ -59,7 +63,11 @@ public class TwoFactorResource {
             .totp(id)
             .filter(t -> t.getConfirmed())
             .isPresent();
-        return new Factors(confirmed, factors.passkeys(id).stream().map(TwoFactorResource::view).toList(), false);
+        return new Factors(
+                confirmed,
+                factors.passkeys(id).stream().map(TwoFactorResource::view).toList(),
+                policy.required()
+        );
     }
 
     @POST
@@ -86,10 +94,12 @@ public class TwoFactorResource {
 
     @DELETE
     @Path("/totp")
+    @Transactional
     public Response remove() {
         if (factors.deleteTotp(userId()) == 0) {
             throw new ItemService.Refused(404, "not_found", null);
         }
+        keepOneFactor();
         return Response.noContent().build();
     }
 
@@ -124,11 +134,23 @@ public class TwoFactorResource {
 
     @DELETE
     @Path("/passkeys/{id}")
+    @Transactional
     public Response removePasskey(@PathParam("id") String id) {
         if (factors.deletePasskey(userId(), id) == 0) {
             throw new ItemService.Refused(404, "not_found", null);
         }
+        keepOneFactor();
         return Response.noContent().build();
+    }
+
+    /**
+     * Run after a delete: when it took the last factor while 2FA is mandatory, the refusal rolls it back. An
+     * unconfirmed authenticator was never a factor, so dropping it always works.
+     */
+    private void keepOneFactor() {
+        if (policy.required() && !factors.hasFactor(userId())) {
+            throw new ItemService.Refused(409, "last_factor", null);
+        }
     }
 
     private long userId() {

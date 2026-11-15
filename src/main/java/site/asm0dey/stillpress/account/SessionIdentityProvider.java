@@ -10,15 +10,22 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import site.asm0dey.stillpress.store.SessionRepository;
+import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 /**
- * Turns a session token into an identity: principal = login, role = the user's role, attribute {@code userId}.
+ * Turns a session token into an identity: principal = login, role = the user's role, attribute {@code userId}, and
+ * {@code enrollRequired} when mandatory 2FA is on and the user has no factor yet.
  */
 @ApplicationScoped
 public class SessionIdentityProvider implements IdentityProvider<SessionAuthenticationRequest> {
     public static final String USER_ID = "userId";
+    public static final String ENROLL_REQUIRED = "enrollRequired";
     @Inject
     SessionRepository sessions;
+    @Inject
+    TwoFactorPolicy policy;
+    @Inject
+    TwoFactorRepository factors;
 
     @Override
     public Class<SessionAuthenticationRequest> getRequestType() {
@@ -37,6 +44,7 @@ public class SessionIdentityProvider implements IdentityProvider<SessionAuthenti
                 .setPrincipal(new QuarkusPrincipal(u.getLogin()))
                 .addRole(u.getRole())
                 .addAttribute(USER_ID, u.getId())
+                .addAttribute(ENROLL_REQUIRED, policy.required() && !factors.hasFactor(u.getId()))
                 .build())
             .orElseThrow(AuthenticationFailedException::new));
     }

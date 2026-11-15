@@ -32,6 +32,7 @@ import site.asm0dey.stillpress.account.SessionAuthMechanism;
 import site.asm0dey.stillpress.account.SessionIdentityProvider;
 import site.asm0dey.stillpress.account.SetPasswordLink;
 import site.asm0dey.stillpress.account.Totp;
+import site.asm0dey.stillpress.account.TwoFactorPolicy;
 import site.asm0dey.stillpress.mail.Mail;
 import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.store.AuthorRepository;
@@ -80,6 +81,8 @@ public class AuthResource {
     WebAuthnSecurity webAuthn;
     @Inject
     PasskeyChallenges challenges;
+    @Inject
+    TwoFactorPolicy policy;
     @Context
     HttpServerRequest request;
 
@@ -90,7 +93,18 @@ public class AuthResource {
 
     public record NewPassword(String token, String password, String captcha, String website) {}
 
-    public record SessionUser(long id, String login, String displayName, String email, String role, String locale) {}
+    /**
+     * {@code enrollRequired}: 2FA is mandatory and this user has no factor yet, so only enrollment is open.
+     */
+    public record SessionUser(
+            long id,
+            String login,
+            String displayName,
+            String email,
+            String role,
+            String locale,
+            boolean enrollRequired
+    ) {}
 
     public record NewLocale(String locale) {}
 
@@ -367,7 +381,15 @@ public class AuthResource {
                 .ifPresent(o -> settings.compareAndSet("admin_url", null, o));
         }
         var locale = adminLocale(u.getLocale(), settings.get("language"));
-        return new SessionUser(u.getId(), u.getLogin(), u.getDisplayName(), u.getEmail(), u.getRole(), locale);
+        return new SessionUser(
+                u.getId(),
+                u.getLogin(),
+                u.getDisplayName(),
+                u.getEmail(),
+                u.getRole(),
+                locale,
+                Boolean.TRUE.equals(identity.getAttribute(SessionIdentityProvider.ENROLL_REQUIRED))
+        );
     }
 
     /**
@@ -422,6 +444,14 @@ public class AuthResource {
         // the other link of the pair dies with the one used
         tokens.deleteAll(userId.get(), purposes);
         sessions.deleteAllFor(userId.get());
+        // with 2FA mandatory a user without a factor goes straight to enrolling one; a reset never skips a factor
+        if (policy.required() && !factors.hasFactor(userId.get())) {
+            var raw = sessions.create(userId.get());
+            return Response
+                .ok(Map.of("enroll", true))
+                .header(HttpHeaders.SET_COOKIE, SessionAuthMechanism.cookie(raw, secure()).encode())
+                .build();
+        }
         return Response.noContent().build();
     }
 
