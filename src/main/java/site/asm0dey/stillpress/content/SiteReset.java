@@ -13,9 +13,9 @@ import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.importer.ImportRunningException;
 import site.asm0dey.stillpress.publish.Jobs;
-import site.asm0dey.stillpress.publish.PublishLock;
 import site.asm0dey.stillpress.publish.ReleaseSwitcher;
 import site.asm0dey.stillpress.publish.SitePublisher;
+import site.asm0dey.stillpress.store.PublishLock;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 

@@ -3,16 +3,11 @@ package site.asm0dey.stillpress.publish.views;
 import static org.assertj.core.api.Assertions.assertThat;
 import module java.base;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.db.tables.records.CommentRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Comment;
 
 class ThreadingTest {
-    private static CommentRecord c(long id, Long parent) {
-        var r = new CommentRecord();
-        r.setId(id);
-        r.setParentId(parent);
-        r.setContent("x");
-        r.setCreatedAt(LocalDateTime.of(2020, 1, 1, 0, 0));
-        return r;
+    private static Comment c(long id, Long parent) {
+        return new Comment(id, null, null, parent, null, null, null, "x", LocalDateTime.of(2020, 1, 1, 0, 0), null);
     }
 
     @Test

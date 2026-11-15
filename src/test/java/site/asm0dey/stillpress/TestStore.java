@@ -10,7 +10,7 @@ import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.importer.ImportReport;
 import site.asm0dey.stillpress.importer.WordPressImporter;
 import site.asm0dey.stillpress.publish.Jobs;
-import site.asm0dey.stillpress.publish.PublishLock;
+import site.asm0dey.stillpress.store.PublishLock;
 
 /**
  * Test helper: empties the store and imports the sample fixture.

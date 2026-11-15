@@ -93,8 +93,11 @@ class WordPressImporterTest {
         assertThat(month.guid()).isEqualTo("https://blog.example.ru/?p=5994");
         assertThat(month.body()).contains("/media/2023/01/");
         assertThat(comments.approvedFor(month.id())).hasSize(2);
-        assertThat(comments.approvedFor(month.id()).get(1).getParentId())
-            .isEqualTo(comments.approvedFor(month.id()).get(0).getId());
+        assertThat(comments.approvedFor(month.id()).get(1).parentId()).isEqualTo(comments
+            .approvedFor(month.id())
+            .get(0)
+            .id()
+        );
         assertThat(terms.forItem(month.id()))
             .extracting(r -> r.slug())
             .containsExactlyInAnyOrder("travel", "europe", "kids");

@@ -549,18 +549,14 @@ public class SitePublisher {
 
     private void commentsFeed(Out out, SiteView site) throws IOException {
         var newest = comments.newestPublic(out.perRss);
-        var ids = newest
-            .stream()
-            .map(c -> c.getItemId())
-            .distinct()
-            .toList();
+        var ids = newest.stream().map(c -> c.itemId()).distinct().toList();
         var byItem = new HashMap<Long, ItemView>();
         items
             .findByIds(ids)
             .forEach(r -> byItem.put(r.id(), views.item(r)));
         var entries = new ArrayList<SiteComment>();
         for (var c : newest) {
-            var item = byItem.get(c.getItemId());
+            var item = byItem.get(c.itemId());
             item
                 .allComments()
                 .stream()

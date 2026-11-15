@@ -5,7 +5,7 @@ import static site.asm0dey.stillpress.db.Tables.ITEM;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
 import org.jooq.DSLContext;
-import site.asm0dey.stillpress.db.tables.records.CommentRecord;
+import site.asm0dey.stillpress.db.tables.pojos.Comment;
 
 @ApplicationScoped
 public class CommentRepository {
@@ -22,12 +22,12 @@ public class CommentRepository {
     /**
      * Approved comments of an item, oldest first.
      */
-    public List<CommentRecord> approvedFor(long itemId) {
+    public List<Comment> approvedFor(long itemId) {
         return db
             .selectFrom(COMMENT)
             .where(COMMENT.ITEM_ID.eq(itemId), COMMENT.STATUS.eq("approved"))
             .orderBy(COMMENT.CREATED_AT, COMMENT.ID)
-            .fetch();
+            .fetchInto(Comment.class);
     }
 
     /**
@@ -40,7 +40,7 @@ public class CommentRepository {
     /**
      * Newest approved comments on published, non-password-protected posts and pages.
      */
-    public List<CommentRecord> newestPublic(int limit) {
+    public List<Comment> newestPublic(int limit) {
         return db
             .select(COMMENT.fields())
             .from(COMMENT)
@@ -54,6 +54,6 @@ public class CommentRepository {
             )
             .orderBy(COMMENT.CREATED_AT.desc().nullsLast(), COMMENT.ID.desc())
             .limit(limit)
-            .fetchInto(COMMENT);
+            .fetchInto(Comment.class);
     }
 }

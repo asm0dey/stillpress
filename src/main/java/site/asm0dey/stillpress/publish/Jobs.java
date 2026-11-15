@@ -2,10 +2,7 @@ package site.asm0dey.stillpress.publish;
 
 import com.github.kagkarlsson.scheduler.Scheduler;
 import com.github.kagkarlsson.scheduler.SchedulerClient;
-import com.github.kagkarlsson.scheduler.jdbc.AutodetectJdbcCustomization;
 import com.github.kagkarlsson.scheduler.serializer.JacksonSerializer;
-import static site.asm0dey.stillpress.db.Tables.ITEM;
-import static site.asm0dey.stillpress.db.Tables.PUBLISH_QUEUE;
 import com.github.kagkarlsson.scheduler.task.FailureHandler;
 import com.github.kagkarlsson.scheduler.task.Task;
 import com.github.kagkarlsson.scheduler.task.TaskInstanceId;
@@ -22,12 +19,13 @@ import jakarta.transaction.Status;
 import jakarta.transaction.Synchronization;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 import module java.base;
-import javax.sql.DataSource;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
-import org.jooq.DSLContext;
 import site.asm0dey.stillpress.content.Permalinker;
 import site.asm0dey.stillpress.store.ItemRepository;
+import site.asm0dey.stillpress.store.PublishLock;
+import site.asm0dey.stillpress.store.PublishQueueRepository;
+import site.asm0dey.stillpress.store.TaskStore;
 
 /**
  * Background work backed by the {@code scheduled_tasks} table: publishing and go-live of scheduled items. The
@@ -39,7 +37,7 @@ public class Jobs {
     public static final String GO_LIVE = "go-live";
     public static final String PUBLISH_SWEEP = "publish-sweep";
     private static final Logger LOG = Logger.getLogger(Jobs.class);
-    private final DataSource dataSource;
+    private final TaskStore tasks;
     private final TransactionSynchronizationRegistry registry;
     // as SetupToken: Main turns this off for CLI commands
     private final boolean httpEnabled;
@@ -48,7 +46,7 @@ public class Jobs {
     private final SitePublisher publisher;
     private final Permalinker permalinks;
     private final ItemRepository items;
-    private final DSLContext db;
+    private final PublishQueueRepository queued;
     private final Duration sweepInterval;
     private final Duration pollingInterval;
     // a failing run retries a minute later instead of spinning
@@ -67,7 +65,7 @@ public class Jobs {
     private volatile Scheduler scheduler;
 
     Jobs(
-            DataSource dataSource,
+            TaskStore tasks,
             TransactionSynchronizationRegistry registry,
             @ConfigProperty(name = "quarkus.http.host-enabled", defaultValue = "true") boolean httpEnabled,
             PublishLock lock,
@@ -75,11 +73,11 @@ public class Jobs {
             SitePublisher publisher,
             Permalinker permalinks,
             ItemRepository items,
-            DSLContext db,
+            PublishQueueRepository queued,
             @ConfigProperty(name = "stillpress.publish.sweep-interval", defaultValue = "1m") Duration sweepInterval,
             @ConfigProperty(name = "stillpress.publish.polling-interval", defaultValue = "10s") Duration pollingInterval
     ) {
-        this.dataSource = dataSource;
+        this.tasks = tasks;
         this.registry = registry;
         this.httpEnabled = httpEnabled;
         this.lock = lock;
@@ -87,7 +85,7 @@ public class Jobs {
         this.publisher = publisher;
         this.permalinks = permalinks;
         this.items = items;
-        this.db = db;
+        this.queued = queued;
         this.sweepInterval = sweepInterval;
         this.pollingInterval = pollingInterval;
     }
@@ -97,20 +95,15 @@ public class Jobs {
         publishSweep = Tasks
             .recurring(PUBLISH_SWEEP, Schedules.fixedDelay(sweepInterval))
             .execute((i, ctx) -> sweep());
-        client = SchedulerClient.Builder
-            .create(dataSource, publishSite, goLive, publishSweep)
-            .serializer(new JacksonSerializer())
-            // the client builder has no alwaysPersistTimestampInUTC(); this is what that option configures
-            .jdbcCustomization(new AutodetectJdbcCustomization(dataSource, true))
-            .build();
+        client = tasks.client(publishSite, goLive, publishSweep).serializer(new JacksonSerializer()).build();
     }
 
     void onStart(@Observes StartupEvent e) {
         if (!httpEnabled) {
             return;
         }
-        scheduler = Scheduler
-            .create(dataSource, publishSite, goLive)
+        scheduler = tasks
+            .scheduler(publishSite, goLive)
             .startTasks(publishSweep)
             .threads(2)
             .pollingInterval(pollingInterval)
@@ -185,10 +178,7 @@ public class Jobs {
      * the last run was finishing): a row older than one sweep period with no publish pending gets one.
      */
     void sweep() {
-        var stale = db.fetchExists(
-                PUBLISH_QUEUE,
-                PUBLISH_QUEUE.QUEUED_AT.lt(LocalDateTime.now(ZoneOffset.UTC).minus(sweepInterval))
-        );
+        var stale = queued.anyQueuedBefore(LocalDateTime.now(ZoneOffset.UTC).minus(sweepInterval));
         if (stale && client().getScheduledExecution(TaskInstanceId.of(PUBLISH_SITE, "site")).isEmpty()) {
             requestPublish();
         }
@@ -202,16 +192,7 @@ public class Jobs {
         QuarkusTransaction
             .requiringNew()
             .run(() -> {
-                var changed = db
-                    .update(ITEM)
-                    .set(ITEM.STATUS, "publish")
-                    .where(
-                            ITEM.ID.eq(id),
-                            ITEM.STATUS.eq("future"),
-                            ITEM.PUBLISHED_AT.le(LocalDateTime.now(ZoneOffset.UTC))
-                    )
-                    .execute();
-                if (changed == 1) {
+                if (items.publishIfDue(id, LocalDateTime.now(ZoneOffset.UTC))) {
                     // first permalink, or a re-dated post's new date-derived one (with a redirect from the old)
                     permalinks.assignPermalink(items.find(id).orElseThrow());
                     queue.item(id);

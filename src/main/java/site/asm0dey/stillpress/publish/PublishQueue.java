@@ -1,9 +1,8 @@
 package site.asm0dey.stillpress.publish;
 
-import static site.asm0dey.stillpress.db.Tables.PUBLISH_QUEUE;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
-import org.jooq.DSLContext;
+import site.asm0dey.stillpress.store.PublishQueueRepository;
 
 /**
  * What changed since the last publish. Callers enqueue inside their own transaction, so a save that rolls back leaves
@@ -11,10 +10,10 @@ import org.jooq.DSLContext;
  */
 @ApplicationScoped
 public class PublishQueue {
-    private final DSLContext db;
+    private final PublishQueueRepository rows;
 
-    PublishQueue(DSLContext db) {
-        this.db = db;
+    PublishQueue(PublishQueueRepository rows) {
+        this.rows = rows;
     }
 
     /**
@@ -30,24 +29,14 @@ public class PublishQueue {
      * {@link #item} for many, in one statement.
      */
     public void items(Collection<Long> ids) {
-        addAll("item", ids.stream().map(String::valueOf).toList());
+        rows.addAll("item", ids.stream().map(String::valueOf).toList());
     }
 
     /**
      * {@link #base} for many, in one statement.
      */
     public void bases(Collection<String> bases) {
-        addAll("base", bases);
-    }
-
-    private void addAll(String kind, Collection<String> refs) {
-        if (refs.isEmpty()) {
-            return;
-        }
-        var now = LocalDateTime.now(ZoneOffset.UTC);
-        var insert = db.insertInto(PUBLISH_QUEUE, PUBLISH_QUEUE.KIND, PUBLISH_QUEUE.REF, PUBLISH_QUEUE.QUEUED_AT);
-        refs.forEach(ref -> insert.values(kind, ref, now));
-        insert.execute();
+        rows.addAll("base", bases);
     }
 
     /**
@@ -66,29 +55,26 @@ public class PublishQueue {
     }
 
     private void add(String kind, String ref) {
-        db
-            .insertInto(PUBLISH_QUEUE, PUBLISH_QUEUE.KIND, PUBLISH_QUEUE.REF, PUBLISH_QUEUE.QUEUED_AT)
-            .values(kind, ref, LocalDateTime.now(ZoneOffset.UTC))
-            .execute();
+        rows.add(kind, ref);
     }
 
     /**
      * Empty when nothing is queued.
      */
     public Optional<Batch> snapshot() {
-        var rows = db.select(PUBLISH_QUEUE.ID, PUBLISH_QUEUE.KIND, PUBLISH_QUEUE.REF).from(PUBLISH_QUEUE).fetch();
-        if (rows.isEmpty()) {
+        var queued = rows.all();
+        if (queued.isEmpty()) {
             return Optional.empty();
         }
         var items = new LinkedHashSet<Long>();
         var bases = new LinkedHashSet<String>();
         boolean media = false, all = false;
         var ids = new HashSet<Long>();
-        for (var r : rows) {
-            ids.add(r.get(PUBLISH_QUEUE.ID));
-            switch (r.get(PUBLISH_QUEUE.KIND)) {
-                case "item" -> items.add(Long.parseLong(r.get(PUBLISH_QUEUE.REF)));
-                case "base" -> bases.add(r.get(PUBLISH_QUEUE.REF));
+        for (var r : queued) {
+            ids.add(r.id());
+            switch (r.kind()) {
+                case "item" -> items.add(Long.parseLong(r.ref()));
+                case "base" -> bases.add(r.ref());
                 case "media" -> media = true;
                 default -> all = true;
             }
@@ -100,6 +86,6 @@ public class PublishQueue {
      * Removes exactly the rows {@code b} read; rows queued since stay, even those with a lower id that committed late.
      */
     public void done(Batch b) {
-        db.deleteFrom(PUBLISH_QUEUE).where(PUBLISH_QUEUE.ID.in(b.ids())).execute();
+        rows.delete(b.ids());
     }
 }

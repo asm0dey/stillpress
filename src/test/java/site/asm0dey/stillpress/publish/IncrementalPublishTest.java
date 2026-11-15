@@ -27,6 +27,7 @@ import site.asm0dey.stillpress.content.TermService;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.FragmentRepository;
+import site.asm0dey.stillpress.store.PublishLock;
 import site.asm0dey.stillpress.store.ReusableBlockRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 

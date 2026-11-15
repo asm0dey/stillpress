@@ -1,15 +1,14 @@
 package site.asm0dey.stillpress;
 
 import module java.base;
-import org.jooq.DSLContext;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Spec;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.content.SiteReset;
-import site.asm0dey.stillpress.db.DefaultSchema;
 import site.asm0dey.stillpress.importer.ImportRunningException;
+import site.asm0dey.stillpress.store.SchemaRepository;
 
 @Command(name = "reset", description = "Delete all content, users and settings, back to a fresh install")
 public class ResetCommand implements Callable<Integer> {
@@ -24,12 +23,12 @@ public class ResetCommand implements Callable<Integer> {
     @Spec
     CommandSpec spec;
     private final SiteReset reset;
-    private final DSLContext db;
+    private final SchemaRepository schema;
     private final DataDir dataDir;
 
-    ResetCommand(SiteReset reset, DSLContext db, DataDir dataDir) {
+    ResetCommand(SiteReset reset, SchemaRepository schema, DataDir dataDir) {
         this.reset = reset;
-        this.db = db;
+        this.schema = schema;
         this.dataDir = dataDir;
     }
 
@@ -38,10 +37,9 @@ public class ResetCommand implements Callable<Integer> {
         var out = spec.commandLine().getOut();
         if (!yes) {
             out.println("This deletes every row below and the files in " + dataDir.root() + ":");
-            // one count per table: a dry run's report, not bulk work
-            for (var t : DefaultSchema.DEFAULT_SCHEMA.getTables()) {
-                out.println("  " + t.getName() + ": " + db.fetchCount(t));
-            }
+            schema
+                .rowCounts()
+                .forEach((table, rows) -> out.println("  " + table + ": " + rows));
             out.println("Run again with --yes to delete it. Copy the data directory first if you may want it back.");
             return 1;
         }

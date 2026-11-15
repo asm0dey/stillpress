@@ -6,9 +6,9 @@ import site.asm0dey.stillpress.blocks.BlockRenderer;
 import site.asm0dey.stillpress.blocks.ClassicContent;
 import site.asm0dey.stillpress.blocks.RenderContext;
 import site.asm0dey.stillpress.db.tables.pojos.Author;
+import site.asm0dey.stillpress.db.tables.pojos.Comment;
 import site.asm0dey.stillpress.db.tables.pojos.Item;
 import site.asm0dey.stillpress.db.tables.pojos.Term;
-import site.asm0dey.stillpress.db.tables.records.CommentRecord;
 import site.asm0dey.stillpress.publish.Permalinks;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.CommentRepository;
@@ -127,42 +127,40 @@ public class ViewFactory {
         return String.join("/", parts);
     }
 
-    static List<CommentView> threaded(List<CommentRecord> flat) {
-        var byId = new HashMap<Long, CommentRecord>();
-        flat.forEach(c -> byId.put(c.getId(), c));
-        var byParent = new HashMap<Long, List<CommentRecord>>();
+    static List<CommentView> threaded(List<Comment> flat) {
+        var byId = new HashMap<Long, Comment>();
+        flat.forEach(c -> byId.put(c.id(), c));
+        var byParent = new HashMap<Long, List<Comment>>();
         // orphans and members of parent cycles are promoted to top level (key 0)
         flat.forEach(c -> byParent
-            .computeIfAbsent(c.getParentId() != null && byId.containsKey(c.getParentId()) && !inCycle(c, byId)
-                    ? c.getParentId()
+            .computeIfAbsent(c.parentId() != null && byId.containsKey(c.parentId()) && !inCycle(c, byId)
+                    ? c.parentId()
                     : 0L, k -> new ArrayList<>())
             .add(c));
         return build(byParent, 0L);
     }
 
-    private static boolean inCycle(CommentRecord c, Map<Long, CommentRecord> byId) {
+    private static boolean inCycle(Comment c, Map<Long, Comment> byId) {
         var seen = new HashSet<Long>();
-        for (var p = c.getParentId(); p != null && seen.add(p); p = byId.containsKey(p)
-                ? byId.get(p).getParentId()
-                : null) {
-            if (p.equals(c.getId())) {
+        for (var p = c.parentId(); p != null && seen.add(p); p = byId.containsKey(p) ? byId.get(p).parentId() : null) {
+            if (p.equals(c.id())) {
                 return true;
             }
         }
         return false;
     }
 
-    private static List<CommentView> build(Map<Long, List<CommentRecord>> byParent, long parent) {
+    private static List<CommentView> build(Map<Long, List<Comment>> byParent, long parent) {
         return byParent
             .getOrDefault(parent, List.of())
             .stream()
             .map(c -> new CommentView(
                     anchorId(c),
-                    Objects.requireNonNullElse(c.getAuthorName(), ""),
-                    c.getAuthorUrl() == null || c.getAuthorUrl().isBlank() ? null : c.getAuthorUrl(),
-                    instant(c.getCreatedAt()),
-                    CommentSanitizer.clean(ClassicContent.toHtml(c.getContent())),
-                    build(byParent, c.getId())
+                    Objects.requireNonNullElse(c.authorName(), ""),
+                    c.authorUrl() == null || c.authorUrl().isBlank() ? null : c.authorUrl(),
+                    instant(c.createdAt()),
+                    CommentSanitizer.clean(ClassicContent.toHtml(c.content())),
+                    build(byParent, c.id())
             ))
             .toList();
     }
@@ -171,8 +169,8 @@ public class ViewFactory {
      * WordPress anchors and comment-feed GUIDs use {@code comment_ID}: the WXR id, or ours for comments made here.
      */
     // shortcut: a native comment's row id could equal an imported comment's WXR id; give native comments their own id space when Stillpress takes comments
-    public static long anchorId(CommentRecord c) {
-        return c.getSourceId() != null ? c.getSourceId() : c.getId();
+    public static long anchorId(Comment c) {
+        return c.sourceId() != null ? c.sourceId() : c.id();
     }
 
     private static Instant instant(LocalDateTime t) {

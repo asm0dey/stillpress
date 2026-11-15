@@ -318,6 +318,17 @@ public class ItemRepository {
     }
 
     /**
+     * Publishes a scheduled item that is still due at {@code now}; false when it is not (rescheduled or unscheduled).
+     */
+    public boolean publishIfDue(long id, LocalDateTime now) {
+        return db
+            .update(ITEM)
+            .set(ITEM.STATUS, "publish")
+            .where(ITEM.ID.eq(id), ITEM.STATUS.eq("future"), ITEM.PUBLISHED_AT.le(now))
+            .execute() == 1;
+    }
+
+    /**
      * WordPress's {@code wp_unique_post_slug}: unique among items of the same type, whatever their date.
      */
     public boolean slugTaken(String type, String slug, Long exceptId) {

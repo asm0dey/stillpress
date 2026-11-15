@@ -2,6 +2,7 @@ package site.asm0dey.stillpress.publish;
 
 import module java.base;
 import picocli.CommandLine.Command;
+import site.asm0dey.stillpress.store.PublishLock;
 
 @Command(name = "publish", description = "Render the whole site into a new release and make it live")
 public class PublishCommand implements Callable<Integer> {

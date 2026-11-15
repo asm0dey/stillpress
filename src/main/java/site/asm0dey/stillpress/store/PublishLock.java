@@ -1,4 +1,4 @@
-package site.asm0dey.stillpress.publish;
+package site.asm0dey.stillpress.store;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;

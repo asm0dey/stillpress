@@ -1,12 +1,11 @@
 package site.asm0dey.stillpress.publish;
 
-import static site.asm0dey.stillpress.db.Tables.PUBLISH_QUEUE;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
 import module java.base;
-import org.jooq.DSLContext;
+import site.asm0dey.stillpress.store.PublishQueueRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 
 /**
@@ -18,13 +17,13 @@ public class PublishStatus {
     static final String KEY = "publish_state";
     private static final int EVERY = 200;
     private final SettingRepository settings;
-    private final DSLContext db;
+    private final PublishQueueRepository queue;
     private final ObjectMapper json;
     private int persistedDone;
 
-    PublishStatus(SettingRepository settings, DSLContext db, ObjectMapper json) {
+    PublishStatus(SettingRepository settings, PublishQueueRepository queue, ObjectMapper json) {
         this.settings = settings;
-        this.db = db;
+        this.queue = queue;
         this.json = json;
     }
 
@@ -36,7 +35,7 @@ public class PublishStatus {
 
     public State current() {
         var s = stored();
-        return "idle".equals(s.state()) && db.fetchExists(PUBLISH_QUEUE)
+        return "idle".equals(s.state()) && queue.any()
                 ? new State("queued", s.done(), s.total(), s.lastPublishedAt(), null)
                 : s;
     }

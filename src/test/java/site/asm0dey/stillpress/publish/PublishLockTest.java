@@ -7,6 +7,7 @@ import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.TestStore;
+import site.asm0dey.stillpress.store.PublishLock;
 
 @QuarkusTest
 class PublishLockTest {
