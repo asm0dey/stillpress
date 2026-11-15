@@ -37,6 +37,18 @@ public class AuthorRepository {
     }
 
     /**
+     * Administrators and editors with an email: who reviews what contributors submit.
+     */
+    public List<AuthorRecord> reviewers() {
+        return db
+            .selectFrom(AUTHOR)
+            .where(AUTHOR.ROLE.in(Role.ADMINISTRATOR.id(), Role.EDITOR.id()))
+            .and(AUTHOR.EMAIL.isNotNull())
+            .and(AUTHOR.EMAIL.ne(""))
+            .fetch();
+    }
+
+    /**
      * The exact login, else the email (case-insensitive) when exactly one user has it.
      */
     public Optional<AuthorRecord> findByLoginOrEmail(String s) {

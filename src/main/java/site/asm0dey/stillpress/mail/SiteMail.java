@@ -106,7 +106,11 @@ public class SiteMail {
      */
     private CompletableFuture<?> start(Mail m) {
         var c = client().orElseThrow(() -> new MailFailedException("SMTP is not configured"));
-        var message = new MailMessage().setFrom(c.from()).setTo(m.to()).setSubject(m.subject()).setText(m.body());
+        var message = new MailMessage()
+            .setFrom(c.from())
+            .setTo(m.to())
+            .setSubject(m.subject().replaceAll("[\\r\\n]+", " "))
+            .setText(m.body());
         return c
             .client()
             .sendMail(message)

@@ -168,7 +168,7 @@ public class UsersResource {
     /**
      * How a mail greets the user: the display name, or the login when an imported author has none.
      */
-    static String displayName(AuthorRecord u) {
+    public static String displayName(AuthorRecord u) {
         var name = u.getDisplayName();
         return name == null || name.isBlank() ? u.getLogin() : name;
     }

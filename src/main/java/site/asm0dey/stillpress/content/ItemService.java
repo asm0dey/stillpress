@@ -14,6 +14,7 @@ import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 import site.asm0dey.stillpress.importer.ImportGuard;
+import site.asm0dey.stillpress.mail.ReviewNotifications;
 import site.asm0dey.stillpress.publish.Jobs;
 import site.asm0dey.stillpress.publish.PublishQueue;
 import site.asm0dey.stillpress.store.AuthorRepository;
@@ -54,6 +55,8 @@ public class ItemService {
     ImportGuard guard;
     @Inject
     HtmlCheck html;
+    @Inject
+    ReviewNotifications reviewNotifications;
 
     public record Actor(long userId, Role role) {}
 
@@ -194,6 +197,7 @@ public class ItemService {
         );
         guard.close();
         var wasPublished = "publish".equals(r.getStatus());
+        var wasPending = "pending".equals(r.getStatus());
         var now = now();
         var dateChanged = u.localDate() != null && !u.localDate().equals(permalinks.localDate(r));
         if (dateChanged) {
@@ -284,6 +288,9 @@ public class ItemService {
         }
         r.setModifiedAt(now);
         r.update();
+        if ("pending".equals(status) && !wasPending) {
+            reviewNotifications.pendingReview(r, a.userId());
+        }
         revisions.saved("item", id, r.getTitle(), r.getBody(), r.getBodyFormat(), r.getExcerpt(), a.userId());
         revisions.deleteAutosave("item", id, a.userId());
         fragments.delete(List.of(id));
