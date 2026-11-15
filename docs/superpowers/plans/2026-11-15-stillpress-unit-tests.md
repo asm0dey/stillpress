@@ -126,7 +126,7 @@
 
 - **Database:** `store/*RepositoryTest`, `pg/Postgres*`, `SchemaTest`, `PublishQueueTest`, `PublishLockTest`, `ImportGuardTest`, `ConcurrentCreatesTest`.
 - **Publishing and import, end to end:** `SitePublisherTest`, `IncrementalPublishTest`, `PublishJobsTest`, `JobsTest`, `PublishCostBench`, `WordPressImporterTest`, `SiteResetTest`, `FromScratchBlogTest`, `HtmlCompositionTest`.
-- **Security, filters and routing:** `SessionAuthTest`, `AuthResourceTest`, `TwoStepLoginTest`, `PasskeyLoginTest`, `PasskeyRegistrationTest`, `PasswordResetTest`, `MandatoryTwoFactorTest`, `CaptchaEnforcementTest`, `AdminBodyLimitTest`, `AdminShellTest`, `StaticSiteRouteTest`, `NginxModeTwoTest`, `ImportClosedTest`, `ImportMediaLimitTest`.
+- **Security, filters and routing:** `SessionAuthTest`, `AuthResourceTest`, `TwoStepLoginTest`, `PasskeyLoginTest`, `PasskeyRegistrationTest`, `PasswordResetTest`, `MandatoryTwoFactorTest`, `CaptchaEnforcementTest`, `AdminBodyLimitTest`, `AdminShellTest`, `StaticSiteRouteTest`, `NginxModeTwoTest`, `ImportClosedTest`.
 - **Qute:** `TemplatesTest`, `HtmlPolicyPropertyTest`.
 - **Wiring:** `KeysetGuardTest`, `StillpressCommandTest`.
 
@@ -150,6 +150,20 @@ Provenance of the "before" numbers: the 71 comes from the plan baseline, and `gi
 | Surefire time, sum of per-class "Time elapsed" | not measured | 135 s |
 | `mvn -B -o verify` wall time, fresh classes | not measured | 2:52 min |
 
+### Follow-up: fewer app starts
+
+Splitting classes did not cut suite time, because every `@QuarkusTest` class with the same profile shares one app start and the moved cases were cheap. What did cost time was each extra `@TestProfile` and `@QuarkusMainTest`, a full start each. Two profiles only set one config value that reaches a constructor, so their cases became plain tests: `ImportMediaLimitTest` (`stillpress.import.media-limit=0`) is now `importer/ImportJobTest`, and `CaptchaCommandQuarkusTest` (`stillpress.captcha.provider=altcha`) is now `CaptchaTest#envProviderLocksTheSetting`, plus `CaptchaQuarkusTest#turnOffStoresNoneInItsOwnTransaction` for the transactional write. The CLI warning was already in `CaptchaCommandTest`. `StillpressCommandTest` moved from `@QuarkusMainTest` to a `@QuarkusTest` that builds the top command with the app's CDI factory.
+
+Starts per full run went from 6 to 3: the default profile (17 s, which includes preparing all profiles up front), `AdminShellTest`'s UI profile and `PostgresProfile`. `PostgresProfile` runs a different database. The UI profile stays because the UI build is about 6 s, and moving it into the default profile would add that to every single-class run.
+
+| | Before profile merge | After |
+|---|---|---|
+| App starts per `verify` | 6 | 3 |
+| Classes with `@QuarkusTest` / `@QuarkusMainTest` | 67 | 65 |
+| Cases / summed time in Quarkus classes | 536 / 107 s | 534 / 92 s |
+| Cases / summed time in plain classes | 419 / 27 s | 422 / 21 s |
+| `mvn -B -o verify` wall time, fresh classes | 2:52 min | 2:27 min |
+
 No component tests were written: plain JUnit sufficed, so the `quarkus-junit-component` dependency in `pom.xml` is unused. It was left in place.
 
 ### Classes that stay on Quarkus
@@ -160,7 +174,6 @@ No component tests were written: plain JUnit sufficed, so the `quarkus-junit-com
 | `AdminShellTest` | routing |
 | `AuthResourceTest` | security |
 | `AuthorRepositoryTest` | SQL |
-| `CaptchaCommandQuarkusTest` | wiring |
 | `CaptchaEnforcementTest` | security |
 | `CaptchaQuarkusTest` | security |
 | `CaptchaResourceQuarkusTest` | security |
@@ -172,7 +185,6 @@ No component tests were written: plain JUnit sufficed, so the `quarkus-junit-com
 | `ImportClosedTest` | security |
 | `ImportCommandQuarkusTest` | wiring |
 | `ImportGuardTest` | SQL |
-| `ImportMediaLimitTest` | security |
 | `ImportResourceQuarkusTest` | security |
 | `IncrementalPublishTest` | SQL |
 | `ItemRepositoryTest` | SQL |

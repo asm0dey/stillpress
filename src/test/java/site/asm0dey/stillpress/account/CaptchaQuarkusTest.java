@@ -9,7 +9,8 @@ import site.asm0dey.stillpress.TestStore;
 import site.asm0dey.stillpress.store.SettingRepository;
 
 /**
- * The privacy notice comes from a Qute message bundle, which exists only in the running application.
+ * The privacy notice comes from a Qute message bundle and turnOff opens its own transaction; both need the running
+ * application.
  */
 @QuarkusTest
 class CaptchaQuarkusTest {
@@ -23,6 +24,13 @@ class CaptchaQuarkusTest {
     @BeforeEach
     void reset() {
         store.reset();
+    }
+
+    @Test
+    void turnOffStoresNoneInItsOwnTransaction() {
+        settings.put("captcha_provider", "turnstile");
+        captcha.turnOff();
+        assertThat(settings.get("captcha_provider")).hasValue("none");
     }
 
     @Test

@@ -55,6 +55,23 @@ class CaptchaTest {
     }
 
     @Test
+    void envProviderLocksTheSetting() {
+        var locked = withEnv("altcha", null, null);
+        var seen = new LinkedHashMap<String, Object>();
+        seen.put("refusal", shape(catchThrowableOfType(Refused.class, () -> locked.save("none", null, null, null))));
+        seen.put("provider", locked.provider());
+        seen.put("locked", locked.locked());
+        assertThat(seen)
+            .containsExactly(
+                    Map.entry("refusal", shape(new Refused(409, "captcha_locked", null))),
+                    Map.entry("provider", "altcha"),
+                    Map.entry("locked", true)
+            );
+        // the environment wins without reading the stored setting, and nothing is written
+        verifyNoInteractions(settings, secrets);
+    }
+
+    @Test
     void unknownEnvProviderIsAStartupProblem() {
         assertThat(withEnv("recaptcha", null, null).environmentProblem())
             .hasValueSatisfying(p -> assertThat(p).contains("must be none, turnstile or altcha: recaptcha"));
