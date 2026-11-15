@@ -6,7 +6,6 @@ import static org.jooq.impl.DSL.select;
 import static org.jooq.impl.DSL.val;
 import static site.asm0dey.stillpress.db.Tables.ITEM;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import org.jooq.DSLContext;
@@ -31,32 +30,49 @@ import site.asm0dey.stillpress.store.TermRepository;
 @ApplicationScoped
 public class ItemService {
     private static final Set<String> STATUSES = Set.of("draft", "pending", "future", "publish", "private");
-    @Inject
-    DSLContext db;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    ItemRepository items;
-    @Inject
-    TermRepository terms;
-    @Inject
-    AuthorRepository authors;
-    @Inject
-    Permalinker permalinks;
-    @Inject
-    FragmentRepository fragments;
-    @Inject
-    Revisions revisions;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    Jobs jobs;
-    @Inject
-    ImportGuard guard;
-    @Inject
-    HtmlCheck html;
-    @Inject
-    ReviewNotifications reviewNotifications;
+    private final DSLContext db;
+    private final SettingRepository settings;
+    private final ItemRepository items;
+    private final TermRepository terms;
+    private final AuthorRepository authors;
+    private final Permalinker permalinks;
+    private final FragmentRepository fragments;
+    private final Revisions revisions;
+    private final PublishQueue queue;
+    private final Jobs jobs;
+    private final ImportGuard guard;
+    private final HtmlCheck html;
+    private final ReviewNotifications reviewNotifications;
+
+    ItemService(
+            DSLContext db,
+            SettingRepository settings,
+            ItemRepository items,
+            TermRepository terms,
+            AuthorRepository authors,
+            Permalinker permalinks,
+            FragmentRepository fragments,
+            Revisions revisions,
+            PublishQueue queue,
+            Jobs jobs,
+            ImportGuard guard,
+            HtmlCheck html,
+            ReviewNotifications reviewNotifications
+    ) {
+        this.db = db;
+        this.settings = settings;
+        this.items = items;
+        this.terms = terms;
+        this.authors = authors;
+        this.permalinks = permalinks;
+        this.fragments = fragments;
+        this.revisions = revisions;
+        this.queue = queue;
+        this.jobs = jobs;
+        this.guard = guard;
+        this.html = html;
+        this.reviewNotifications = reviewNotifications;
+    }
 
     public record Actor(long userId, Role role) {}
 

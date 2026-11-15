@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.store;
 
 import static site.asm0dey.stillpress.db.Tables.SETTING;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.exception.DataAccessException;
@@ -10,8 +9,11 @@ import org.jooq.exception.SQLStateClass;
 
 @ApplicationScoped
 public class SettingRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    SettingRepository(DSLContext db) {
+        this.db = db;
+    }
 
     public Optional<String> get(String key) {
         return db.select(SETTING.VALUE).from(SETTING).where(SETTING.KEY.eq(key)).fetchOptional(SETTING.VALUE);

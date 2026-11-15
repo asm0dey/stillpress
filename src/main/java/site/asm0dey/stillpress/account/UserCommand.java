@@ -1,6 +1,5 @@
 package site.asm0dey.stillpress.account;
 
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import picocli.CommandLine.Command;
@@ -25,12 +24,15 @@ public class UserCommand {
         String login;
         @Spec
         CommandSpec spec;
-        @Inject
-        AuthorRepository users;
-        @Inject
-        SetPasswordLink link;
-        @Inject
-        SettingRepository settings;
+        private final AuthorRepository users;
+        private final SetPasswordLink link;
+        private final SettingRepository settings;
+
+        ResetPassword(AuthorRepository users, SetPasswordLink link, SettingRepository settings) {
+            this.users = users;
+            this.link = link;
+            this.settings = settings;
+        }
 
         @Override
         public Integer call() {
@@ -56,14 +58,22 @@ public class UserCommand {
         String login;
         @Spec
         CommandSpec spec;
-        @Inject
-        AuthorRepository users;
-        @Inject
-        TwoFactorRepository factors;
-        @Inject
-        SessionRepository sessions;
-        @Inject
-        TwoFactorPolicy policy;
+        private final AuthorRepository users;
+        private final TwoFactorRepository factors;
+        private final SessionRepository sessions;
+        private final TwoFactorPolicy policy;
+
+        Reset2fa(
+                AuthorRepository users,
+                TwoFactorRepository factors,
+                SessionRepository sessions,
+                TwoFactorPolicy policy
+        ) {
+            this.users = users;
+            this.factors = factors;
+            this.sessions = sessions;
+            this.policy = policy;
+        }
 
         @Override
         @Transactional

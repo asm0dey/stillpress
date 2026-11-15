@@ -6,7 +6,6 @@ import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import static site.asm0dey.stillpress.db.Tables.PASSKEY;
 import static site.asm0dey.stillpress.db.Tables.TOTP_FACTOR;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.Field;
@@ -23,8 +22,7 @@ import site.asm0dey.stillpress.importer.Nicename;
  */
 @ApplicationScoped
 public class AuthorRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
 
     public Optional<AuthorRecord> findById(long id) {
         return db.selectFrom(AUTHOR).where(AUTHOR.ID.eq(id)).fetchOptional();
@@ -59,6 +57,10 @@ public class AuthorRepository {
             ))
         )
         .as("two_factor");
+
+    AuthorRepository(DSLContext db) {
+        this.db = db;
+    }
 
     /**
      * Administrators and editors with an email: who reviews what contributors submit.

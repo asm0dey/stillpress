@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
 import io.quarkus.security.Authenticated;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -28,14 +27,17 @@ import site.asm0dey.stillpress.wpapi.OEmbedProxy;
 @Path("/admin/api")
 @Authenticated
 public class MediaResource {
-    @Inject
-    MediaRepository media;
-    @Inject
-    OEmbedProxy oembed;
-    @Inject
-    MediaService service;
-    @Inject
-    SecurityIdentity identity;
+    private final MediaRepository media;
+    private final OEmbedProxy oembed;
+    private final MediaService service;
+    private final SecurityIdentity identity;
+
+    MediaResource(MediaRepository media, OEmbedProxy oembed, MediaService service, SecurityIdentity identity) {
+        this.media = media;
+        this.oembed = oembed;
+        this.service = service;
+        this.identity = identity;
+    }
 
     public record MediaView(
             long id,

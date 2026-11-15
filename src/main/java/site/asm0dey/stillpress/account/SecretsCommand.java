@@ -1,6 +1,5 @@
 package site.asm0dey.stillpress.account;
 
-import jakarta.inject.Inject;
 import module java.base;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -14,12 +13,15 @@ public class SecretsCommand {
     public static class Reset implements Callable<Integer> {
         @Spec
         CommandSpec spec;
-        @Inject
-        SecretRepository secrets;
-        @Inject
-        Captcha captcha;
-        @Inject
-        TwoFactorRepository factors;
+        private final SecretRepository secrets;
+        private final Captcha captcha;
+        private final TwoFactorRepository factors;
+
+        Reset(SecretRepository secrets, Captcha captcha, TwoFactorRepository factors) {
+            this.secrets = secrets;
+            this.captcha = captcha;
+            this.factors = factors;
+        }
 
         @Override
         public Integer call() {

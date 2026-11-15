@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.publish;
 
 import static site.asm0dey.stillpress.db.Tables.PUBLISH_QUEUE;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 
@@ -12,8 +11,11 @@ import org.jooq.DSLContext;
  */
 @ApplicationScoped
 public class PublishQueue {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    PublishQueue(DSLContext db) {
+        this.db = db;
+    }
 
     /**
      * Everything read by one snapshot, folded by kind; {@code ids} are the queue rows it covers.

@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.admin;
 
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
@@ -34,20 +33,31 @@ import site.asm0dey.stillpress.store.TermRepository;
 @Authenticated
 public class ItemsResource {
     private static final int PER_PAGE = 20;
-    @Inject
-    ItemService service;
-    @Inject
-    Permalinker permalinks;
-    @Inject
-    ItemRepository items;
-    @Inject
-    TermRepository terms;
-    @Inject
-    AuthorRepository authors;
-    @Inject
-    Revisions revisions;
-    @Inject
-    SecurityIdentity identity;
+    private final ItemService service;
+    private final Permalinker permalinks;
+    private final ItemRepository items;
+    private final TermRepository terms;
+    private final AuthorRepository authors;
+    private final Revisions revisions;
+    private final SecurityIdentity identity;
+
+    ItemsResource(
+            ItemService service,
+            Permalinker permalinks,
+            ItemRepository items,
+            TermRepository terms,
+            AuthorRepository authors,
+            Revisions revisions,
+            SecurityIdentity identity
+    ) {
+        this.service = service;
+        this.permalinks = permalinks;
+        this.items = items;
+        this.terms = terms;
+        this.authors = authors;
+        this.revisions = revisions;
+        this.identity = identity;
+    }
 
     public record ItemView(
             long id,

@@ -1,6 +1,5 @@
 package site.asm0dey.stillpress.account;
 
-import jakarta.inject.Inject;
 import module java.base;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -16,8 +15,11 @@ public class CaptchaCommand {
     public static class None implements Callable<Integer> {
         @Spec
         CommandSpec spec;
-        @Inject
-        Captcha captcha;
+        private final Captcha captcha;
+
+        None(Captcha captcha) {
+            this.captcha = captcha;
+        }
 
         @Override
         public Integer call() {

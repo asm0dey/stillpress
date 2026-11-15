@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.publish.views;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import site.asm0dey.stillpress.blocks.BlockRenderer;
 import site.asm0dey.stillpress.blocks.ClassicContent;
@@ -18,18 +17,28 @@ import site.asm0dey.stillpress.store.TermRepository;
 
 @ApplicationScoped
 public class ViewFactory {
-    @Inject
-    BlockRenderer blocks;
-    @Inject
-    TermRepository terms;
-    @Inject
-    CommentRepository comments;
-    @Inject
-    AuthorRepository authors;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    ReusableBlockRepository reusable;
+    private final BlockRenderer blocks;
+    private final TermRepository terms;
+    private final CommentRepository comments;
+    private final AuthorRepository authors;
+    private final SettingRepository settings;
+    private final ReusableBlockRepository reusable;
+
+    ViewFactory(
+            BlockRenderer blocks,
+            TermRepository terms,
+            CommentRepository comments,
+            AuthorRepository authors,
+            SettingRepository settings,
+            ReusableBlockRepository reusable
+    ) {
+        this.blocks = blocks;
+        this.terms = terms;
+        this.comments = comments;
+        this.authors = authors;
+        this.settings = settings;
+        this.reusable = reusable;
+    }
 
     public SiteView site() {
         return new SiteView(

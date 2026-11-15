@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
 import io.quarkus.security.Authenticated;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import site.asm0dey.stillpress.content.PermalinkStructure;
@@ -15,14 +14,17 @@ import site.asm0dey.stillpress.store.SettingRepository;
  */
 @Path("/admin/api/site")
 public class SiteResource {
-    @Inject
-    SettingRepository settings;
-    @Inject
-    ItemRepository items;
-    @Inject
-    CommentRepository comments;
-    @Inject
-    ImportGuard guard;
+    private final SettingRepository settings;
+    private final ItemRepository items;
+    private final CommentRepository comments;
+    private final ImportGuard guard;
+
+    SiteResource(SettingRepository settings, ItemRepository items, CommentRepository comments, ImportGuard guard) {
+        this.settings = settings;
+        this.items = items;
+        this.comments = comments;
+        this.guard = guard;
+    }
 
     public record Site(
             String title,

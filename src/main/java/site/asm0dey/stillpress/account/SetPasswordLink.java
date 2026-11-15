@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.account;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TokenRepository;
@@ -14,10 +13,13 @@ public class SetPasswordLink {
     public static final Duration INVITE_TTL = Duration.ofDays(7);
     public static final Duration RESET_TTL = Duration.ofHours(1);
     public static final Duration MANUAL_TTL = Duration.ofHours(24);
-    @Inject
-    TokenRepository tokens;
-    @Inject
-    SettingRepository settings;
+    private final TokenRepository tokens;
+    private final SettingRepository settings;
+
+    SetPasswordLink(TokenRepository tokens, SettingRepository settings) {
+        this.tokens = tokens;
+        this.settings = settings;
+    }
 
     public String issue(long userId, String purpose, Duration ttl) {
         return link(tokens.create(userId, purpose, ttl));

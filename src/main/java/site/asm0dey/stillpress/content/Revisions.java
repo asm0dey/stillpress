@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.content;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
 import site.asm0dey.stillpress.store.RevisionRepository;
@@ -14,10 +13,13 @@ import site.asm0dey.stillpress.store.SettingRepository;
 @ApplicationScoped
 public class Revisions {
     private static final int KEEP = 25;
-    @Inject
-    RevisionRepository repo;
-    @Inject
-    SettingRepository settings;
+    private final RevisionRepository repo;
+    private final SettingRepository settings;
+
+    Revisions(RevisionRepository repo, SettingRepository settings) {
+        this.repo = repo;
+        this.settings = settings;
+    }
 
     public void saved(
             String objectType,

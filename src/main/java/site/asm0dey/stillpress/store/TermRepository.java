@@ -4,7 +4,6 @@ import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.ITEM_TERM;
 import static site.asm0dey.stillpress.db.Tables.TERM;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.Records;
@@ -14,8 +13,11 @@ import site.asm0dey.stillpress.db.tables.records.TermRecord;
 
 @ApplicationScoped
 public class TermRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    TermRepository(DSLContext db) {
+        this.db = db;
+    }
 
     public List<TermRecord> forItem(long itemId) {
         return db

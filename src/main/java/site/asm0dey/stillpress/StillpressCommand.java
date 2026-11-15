@@ -2,7 +2,6 @@ package site.asm0dey.stillpress;
 
 import io.quarkus.picocli.runtime.annotations.TopCommand;
 import io.quarkus.runtime.Quarkus;
-import jakarta.inject.Inject;
 import module java.base;
 import picocli.CommandLine.Command;
 import site.asm0dey.stillpress.account.Captcha;
@@ -31,8 +30,11 @@ import site.asm0dey.stillpress.verify.VerifyUrlsCommand;
         }
 )
 public class StillpressCommand implements Runnable {
-    @Inject
-    ServeCommand serve;
+    private final ServeCommand serve;
+
+    StillpressCommand(ServeCommand serve) {
+        this.serve = serve;
+    }
 
     @Override
     public void run() {
@@ -42,8 +44,11 @@ public class StillpressCommand implements Runnable {
 
     @Command(name = "serve", description = "Serve the published site (Mode 1) and the redirect fallback (default)")
     public static class ServeCommand implements Runnable {
-        @Inject
-        Captcha captcha;
+        private final Captcha captcha;
+
+        ServeCommand(Captcha captcha) {
+            this.captcha = captcha;
+        }
 
         /**
          * 1 and the problem on stderr when the CAPTCHA environment is unusable, so a typo fails at start, not on first use.

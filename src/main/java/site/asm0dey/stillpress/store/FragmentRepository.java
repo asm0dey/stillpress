@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.store;
 
 import static site.asm0dey.stillpress.db.Tables.ITEM_FRAGMENT;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 
@@ -14,8 +13,11 @@ import org.jooq.DSLContext;
 public class FragmentRepository {
     public static final String ENTRY = "entry";
     public static final String FEED = "feed";
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    FragmentRepository(DSLContext db) {
+        this.db = db;
+    }
 
     public Map<Long, String> find(String kind, Collection<Long> ids) {
         return db

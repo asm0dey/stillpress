@@ -3,7 +3,6 @@ package site.asm0dey.stillpress.admin;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -24,18 +23,27 @@ import site.asm0dey.stillpress.store.SettingRepository;
  */
 @Path("/admin/api/reset")
 public class ResetResource {
-    @Inject
-    SiteReset reset;
-    @Inject
-    LoginLimiter limiter;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    SecurityIdentity identity;
+    private final SiteReset reset;
+    private final LoginLimiter limiter;
+    private final AuthorRepository users;
+    private final SettingRepository settings;
+    private final SecurityIdentity identity;
     @Context
     HttpServerRequest request;
+
+    ResetResource(
+            SiteReset reset,
+            LoginLimiter limiter,
+            AuthorRepository users,
+            SettingRepository settings,
+            SecurityIdentity identity
+    ) {
+        this.reset = reset;
+        this.limiter = limiter;
+        this.users = users;
+        this.settings = settings;
+        this.identity = identity;
+    }
 
     public record Confirmation(String password, String confirm) {}
 

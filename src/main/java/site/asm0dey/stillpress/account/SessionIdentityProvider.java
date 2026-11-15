@@ -8,7 +8,6 @@ import io.quarkus.security.runtime.QuarkusPrincipal;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.TwoFactorRepository;
 
@@ -20,12 +19,15 @@ import site.asm0dey.stillpress.store.TwoFactorRepository;
 public class SessionIdentityProvider implements IdentityProvider<SessionAuthenticationRequest> {
     public static final String USER_ID = "userId";
     public static final String ENROLL_REQUIRED = "enrollRequired";
-    @Inject
-    SessionRepository sessions;
-    @Inject
-    TwoFactorPolicy policy;
-    @Inject
-    TwoFactorRepository factors;
+    private final SessionRepository sessions;
+    private final TwoFactorPolicy policy;
+    private final TwoFactorRepository factors;
+
+    SessionIdentityProvider(SessionRepository sessions, TwoFactorPolicy policy, TwoFactorRepository factors) {
+        this.sessions = sessions;
+        this.policy = policy;
+        this.factors = factors;
+    }
 
     @Override
     public Class<SessionAuthenticationRequest> getRequestType() {

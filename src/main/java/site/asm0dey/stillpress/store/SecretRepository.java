@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.store;
 
 import static site.asm0dey.stillpress.db.Tables.SECRET;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import site.asm0dey.stillpress.db.tables.records.SecretRecord;
@@ -12,8 +11,11 @@ import site.asm0dey.stillpress.db.tables.records.SecretRecord;
  */
 @ApplicationScoped
 public class SecretRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    SecretRepository(DSLContext db) {
+        this.db = db;
+    }
 
     public Optional<String> ciphertext(String name) {
         return db

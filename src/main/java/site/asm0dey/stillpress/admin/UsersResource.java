@@ -4,7 +4,6 @@ import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -40,30 +39,46 @@ import site.asm0dey.stillpress.store.TwoFactorRepository;
 @Path("/admin/api/users")
 @RolesAllowed("administrator")
 public class UsersResource {
-    @Inject
-    AuthorRepository users;
-    @Inject
-    SetPasswordLink links;
-    @Inject
-    ImportGuard guard;
-    @Inject
-    ItemRepository items;
-    @Inject
-    FragmentRepository fragments;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    Jobs jobs;
-    @Inject
-    SecurityIdentity identity;
-    @Inject
-    SiteMail mail;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    TwoFactorRepository factors;
-    @Inject
-    SessionRepository sessions;
+    private final AuthorRepository users;
+    private final SetPasswordLink links;
+    private final ImportGuard guard;
+    private final ItemRepository items;
+    private final FragmentRepository fragments;
+    private final PublishQueue queue;
+    private final Jobs jobs;
+    private final SecurityIdentity identity;
+    private final SiteMail mail;
+    private final SettingRepository settings;
+    private final TwoFactorRepository factors;
+    private final SessionRepository sessions;
+
+    UsersResource(
+            AuthorRepository users,
+            SetPasswordLink links,
+            ImportGuard guard,
+            ItemRepository items,
+            FragmentRepository fragments,
+            PublishQueue queue,
+            Jobs jobs,
+            SecurityIdentity identity,
+            SiteMail mail,
+            SettingRepository settings,
+            TwoFactorRepository factors,
+            SessionRepository sessions
+    ) {
+        this.users = users;
+        this.links = links;
+        this.guard = guard;
+        this.items = items;
+        this.fragments = fragments;
+        this.queue = queue;
+        this.jobs = jobs;
+        this.identity = identity;
+        this.mail = mail;
+        this.settings = settings;
+        this.factors = factors;
+        this.sessions = sessions;
+    }
 
     public record UserView(
             long id,

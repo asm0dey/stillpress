@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.admin;
 
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
@@ -18,10 +17,13 @@ import site.asm0dey.stillpress.content.ItemService;
 @Path("/admin/api/security/two-factor")
 @RolesAllowed("administrator")
 public class TwoFactorPolicyResource {
-    @Inject
-    TwoFactorPolicy policy;
-    @Inject
-    SecurityIdentity identity;
+    private final TwoFactorPolicy policy;
+    private final SecurityIdentity identity;
+
+    TwoFactorPolicyResource(TwoFactorPolicy policy, SecurityIdentity identity) {
+        this.policy = policy;
+        this.identity = identity;
+    }
 
     public record Policy(Boolean required) {}
 

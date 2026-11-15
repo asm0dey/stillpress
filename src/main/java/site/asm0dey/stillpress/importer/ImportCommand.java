@@ -1,6 +1,5 @@
 package site.asm0dey.stillpress.importer;
 
-import jakarta.inject.Inject;
 import module java.base;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -34,10 +33,13 @@ public class ImportCommand implements Callable<Integer> {
     String tagBase;
     @Spec
     CommandSpec spec;
-    @Inject
-    WordPressImporter importer;
-    @Inject
-    ImportGuard guard;
+    private final WordPressImporter importer;
+    private final ImportGuard guard;
+
+    ImportCommand(WordPressImporter importer, ImportGuard guard) {
+        this.importer = importer;
+        this.guard = guard;
+    }
 
     ImportOptions options() {
         return new ImportOptions(postsPerPage, categoryBase, tagBase, postsPerRss);

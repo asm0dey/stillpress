@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PUT;
@@ -25,20 +24,31 @@ import site.asm0dey.stillpress.store.TermRepository;
 @Path("/admin/api/settings")
 @RolesAllowed("administrator")
 public class SettingsResource {
-    @Inject
-    SettingRepository settings;
-    @Inject
-    TermRepository terms;
-    @Inject
-    Permalinker permalinks;
-    @Inject
-    RedirectRepository redirects;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    Jobs jobs;
-    @Inject
-    ImportGuard guard;
+    private final SettingRepository settings;
+    private final TermRepository terms;
+    private final Permalinker permalinks;
+    private final RedirectRepository redirects;
+    private final PublishQueue queue;
+    private final Jobs jobs;
+    private final ImportGuard guard;
+
+    SettingsResource(
+            SettingRepository settings,
+            TermRepository terms,
+            Permalinker permalinks,
+            RedirectRepository redirects,
+            PublishQueue queue,
+            Jobs jobs,
+            ImportGuard guard
+    ) {
+        this.settings = settings;
+        this.terms = terms;
+        this.permalinks = permalinks;
+        this.redirects = redirects;
+        this.queue = queue;
+        this.jobs = jobs;
+        this.guard = guard;
+    }
 
     public record Settings(
             String title,

@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.content;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.blocks.BlockRenderer;
@@ -21,14 +20,17 @@ import site.asm0dey.stillpress.store.ReusableBlockRepository;
 public class HtmlCheck {
     private static final String EDITORS_BLOCK = " in a reusable block owned by an editor; an editor must change it";
     private static final String EDITORS_ITEM = " in an item owned by an editor; an editor must change it";
-    @Inject
-    ViewFactory views;
-    @Inject
-    ReusableBlockRepository blocks;
-    @Inject
-    ItemRepository items;
-    @Inject
-    AuthorRepository authors;
+    private final ViewFactory views;
+    private final ReusableBlockRepository blocks;
+    private final ItemRepository items;
+    private final AuthorRepository authors;
+
+    HtmlCheck(ViewFactory views, ReusableBlockRepository blocks, ItemRepository items, AuthorRepository authors) {
+        this.views = views;
+        this.blocks = blocks;
+        this.items = items;
+        this.authors = authors;
+    }
 
     void item(Role role, String title, String body, String bodyFormat, String excerpt) {
         if (Capabilities.canPostUnfilteredHtml(role)) {

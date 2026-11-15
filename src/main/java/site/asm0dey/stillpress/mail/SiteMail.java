@@ -13,7 +13,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.TransactionPhase;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.account.Secrets;
@@ -29,20 +28,23 @@ public class SiteMail {
     public static final String PASSWORD = "smtp_password";
     private static final Logger LOG = Logger.getLogger(SiteMail.class);
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
-    @Inject
-    Vertx vertx;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    Secrets secrets;
-    @Inject
-    Event<Mail> afterCommit;
+    private final Vertx vertx;
+    private final SettingRepository settings;
+    private final Secrets secrets;
+    private final Event<Mail> afterCommit;
 
     private record Client(MailClient client, String from) {}
 
     // built on first use after a reload, so it always reflects committed settings
     private Client client;
     private boolean loaded;
+
+    SiteMail(Vertx vertx, SettingRepository settings, Secrets secrets, Event<Mail> afterCommit) {
+        this.vertx = vertx;
+        this.settings = settings;
+        this.secrets = secrets;
+        this.afterCommit = afterCommit;
+    }
 
     /**
      * The texts in {@code locale} ({@code en} or {@code ru}).

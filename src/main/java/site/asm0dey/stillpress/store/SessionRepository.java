@@ -7,7 +7,6 @@ import static site.asm0dey.stillpress.db.Tables.PASSKEY;
 import static site.asm0dey.stillpress.db.Tables.SESSION;
 import static site.asm0dey.stillpress.db.Tables.TOTP_FACTOR;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
@@ -19,8 +18,11 @@ import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 public class SessionRepository {
     public static final Duration LIFETIME = Duration.ofDays(14);
     private static final SecureRandom RANDOM = new SecureRandom();
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    SessionRepository(DSLContext db) {
+        this.db = db;
+    }
 
     /**
      * @return the raw cookie value

@@ -60,27 +60,27 @@ class ImportCommandTest {
 
     @Test
     void parsesMediaLimit() {
-        var cmd = new ImportCommand();
+        var cmd = new ImportCommand(null, null);
         new CommandLine(cmd).parseArgs("--wxr", "x.xml", "--media-limit", "100");
         assertThat(cmd.mediaLimit).isEqualTo(100);
     }
 
     @Test
     void mediaLimitIsOptional() {
-        var cmd = new ImportCommand();
+        var cmd = new ImportCommand(null, null);
         new CommandLine(cmd).parseArgs("--wxr", "x.xml");
         assertThat(cmd.mediaLimit).isNull();
     }
 
     @Test
     void negativeMediaLimitIsRejectedWithExitCode2() {
-        var exit = new CommandLine(new ImportCommand()).execute("--wxr", "x.xml", "--media-limit", "-1");
+        var exit = new CommandLine(new ImportCommand(null, null)).execute("--wxr", "x.xml", "--media-limit", "-1");
         assertThat(exit).isEqualTo(2);
     }
 
     @Test
     void siteOptionsDefaultToWordPressDefaults() {
-        var cmd = new ImportCommand();
+        var cmd = new ImportCommand(null, null);
         new CommandLine(cmd).parseArgs("--wxr", "x.xml");
         assertThat(cmd.options()).isEqualTo(ImportOptions.DEFAULTS);
         assertThat(ImportOptions.DEFAULTS).isEqualTo(new ImportOptions(10, "category", "tag", 10));
@@ -88,7 +88,7 @@ class ImportCommandTest {
 
     @Test
     void parsesSiteOptions() {
-        var cmd = new ImportCommand();
+        var cmd = new ImportCommand(null, null);
         new CommandLine(cmd)
             .parseArgs(
                     "--wxr",
@@ -118,7 +118,7 @@ class ImportCommandTest {
         )) {
             var all = new ArrayList<>(List.of("--wxr", "x.xml"));
             all.addAll(args);
-            var cmd = new CommandLine(new ImportCommand());
+            var cmd = new CommandLine(new ImportCommand(null, null));
             cmd.setErr(new PrintWriter(new StringWriter()));
             assertThat(cmd.execute(all.toArray(String[]::new))).as(args.toString()).isEqualTo(2);
         }

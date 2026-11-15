@@ -3,7 +3,6 @@ package site.asm0dey.stillpress.admin;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
 import module java.base;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -17,12 +16,18 @@ import site.asm0dey.stillpress.store.AuthorRepository;
 public class SetupToken {
     private static final Logger LOG = Logger.getLogger(SetupToken.class);
     private static final SecureRandom RANDOM = new SecureRandom();
-    @Inject
-    AuthorRepository users;
+    private final AuthorRepository users;
     // Main turns this off for CLI commands, which must not print a token nobody can use
-    @ConfigProperty(name = "quarkus.http.host-enabled", defaultValue = "true")
-    boolean httpEnabled;
+    private final boolean httpEnabled;
     private volatile String token;
+
+    SetupToken(
+            AuthorRepository users,
+            @ConfigProperty(name = "quarkus.http.host-enabled", defaultValue = "true") boolean httpEnabled
+    ) {
+        this.users = users;
+        this.httpEnabled = httpEnabled;
+    }
 
     void onStart(@Observes StartupEvent e) {
         if (httpEnabled && !users.anyAdministratorWithPassword()) {

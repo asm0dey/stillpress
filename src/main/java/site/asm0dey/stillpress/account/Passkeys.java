@@ -6,7 +6,6 @@ import io.quarkus.security.webauthn.WebAuthnUserProvider;
 import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import site.asm0dey.stillpress.db.tables.records.PasskeyRecord;
 import site.asm0dey.stillpress.store.AuthorRepository;
@@ -20,10 +19,13 @@ import site.asm0dey.stillpress.store.TwoFactorRepository;
 @ApplicationScoped
 @Blocking
 public class Passkeys implements WebAuthnUserProvider {
-    @Inject
-    TwoFactorRepository factors;
-    @Inject
-    AuthorRepository users;
+    private final TwoFactorRepository factors;
+    private final AuthorRepository users;
+
+    Passkeys(TwoFactorRepository factors, AuthorRepository users) {
+        this.factors = factors;
+        this.users = users;
+    }
 
     @Override
     public Uni<List<WebAuthnCredentialRecord>> findByUsername(String login) {

@@ -1,6 +1,5 @@
 package site.asm0dey.stillpress.serve;
 
-import jakarta.inject.Inject;
 import module java.base;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -23,8 +22,11 @@ public class NginxConfigCommand implements Callable<Integer> {
     String upstream;
     @Spec
     CommandSpec spec;
-    @Inject
-    DataDir dataDir;
+    private final DataDir dataDir;
+
+    NginxConfigCommand(DataDir dataDir) {
+        this.dataDir = dataDir;
+    }
 
     @Override
     public Integer call() {

@@ -3,7 +3,6 @@ package site.asm0dey.stillpress.admin;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -33,24 +32,36 @@ public class SetupResource {
     static final Pattern LANGUAGE = Pattern.compile("^[a-z]{2,3}(-[A-Z]{2})?$");
     // one install = one process; held across the commit so a second caller sees the first administrator
     private static final ReentrantLock LOCK = new ReentrantLock();
-    @Inject
-    SetupToken token;
-    @Inject
-    Captcha captcha;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    SessionRepository sessions;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    Jobs jobs;
-    @Inject
-    ImportGuard guard;
+    private final SetupToken token;
+    private final Captcha captcha;
+    private final AuthorRepository users;
+    private final SessionRepository sessions;
+    private final SettingRepository settings;
+    private final PublishQueue queue;
+    private final Jobs jobs;
+    private final ImportGuard guard;
     @Context
     HttpServerRequest request;
+
+    SetupResource(
+            SetupToken token,
+            Captcha captcha,
+            AuthorRepository users,
+            SessionRepository sessions,
+            SettingRepository settings,
+            PublishQueue queue,
+            Jobs jobs,
+            ImportGuard guard
+    ) {
+        this.token = token;
+        this.captcha = captcha;
+        this.users = users;
+        this.sessions = sessions;
+        this.settings = settings;
+        this.queue = queue;
+        this.jobs = jobs;
+        this.guard = guard;
+    }
 
     public record Setup(
             String token,

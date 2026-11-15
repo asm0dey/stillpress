@@ -2,17 +2,19 @@ package site.asm0dey.stillpress.blocks;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
-import jakarta.inject.Inject;
 import module java.base;
 
 @ApplicationScoped
 public class BlockRenderer {
     public static final int MAX_DEPTH = 5;
-    @Inject
-    Instance<DynamicBlockRenderer> dynamic;
+    private final Instance<DynamicBlockRenderer> dynamic;
     // the map is built before publication and never mutated
     @SuppressWarnings("java:S3077")
     private volatile Map<String, DynamicBlockRenderer> byName;
+
+    BlockRenderer(Instance<DynamicBlockRenderer> dynamic) {
+        this.dynamic = dynamic;
+    }
 
     public String render(String document, RenderContext ctx) {
         return render(BlockParser.parse(document), ctx);

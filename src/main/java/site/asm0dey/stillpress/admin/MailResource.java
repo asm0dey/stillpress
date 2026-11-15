@@ -3,7 +3,6 @@ package site.asm0dey.stillpress.admin;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
@@ -29,16 +28,25 @@ public class MailResource {
     private static final Set<String> SECURITY = Set.of("none", "starttls", "tls");
     private static final List<String> KEYS =
             List.of("smtp_host", "smtp_port", "smtp_security", "smtp_username", "smtp_from");
-    @Inject
-    SettingRepository settings;
-    @Inject
-    Secrets secrets;
-    @Inject
-    SiteMail mail;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    SecurityIdentity identity;
+    private final SettingRepository settings;
+    private final Secrets secrets;
+    private final SiteMail mail;
+    private final AuthorRepository users;
+    private final SecurityIdentity identity;
+
+    MailResource(
+            SettingRepository settings,
+            Secrets secrets,
+            SiteMail mail,
+            AuthorRepository users,
+            SecurityIdentity identity
+    ) {
+        this.settings = settings;
+        this.secrets = secrets;
+        this.mail = mail;
+        this.users = users;
+        this.identity = identity;
+    }
 
     public record Settings(
             String host,

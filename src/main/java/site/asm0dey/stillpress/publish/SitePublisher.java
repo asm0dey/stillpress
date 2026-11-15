@@ -3,7 +3,6 @@ package site.asm0dey.stillpress.publish;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.qute.Engine;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.db.tables.records.TermRecord;
@@ -37,32 +36,49 @@ public class SitePublisher {
     private static final int BATCH = 50;
     private static final Logger LOG = Logger.getLogger(SitePublisher.class);
     private static final Pattern PAGE = Pattern.compile("(.*)page/[0-9]+/index\\.html");
-    @Inject
-    ItemRepository items;
-    @Inject
-    CommentRepository comments;
-    @Inject
-    TermRepository terms;
-    @Inject
-    AuthorRepository authors;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    ViewFactory views;
-    @Inject
-    Engine engine;
-    @Inject
-    DataDir dataDir;
-    @Inject
-    ReleaseSwitcher switcher;
-    @Inject
-    FragmentRepository fragments;
-    @Inject
-    PublishedItemRepository published;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    PublishStatus status;
+    private final ItemRepository items;
+    private final CommentRepository comments;
+    private final TermRepository terms;
+    private final AuthorRepository authors;
+    private final SettingRepository settings;
+    private final ViewFactory views;
+    private final Engine engine;
+    private final DataDir dataDir;
+    private final ReleaseSwitcher switcher;
+    private final FragmentRepository fragments;
+    private final PublishedItemRepository published;
+    private final PublishQueue queue;
+    private final PublishStatus status;
+
+    SitePublisher(
+            ItemRepository items,
+            CommentRepository comments,
+            TermRepository terms,
+            AuthorRepository authors,
+            SettingRepository settings,
+            ViewFactory views,
+            Engine engine,
+            DataDir dataDir,
+            ReleaseSwitcher switcher,
+            FragmentRepository fragments,
+            PublishedItemRepository published,
+            PublishQueue queue,
+            PublishStatus status
+    ) {
+        this.items = items;
+        this.comments = comments;
+        this.terms = terms;
+        this.authors = authors;
+        this.settings = settings;
+        this.views = views;
+        this.engine = engine;
+        this.dataDir = dataDir;
+        this.switcher = switcher;
+        this.fragments = fragments;
+        this.published = published;
+        this.queue = queue;
+        this.status = status;
+    }
 
     public PublishResult publishAll() {
         return publish(new PublishQueue.Batch(Set.of(), Set.of(), Set.of(), false, true));

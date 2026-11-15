@@ -18,7 +18,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import io.quarkus.narayana.jta.QuarkusTransaction;
-import jakarta.inject.Inject;
 import jakarta.transaction.Status;
 import jakarta.transaction.Synchronization;
 import jakarta.transaction.TransactionSynchronizationRegistry;
@@ -39,27 +38,17 @@ public class Jobs {
     public static final String GO_LIVE = "go-live";
     public static final String PUBLISH_SWEEP = "publish-sweep";
     private static final Logger LOG = Logger.getLogger(Jobs.class);
-    @Inject
-    DataSource dataSource;
-    @Inject
-    TransactionSynchronizationRegistry registry;
+    private final DataSource dataSource;
+    private final TransactionSynchronizationRegistry registry;
     // as SetupToken: Main turns this off for CLI commands
-    @ConfigProperty(name = "quarkus.http.host-enabled", defaultValue = "true")
-    boolean httpEnabled;
-    @Inject
-    PublishLock lock;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    SitePublisher publisher;
-    @Inject
-    Permalinker permalinks;
-    @Inject
-    DSLContext db;
-    @ConfigProperty(name = "stillpress.publish.sweep-interval", defaultValue = "1m")
-    Duration sweepInterval;
-    @ConfigProperty(name = "stillpress.publish.polling-interval", defaultValue = "10s")
-    Duration pollingInterval;
+    private final boolean httpEnabled;
+    private final PublishLock lock;
+    private final PublishQueue queue;
+    private final SitePublisher publisher;
+    private final Permalinker permalinks;
+    private final DSLContext db;
+    private final Duration sweepInterval;
+    private final Duration pollingInterval;
     // a failing run retries a minute later instead of spinning
     private final Task<Void> publishSite = Tasks
         .oneTime(PUBLISH_SITE)
@@ -74,6 +63,30 @@ public class Jobs {
     // db-scheduler's Scheduler is thread-safe
     @SuppressWarnings("java:S3077")
     private volatile Scheduler scheduler;
+
+    Jobs(
+            DataSource dataSource,
+            TransactionSynchronizationRegistry registry,
+            @ConfigProperty(name = "quarkus.http.host-enabled", defaultValue = "true") boolean httpEnabled,
+            PublishLock lock,
+            PublishQueue queue,
+            SitePublisher publisher,
+            Permalinker permalinks,
+            DSLContext db,
+            @ConfigProperty(name = "stillpress.publish.sweep-interval", defaultValue = "1m") Duration sweepInterval,
+            @ConfigProperty(name = "stillpress.publish.polling-interval", defaultValue = "10s") Duration pollingInterval
+    ) {
+        this.dataSource = dataSource;
+        this.registry = registry;
+        this.httpEnabled = httpEnabled;
+        this.lock = lock;
+        this.queue = queue;
+        this.publisher = publisher;
+        this.permalinks = permalinks;
+        this.db = db;
+        this.sweepInterval = sweepInterval;
+        this.pollingInterval = pollingInterval;
+    }
 
     @PostConstruct
     void init() {

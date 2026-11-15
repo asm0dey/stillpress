@@ -1,6 +1,5 @@
 package site.asm0dey.stillpress;
 
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import picocli.CommandLine.Command;
@@ -24,12 +23,15 @@ public class ResetCommand implements Callable<Integer> {
     boolean force;
     @Spec
     CommandSpec spec;
-    @Inject
-    SiteReset reset;
-    @Inject
-    DSLContext db;
-    @Inject
-    DataDir dataDir;
+    private final SiteReset reset;
+    private final DSLContext db;
+    private final DataDir dataDir;
+
+    ResetCommand(SiteReset reset, DSLContext db, DataDir dataDir) {
+        this.reset = reset;
+        this.db = db;
+        this.dataDir = dataDir;
+    }
 
     @Override
     public Integer call() {

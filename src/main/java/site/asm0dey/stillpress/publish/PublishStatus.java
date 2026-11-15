@@ -5,7 +5,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import site.asm0dey.stillpress.store.SettingRepository;
@@ -18,13 +17,16 @@ import site.asm0dey.stillpress.store.SettingRepository;
 public class PublishStatus {
     static final String KEY = "publish_state";
     private static final int EVERY = 200;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    DSLContext db;
-    @Inject
-    ObjectMapper json;
+    private final SettingRepository settings;
+    private final DSLContext db;
+    private final ObjectMapper json;
     private int persistedDone;
+
+    PublishStatus(SettingRepository settings, DSLContext db, ObjectMapper json) {
+        this.settings = settings;
+        this.db = db;
+        this.json = json;
+    }
 
     /**
      * @param state {@code idle}, {@code queued} (changes wait and nothing runs), {@code running} or {@code failed}

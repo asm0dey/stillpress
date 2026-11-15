@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.content;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import site.asm0dey.stillpress.blocks.BlockRenderer;
@@ -18,18 +17,28 @@ import site.asm0dey.stillpress.store.ReusableBlockRepository;
 @ApplicationScoped
 public class ReusableBlockService {
     public static final String OBJECT_TYPE = "reusable_block";
-    @Inject
-    ReusableBlockRepository blocks;
-    @Inject
-    Revisions revisions;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    Jobs jobs;
-    @Inject
-    ImportGuard guard;
-    @Inject
-    HtmlCheck html;
+    private final ReusableBlockRepository blocks;
+    private final Revisions revisions;
+    private final PublishQueue queue;
+    private final Jobs jobs;
+    private final ImportGuard guard;
+    private final HtmlCheck html;
+
+    ReusableBlockService(
+            ReusableBlockRepository blocks,
+            Revisions revisions,
+            PublishQueue queue,
+            Jobs jobs,
+            ImportGuard guard,
+            HtmlCheck html
+    ) {
+        this.blocks = blocks;
+        this.revisions = revisions;
+        this.queue = queue;
+        this.jobs = jobs;
+        this.guard = guard;
+        this.html = html;
+    }
 
     /**
      * Creates ({@code ref == null}) or updates a block; a null title or content keeps the stored value. Refused with

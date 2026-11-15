@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.content;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Status;
 import jakarta.transaction.Synchronization;
 import jakarta.transaction.TransactionSynchronizationRegistry;
@@ -40,20 +39,31 @@ public class MediaService {
             Map.entry("zip", "application/zip")
     );
     private static final Logger LOG = Logger.getLogger(MediaService.class);
-    @Inject
-    TransactionSynchronizationRegistry registry;
-    @Inject
-    MediaRepository media;
-    @Inject
-    DataDir dataDir;
-    @Inject
-    Permalinker permalinker;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    Jobs jobs;
-    @Inject
-    ImportGuard guard;
+    private final TransactionSynchronizationRegistry registry;
+    private final MediaRepository media;
+    private final DataDir dataDir;
+    private final Permalinker permalinker;
+    private final PublishQueue queue;
+    private final Jobs jobs;
+    private final ImportGuard guard;
+
+    MediaService(
+            TransactionSynchronizationRegistry registry,
+            MediaRepository media,
+            DataDir dataDir,
+            Permalinker permalinker,
+            PublishQueue queue,
+            Jobs jobs,
+            ImportGuard guard
+    ) {
+        this.registry = registry;
+        this.media = media;
+        this.dataDir = dataDir;
+        this.permalinker = permalinker;
+        this.queue = queue;
+        this.jobs = jobs;
+        this.guard = guard;
+    }
 
     /**
      * Copies {@code upload} into the media folder of the current month (site time zone) under a sanitized, unique name.

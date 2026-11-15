@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.admin;
 
 import io.quarkus.security.Authenticated;
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -17,12 +16,15 @@ import site.asm0dey.stillpress.publish.PublishStatus;
  */
 @Path("/admin/api/publish")
 public class PublishResource {
-    @Inject
-    PublishStatus status;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    Jobs jobs;
+    private final PublishStatus status;
+    private final PublishQueue queue;
+    private final Jobs jobs;
+
+    PublishResource(PublishStatus status, PublishQueue queue, Jobs jobs) {
+        this.status = status;
+        this.queue = queue;
+        this.jobs = jobs;
+    }
 
     @GET
     @Authenticated

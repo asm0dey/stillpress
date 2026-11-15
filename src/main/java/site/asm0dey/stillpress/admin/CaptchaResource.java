@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
@@ -16,8 +15,11 @@ import site.asm0dey.stillpress.content.ItemService;
 @Path("/admin/api/captcha")
 @RolesAllowed("administrator")
 public class CaptchaResource {
-    @Inject
-    Captcha captcha;
+    private final Captcha captcha;
+
+    CaptchaResource(Captcha captcha) {
+        this.captcha = captcha;
+    }
 
     public record Settings(String provider, String turnstileSiteKey, boolean secretSet, boolean locked) {}
 

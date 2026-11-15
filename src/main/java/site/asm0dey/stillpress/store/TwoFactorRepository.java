@@ -4,7 +4,6 @@ import static site.asm0dey.stillpress.db.Tables.PASSKEY;
 import static site.asm0dey.stillpress.db.Tables.TOTP_FACTOR;
 import io.quarkus.security.webauthn.WebAuthnCredentialRecord.RequiredPersistedData;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import org.jooq.DSLContext;
@@ -19,8 +18,11 @@ import site.asm0dey.stillpress.db.tables.records.TotpFactorRecord;
  */
 @ApplicationScoped
 public class TwoFactorRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    TwoFactorRepository(DSLContext db) {
+        this.db = db;
+    }
 
     public Optional<TotpFactorRecord> totp(long userId) {
         return db.selectFrom(TOTP_FACTOR).where(TOTP_FACTOR.USER_ID.eq(userId)).fetchOptional();

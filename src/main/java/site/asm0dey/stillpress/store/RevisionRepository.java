@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.store;
 
 import static site.asm0dey.stillpress.db.Tables.REVISION;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
@@ -13,8 +12,11 @@ import site.asm0dey.stillpress.db.tables.records.RevisionRecord;
  */
 @ApplicationScoped
 public class RevisionRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    RevisionRepository(DSLContext db) {
+        this.db = db;
+    }
 
     public void insert(
             String objectType,

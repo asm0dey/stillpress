@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.mail;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import site.asm0dey.stillpress.admin.AuthResource;
 import site.asm0dey.stillpress.admin.UsersResource;
 import site.asm0dey.stillpress.db.tables.records.ItemRecord;
@@ -13,12 +12,15 @@ import site.asm0dey.stillpress.store.SettingRepository;
  */
 @ApplicationScoped
 public class ReviewNotifications {
-    @Inject
-    SiteMail mail;
-    @Inject
-    AuthorRepository authors;
-    @Inject
-    SettingRepository settings;
+    private final SiteMail mail;
+    private final AuthorRepository authors;
+    private final SettingRepository settings;
+
+    ReviewNotifications(SiteMail mail, AuthorRepository authors, SettingRepository settings) {
+        this.mail = mail;
+        this.authors = authors;
+        this.settings = settings;
+    }
 
     /**
      * Mails every reviewer except {@code actorId} once the current transaction commits; nothing without SMTP.

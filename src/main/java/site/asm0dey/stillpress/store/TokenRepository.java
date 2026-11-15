@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.store;
 
 import static site.asm0dey.stillpress.db.Tables.USER_TOKEN;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import org.jooq.DSLContext;
@@ -22,8 +21,11 @@ public class TokenRepository {
      */
     public static final String SECOND_FACTOR = "second_factor";
     public static final Duration SECOND_FACTOR_TTL = Duration.ofMinutes(5);
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    TokenRepository(DSLContext db) {
+        this.db = db;
+    }
 
     /**
      * The user's one live token of this purpose, replacing any earlier one.

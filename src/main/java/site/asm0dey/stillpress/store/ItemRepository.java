@@ -5,7 +5,6 @@ import static org.jooq.impl.DSL.notExists;
 import static org.jooq.impl.DSL.selectOne;
 import static site.asm0dey.stillpress.db.Tables.*;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
@@ -15,8 +14,11 @@ import site.asm0dey.stillpress.db.tables.records.ItemRecord;
 
 @ApplicationScoped
 public class ItemRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    ItemRepository(DSLContext db) {
+        this.db = db;
+    }
 
     /**
      * Published, non-password-protected posts and pages, newest first.

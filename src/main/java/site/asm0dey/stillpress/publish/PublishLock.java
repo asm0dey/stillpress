@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.publish;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import javax.sql.DataSource;
 
@@ -12,8 +11,11 @@ import javax.sql.DataSource;
  */
 @ApplicationScoped
 public class PublishLock {
-    @Inject
-    DataSource dataSource;
+    private final DataSource dataSource;
+
+    PublishLock(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
 
     /**
      * Runs {@code work} while holding the lock, waiting for any other holder. The connection is opened outside the

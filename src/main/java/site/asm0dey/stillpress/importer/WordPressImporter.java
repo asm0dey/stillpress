@@ -3,7 +3,6 @@ package site.asm0dey.stillpress.importer;
 import static site.asm0dey.stillpress.db.Tables.*;
 import io.quarkus.narayana.jta.runtime.TransactionConfiguration;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import org.jooq.DSLContext;
@@ -35,20 +34,31 @@ public class WordPressImporter {
     // no '&': WordPress strips it from upload names, and it would swallow a following &quot;
     private static final String URL_CHARS = "[^\\s\"'<>()\\[\\]\\\\?#&]+";
     private static final Pattern ANY_UPLOAD = Pattern.compile("(?:https?:)?//" + URL_CHARS + UPLOADS + URL_CHARS);
-    @Inject
-    DSLContext db;
-    @Inject
-    DataDir dataDir;
-    @Inject
-    MediaFetcher fetcher;
-    @Inject
-    ItemRepository items;
-    @Inject
-    MediaRepository media;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    AuthorRepository authors;
+    private final DSLContext db;
+    private final DataDir dataDir;
+    private final MediaFetcher fetcher;
+    private final ItemRepository items;
+    private final MediaRepository media;
+    private final SettingRepository settings;
+    private final AuthorRepository authors;
+
+    WordPressImporter(
+            DSLContext db,
+            DataDir dataDir,
+            MediaFetcher fetcher,
+            ItemRepository items,
+            MediaRepository media,
+            SettingRepository settings,
+            AuthorRepository authors
+    ) {
+        this.db = db;
+        this.dataDir = dataDir;
+        this.fetcher = fetcher;
+        this.items = items;
+        this.media = media;
+        this.settings = settings;
+        this.authors = authors;
+    }
 
     // a multi-GB export with downloads runs far past Narayana's 60 s default
     public ImportReport importWxr(InputStream in) throws AlreadyImportedException {

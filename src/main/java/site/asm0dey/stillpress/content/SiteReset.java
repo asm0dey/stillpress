@@ -3,7 +3,6 @@ package site.asm0dey.stillpress.content;
 import static site.asm0dey.stillpress.db.Tables.*;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jboss.logging.Logger;
 import org.jooq.DSLContext;
@@ -36,20 +35,31 @@ public class SiteReset {
     private static final Set<String> KEPT =
             Set.of("title", "language", "home_url", "timezone", TwoFactorPolicy.KEY, LOCK_ROW, ImportGuard.STATE);
     private static final Logger LOG = Logger.getLogger(SiteReset.class);
-    @Inject
-    DSLContext db;
-    @Inject
-    PublishLock lock;
-    @Inject
-    ImportGuard guard;
-    @Inject
-    SitePublisher publisher;
-    @Inject
-    DataDir dataDir;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    SiteMail mail;
+    private final DSLContext db;
+    private final PublishLock lock;
+    private final ImportGuard guard;
+    private final SitePublisher publisher;
+    private final DataDir dataDir;
+    private final SettingRepository settings;
+    private final SiteMail mail;
+
+    SiteReset(
+            DSLContext db,
+            PublishLock lock,
+            ImportGuard guard,
+            SitePublisher publisher,
+            DataDir dataDir,
+            SettingRepository settings,
+            SiteMail mail
+    ) {
+        this.db = db;
+        this.lock = lock;
+        this.guard = guard;
+        this.publisher = publisher;
+        this.dataDir = dataDir;
+        this.settings = settings;
+        this.mail = mail;
+    }
 
     /**
      * Keeps one administrator (password kept, {@code source_id} cleared so the next import merges by login), the

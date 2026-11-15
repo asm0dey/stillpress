@@ -1,17 +1,19 @@
 package site.asm0dey.stillpress.publish;
 
-import jakarta.inject.Inject;
 import module java.base;
 import picocli.CommandLine.Command;
 
 @Command(name = "publish", description = "Render the whole site into a new release and make it live")
 public class PublishCommand implements Callable<Integer> {
-    @Inject
-    SitePublisher publisher;
-    @Inject
-    PublishLock lock;
-    @Inject
-    PublishQueue queue;
+    private final SitePublisher publisher;
+    private final PublishLock lock;
+    private final PublishQueue queue;
+
+    PublishCommand(SitePublisher publisher, PublishLock lock, PublishQueue queue) {
+        this.publisher = publisher;
+        this.lock = lock;
+        this.queue = queue;
+    }
 
     /**
      * A full publish under the lock that consumes the queued rows too, so the server has nothing left to redo.

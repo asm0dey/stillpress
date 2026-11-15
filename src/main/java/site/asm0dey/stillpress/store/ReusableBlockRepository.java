@@ -6,7 +6,6 @@ import static org.jooq.impl.DSL.val;
 import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
@@ -19,8 +18,11 @@ import site.asm0dey.stillpress.db.tables.records.ReusableBlockRecord;
  */
 @ApplicationScoped
 public class ReusableBlockRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    ReusableBlockRepository(DSLContext db) {
+        this.db = db;
+    }
 
     /**
      * An item (not trashed) whose body uses some of the asked-for refs, confirmed by parsing.

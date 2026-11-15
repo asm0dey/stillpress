@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.admin;
 
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
@@ -30,16 +29,25 @@ import site.asm0dey.stillpress.store.ReusableBlockRepository;
 @Authenticated
 public class ReusableBlocksResource {
     private static final String TYPE = ReusableBlockService.OBJECT_TYPE;
-    @Inject
-    ReusableBlockService service;
-    @Inject
-    ReusableBlockRepository blocks;
-    @Inject
-    AuthorRepository authors;
-    @Inject
-    Revisions revisions;
-    @Inject
-    SecurityIdentity identity;
+    private final ReusableBlockService service;
+    private final ReusableBlockRepository blocks;
+    private final AuthorRepository authors;
+    private final Revisions revisions;
+    private final SecurityIdentity identity;
+
+    ReusableBlocksResource(
+            ReusableBlockService service,
+            ReusableBlockRepository blocks,
+            AuthorRepository authors,
+            Revisions revisions,
+            SecurityIdentity identity
+    ) {
+        this.service = service;
+        this.blocks = blocks;
+        this.authors = authors;
+        this.revisions = revisions;
+        this.identity = identity;
+    }
 
     /**
      * {@code content} only with {@code ?content=true} (the editor's inserter); the list screen leaves it out.

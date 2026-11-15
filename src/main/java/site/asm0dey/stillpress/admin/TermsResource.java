@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.admin;
 
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
@@ -26,12 +25,15 @@ import site.asm0dey.stillpress.store.TermRepository;
 @Path("/admin/api/terms")
 @Authenticated
 public class TermsResource {
-    @Inject
-    TermService service;
-    @Inject
-    TermRepository terms;
-    @Inject
-    SecurityIdentity identity;
+    private final TermService service;
+    private final TermRepository terms;
+    private final SecurityIdentity identity;
+
+    TermsResource(TermService service, TermRepository terms, SecurityIdentity identity) {
+        this.service = service;
+        this.terms = terms;
+        this.identity = identity;
+    }
 
     public record TermView(long id, String name, String slug, Long parentId, String description) {}
 

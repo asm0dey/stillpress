@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
 import io.quarkus.security.identity.SecurityIdentity;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -29,8 +28,11 @@ public class EnrollmentGate {
             "POST /admin/api/set-password",
             "GET /admin/api/altcha/challenge"
     );
-    @Inject
-    SecurityIdentity identity;
+    private final SecurityIdentity identity;
+
+    EnrollmentGate(SecurityIdentity identity) {
+        this.identity = identity;
+    }
 
     @ServerRequestFilter
     public Optional<Response> fence(ContainerRequestContext ctx) {

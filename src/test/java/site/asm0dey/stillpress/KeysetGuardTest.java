@@ -1,13 +1,13 @@
 package site.asm0dey.stillpress;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import io.quarkus.picocli.runtime.PicocliCommandLineFactory;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import picocli.CommandLine;
 import site.asm0dey.stillpress.account.Secrets;
 import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.config.Keys;
@@ -18,8 +18,9 @@ import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 @QuarkusTest
 class KeysetGuardTest {
+    // as production builds it (KeysetGuard): the top command is a qualified bean an IFactory lookup misses
     @Inject
-    CommandLine.IFactory factory;
+    PicocliCommandLineFactory commandLines;
     @Inject
     TestStore store;
     @Inject
@@ -152,7 +153,7 @@ class KeysetGuardTest {
     }
 
     private int run(Keys keys, String... args) {
-        var cmd = KeysetGuard.guard(new CommandLine(StillpressCommand.class, factory), () -> keys, secrets);
+        var cmd = KeysetGuard.guard(commandLines.create(), () -> keys, secrets);
         cmd.setOut(new PrintWriter(out, true));
         cmd.setErr(new PrintWriter(err, true));
         return cmd.execute(args);

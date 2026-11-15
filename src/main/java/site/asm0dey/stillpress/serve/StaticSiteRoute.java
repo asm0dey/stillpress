@@ -5,7 +5,6 @@ import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jboss.logging.Logger;
 import site.asm0dey.stillpress.config.DataDir;
@@ -23,10 +22,13 @@ public class StaticSiteRoute {
     static final String LONG_CACHE = "public, max-age=31536000, immutable";
     private static final List<String> SHORTLINK_KEYS = List.of("p", "page_id", "attachment_id");
     private static final Logger LOG = Logger.getLogger(StaticSiteRoute.class);
-    @Inject
-    DataDir dataDir;
-    @Inject
-    RedirectRepository redirects;
+    private final DataDir dataDir;
+    private final RedirectRepository redirects;
+
+    StaticSiteRoute(DataDir dataDir, RedirectRepository redirects) {
+        this.dataDir = dataDir;
+        this.redirects = redirects;
+    }
 
     void init(@Observes Router router) {
         // after every application route, but ahead of the dev-mode "/" -> Dev UI welcome redirect (Integer.MAX_VALUE);

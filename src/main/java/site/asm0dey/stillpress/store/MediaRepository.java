@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.store;
 
 import static site.asm0dey.stillpress.db.Tables.MEDIA;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
@@ -11,8 +10,11 @@ import site.asm0dey.stillpress.db.tables.records.MediaRecord;
 
 @ApplicationScoped
 public class MediaRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    MediaRepository(DSLContext db) {
+        this.db = db;
+    }
 
     public Optional<MediaRecord> findBySource(String sourceUrl) {
         return db.selectFrom(MEDIA).where(MEDIA.SOURCE_URL.eq(sourceUrl)).fetchOptional();

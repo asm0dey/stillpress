@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.importer;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import javax.xml.stream.XMLStreamException;
 import module java.base;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -20,24 +19,35 @@ public class ImportJob {
             "No import is running in this server. If it stopped mid-way, stop Stillpress"
             + " and run `stillpress reset --yes --force`.";
     private static final Logger LOG = Logger.getLogger(ImportJob.class);
-    @Inject
-    ImportGuard guard;
-    @Inject
-    WordPressImporter importer;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    Jobs jobs;
-    @Inject
-    DataDir dataDir;
-    @Inject
-    ItemRepository store;
-    @ConfigProperty(name = "stillpress.import.media-limit")
-    Optional<Integer> mediaLimit;
+    private final ImportGuard guard;
+    private final WordPressImporter importer;
+    private final PublishQueue queue;
+    private final Jobs jobs;
+    private final DataDir dataDir;
+    private final ItemRepository store;
+    private final Optional<Integer> mediaLimit;
     // true from a successful begin() until the outcome is persisted: "running" without it is a dead import (or the CLI)
     private volatile boolean live;
     private volatile int items, media;
     private volatile String report, error;
+
+    ImportJob(
+            ImportGuard guard,
+            WordPressImporter importer,
+            PublishQueue queue,
+            Jobs jobs,
+            DataDir dataDir,
+            ItemRepository store,
+            @ConfigProperty(name = "stillpress.import.media-limit") Optional<Integer> mediaLimit
+    ) {
+        this.guard = guard;
+        this.importer = importer;
+        this.queue = queue;
+        this.jobs = jobs;
+        this.dataDir = dataDir;
+        this.store = store;
+        this.mediaLimit = mediaLimit;
+    }
 
     /**
      * @param state {@code idle}, {@code running}, {@code done} or {@code failed}

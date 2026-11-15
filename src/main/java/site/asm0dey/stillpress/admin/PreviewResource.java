@@ -3,7 +3,6 @@ package site.asm0dey.stillpress.admin;
 import io.quarkus.qute.Engine;
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -22,16 +21,25 @@ import site.asm0dey.stillpress.store.ItemRepository;
 @Path("/admin/preview")
 @Authenticated
 public class PreviewResource {
-    @Inject
-    ItemRepository items;
-    @Inject
-    Revisions revisions;
-    @Inject
-    ViewFactory views;
-    @Inject
-    Engine engine;
-    @Inject
-    SecurityIdentity identity;
+    private final ItemRepository items;
+    private final Revisions revisions;
+    private final ViewFactory views;
+    private final Engine engine;
+    private final SecurityIdentity identity;
+
+    PreviewResource(
+            ItemRepository items,
+            Revisions revisions,
+            ViewFactory views,
+            Engine engine,
+            SecurityIdentity identity
+    ) {
+        this.items = items;
+        this.revisions = revisions;
+        this.views = views;
+        this.engine = engine;
+        this.identity = identity;
+    }
 
     @GET
     @Path("{id}")

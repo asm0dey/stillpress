@@ -3,15 +3,17 @@ package site.asm0dey.stillpress.store;
 import static site.asm0dey.stillpress.db.Tables.COMMENT;
 import static site.asm0dey.stillpress.db.Tables.ITEM;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import site.asm0dey.stillpress.db.tables.records.CommentRecord;
 
 @ApplicationScoped
 public class CommentRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    CommentRepository(DSLContext db) {
+        this.db = db;
+    }
 
     public int count() {
         return db.fetchCount(COMMENT);

@@ -5,7 +5,6 @@ import static site.asm0dey.stillpress.db.Tables.ITEM;
 import static site.asm0dey.stillpress.db.Tables.ITEM_TERM;
 import static site.asm0dey.stillpress.db.Tables.TERM;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
@@ -21,16 +20,25 @@ import site.asm0dey.stillpress.store.TermRepository;
 @ApplicationScoped
 public class Permalinker {
     private static final int MAX_ATTEMPTS = 1000;
-    @Inject
-    DSLContext db;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    RedirectRepository redirects;
-    @Inject
-    TermRepository terms;
-    @Inject
-    TermService termService;
+    private final DSLContext db;
+    private final SettingRepository settings;
+    private final RedirectRepository redirects;
+    private final TermRepository terms;
+    private final TermService termService;
+
+    Permalinker(
+            DSLContext db,
+            SettingRepository settings,
+            RedirectRepository redirects,
+            TermRepository terms,
+            TermService termService
+    ) {
+        this.db = db;
+        this.settings = settings;
+        this.redirects = redirects;
+        this.terms = terms;
+        this.termService = termService;
+    }
 
     /**
      * Whether posts' permalinks contain {@code token}, such as {@code %category%}.

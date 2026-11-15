@@ -8,7 +8,6 @@ import io.quarkus.vertx.http.runtime.security.HttpAuthenticationMechanism;
 import io.quarkus.vertx.http.runtime.security.HttpSecurityUtils;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 
 /**
@@ -18,8 +17,11 @@ import module java.base;
  */
 @ApplicationScoped
 public class SessionOnlyAugmentor implements SecurityIdentityAugmentor {
-    @Inject
-    SessionAuthMechanism sessionMechanism;
+    private final SessionAuthMechanism sessionMechanism;
+
+    SessionOnlyAugmentor(SessionAuthMechanism sessionMechanism) {
+        this.sessionMechanism = sessionMechanism;
+    }
 
     @Override
     public Uni<SecurityIdentity> augment(SecurityIdentity identity, AuthenticationRequestContext context) {

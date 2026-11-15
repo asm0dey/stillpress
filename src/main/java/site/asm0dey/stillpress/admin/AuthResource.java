@@ -9,7 +9,6 @@ import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.CookieParam;
 import jakarta.ws.rs.GET;
@@ -53,36 +52,21 @@ public class AuthResource {
     private static final Duration RESET_INTERVAL = Duration.ofMinutes(5);
     private static final Map<String, String> INVALID_CREDENTIALS = Map.of("error", "invalid_credentials");
     private static final Map<String, String> SECOND_STEP_EXPIRED = Map.of("error", "second_step_expired");
-    @Inject
-    Vertx vertx;
-    @Inject
-    LoginLimiter limiter;
-    @Inject
-    Captcha captcha;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    SessionRepository sessions;
-    @Inject
-    TokenRepository tokens;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    SecurityIdentity identity;
-    @Inject
-    SiteMail mail;
-    @Inject
-    SetPasswordLink links;
-    @Inject
-    TwoFactorRepository factors;
-    @Inject
-    Totp totp;
-    @Inject
-    WebAuthnSecurity webAuthn;
-    @Inject
-    PasskeyChallenges challenges;
-    @Inject
-    TwoFactorPolicy policy;
+    private final Vertx vertx;
+    private final LoginLimiter limiter;
+    private final Captcha captcha;
+    private final AuthorRepository users;
+    private final SessionRepository sessions;
+    private final TokenRepository tokens;
+    private final SettingRepository settings;
+    private final SecurityIdentity identity;
+    private final SiteMail mail;
+    private final SetPasswordLink links;
+    private final TwoFactorRepository factors;
+    private final Totp totp;
+    private final WebAuthnSecurity webAuthn;
+    private final PasskeyChallenges challenges;
+    private final TwoFactorPolicy policy;
     @Context
     HttpServerRequest request;
 
@@ -122,6 +106,40 @@ public class AuthResource {
     public record LoginOptions(boolean mail, String captcha, String turnstileSiteKey) {}
 
     private static final Set<String> LOCALES = Set.of("en", "ru");
+
+    AuthResource(
+            Vertx vertx,
+            LoginLimiter limiter,
+            Captcha captcha,
+            AuthorRepository users,
+            SessionRepository sessions,
+            TokenRepository tokens,
+            SettingRepository settings,
+            SecurityIdentity identity,
+            SiteMail mail,
+            SetPasswordLink links,
+            TwoFactorRepository factors,
+            Totp totp,
+            WebAuthnSecurity webAuthn,
+            PasskeyChallenges challenges,
+            TwoFactorPolicy policy
+    ) {
+        this.vertx = vertx;
+        this.limiter = limiter;
+        this.captcha = captcha;
+        this.users = users;
+        this.sessions = sessions;
+        this.tokens = tokens;
+        this.settings = settings;
+        this.identity = identity;
+        this.mail = mail;
+        this.links = links;
+        this.factors = factors;
+        this.totp = totp;
+        this.webAuthn = webAuthn;
+        this.challenges = challenges;
+        this.policy = policy;
+    }
 
     @POST
     @Path("login")

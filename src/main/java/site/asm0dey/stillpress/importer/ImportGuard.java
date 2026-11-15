@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.importer;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import site.asm0dey.stillpress.store.ItemRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
@@ -15,10 +14,13 @@ import site.asm0dey.stillpress.store.SettingRepository;
 public class ImportGuard {
     public static final String STATE = "import_state";
     private static final String CLOSED = "closed";
-    @Inject
-    ItemRepository items;
-    @Inject
-    SettingRepository settings;
+    private final ItemRepository items;
+    private final SettingRepository settings;
+
+    ImportGuard(ItemRepository items, SettingRepository settings) {
+        this.items = items;
+        this.settings = settings;
+    }
 
     /**
      * Claims the import: the state moves to {@code running} by compare-and-set, so of two processes starting at once

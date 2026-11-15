@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.content;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import module java.base;
 import site.asm0dey.stillpress.db.tables.records.TermRecord;
@@ -19,22 +18,34 @@ import site.asm0dey.stillpress.store.TermRepository;
 @ApplicationScoped
 public class TermService {
     private static final int MAX_LENGTH = 200;
-    @Inject
-    TermRepository terms;
-    @Inject
-    SettingRepository settings;
-    @Inject
-    Permalinker permalinks;
-    @Inject
-    PublishQueue queue;
-    @Inject
-    Jobs jobs;
-    @Inject
-    ImportGuard guard;
-    @Inject
-    FragmentRepository fragments;
-    @Inject
-    RedirectRepository redirects;
+    private final TermRepository terms;
+    private final SettingRepository settings;
+    private final Permalinker permalinks;
+    private final PublishQueue queue;
+    private final Jobs jobs;
+    private final ImportGuard guard;
+    private final FragmentRepository fragments;
+    private final RedirectRepository redirects;
+
+    TermService(
+            TermRepository terms,
+            SettingRepository settings,
+            Permalinker permalinks,
+            PublishQueue queue,
+            Jobs jobs,
+            ImportGuard guard,
+            FragmentRepository fragments,
+            RedirectRepository redirects
+    ) {
+        this.terms = terms;
+        this.settings = settings;
+        this.permalinks = permalinks;
+        this.queue = queue;
+        this.jobs = jobs;
+        this.guard = guard;
+        this.fragments = fragments;
+        this.redirects = redirects;
+    }
 
     /**
      * A new category or tag; its empty archive is published.

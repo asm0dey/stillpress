@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
@@ -23,12 +22,15 @@ import site.asm0dey.stillpress.store.RedirectRepository;
 @RolesAllowed("administrator")
 public class RedirectsResource {
     private static final int PER_PAGE = 50;
-    @Inject
-    RedirectRepository redirects;
-    @Inject
-    ItemRepository items;
-    @Inject
-    ImportGuard guard;
+    private final RedirectRepository redirects;
+    private final ItemRepository items;
+    private final ImportGuard guard;
+
+    RedirectsResource(RedirectRepository redirects, ItemRepository items, ImportGuard guard) {
+        this.redirects = redirects;
+        this.items = items;
+        this.guard = guard;
+    }
 
     public record RedirectList(List<RedirectRepository.Row> items, int total) {}
 

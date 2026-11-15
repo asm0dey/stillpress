@@ -6,7 +6,6 @@ import io.quarkus.security.webauthn.WebAuthnCredentialRecord;
 import io.quarkus.security.webauthn.WebAuthnSecurity;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
-import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -32,16 +31,25 @@ import site.asm0dey.stillpress.store.TwoFactorRepository;
 @Authenticated
 public class TwoFactorResource {
     private static final Logger LOG = Logger.getLogger(TwoFactorResource.class);
-    @Inject
-    SecurityIdentity identity;
-    @Inject
-    Totp totp;
-    @Inject
-    TwoFactorRepository factors;
-    @Inject
-    WebAuthnSecurity webAuthn;
-    @Inject
-    TwoFactorPolicy policy;
+    private final SecurityIdentity identity;
+    private final Totp totp;
+    private final TwoFactorRepository factors;
+    private final WebAuthnSecurity webAuthn;
+    private final TwoFactorPolicy policy;
+
+    TwoFactorResource(
+            SecurityIdentity identity,
+            Totp totp,
+            TwoFactorRepository factors,
+            WebAuthnSecurity webAuthn,
+            TwoFactorPolicy policy
+    ) {
+        this.identity = identity;
+        this.totp = totp;
+        this.factors = factors;
+        this.webAuthn = webAuthn;
+        this.policy = policy;
+    }
 
     public record PasskeyView(String id, String name, String createdAt, String lastUsedAt) {}
 

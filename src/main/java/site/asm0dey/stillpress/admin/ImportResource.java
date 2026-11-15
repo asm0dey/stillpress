@@ -1,7 +1,6 @@
 package site.asm0dey.stillpress.admin;
 
 import jakarta.annotation.security.RolesAllowed;
-import jakarta.inject.Inject;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -20,8 +19,11 @@ import site.asm0dey.stillpress.importer.ImportOptions;
 @Path("/admin/api/import")
 @RolesAllowed("administrator")
 public class ImportResource {
-    @Inject
-    ImportJob job;
+    private final ImportJob job;
+
+    ImportResource(ImportJob job) {
+        this.job = job;
+    }
 
     @GET
     public ImportJob.Status status() {

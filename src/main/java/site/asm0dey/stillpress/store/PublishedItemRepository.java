@@ -2,7 +2,6 @@ package site.asm0dey.stillpress.store;
 
 import static site.asm0dey.stillpress.db.Tables.PUBLISHED_ITEM;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
 import org.jooq.Records;
@@ -13,8 +12,11 @@ import org.jooq.Records;
  */
 @ApplicationScoped
 public class PublishedItemRepository {
-    @Inject
-    DSLContext db;
+    private final DSLContext db;
+
+    PublishedItemRepository(DSLContext db) {
+        this.db = db;
+    }
 
     /**
      * @param bases decoded listing base paths such as {@code /category/travel/}

@@ -1,12 +1,14 @@
 package site.asm0dey.stillpress.blocks;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 
 @ApplicationScoped
 public class ReusableBlockRenderer implements DynamicBlockRenderer {
-    @Inject
-    BlockRenderer renderer;
+    private final BlockRenderer renderer;
+
+    ReusableBlockRenderer(BlockRenderer renderer) {
+        this.renderer = renderer;
+    }
 
     @Override
     public String blockName() {
