@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import site.asm0dey.stillpress.account.Secrets;
 
 @QuarkusTest
-class CsrfSignatureTest {
+class CsrfSignatureQuarkusTest {
     @Inject
     Secrets secrets;
 

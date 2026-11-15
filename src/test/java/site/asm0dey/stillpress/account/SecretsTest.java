@@ -2,40 +2,59 @@ package site.asm0dey.stillpress.account;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KeysetHandle;
 import com.google.crypto.tink.RegistryConfiguration;
 import com.google.crypto.tink.aead.PredefinedAeadParameters;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
 import module java.base;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.TestStore;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import site.asm0dey.stillpress.config.DataDir;
 import site.asm0dey.stillpress.store.SecretRepository;
+import site.asm0dey.stillpress.store.TwoFactorRepository;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class SecretsTest {
-    @Inject
-    Secrets secrets;
-    @Inject
+    @TempDir
+    Path root;
+    @Mock
     SecretRepository repository;
-    @Inject
-    TestStore store;
+    @Mock
+    TwoFactorRepository totp;
+    Secrets secrets;
 
     @BeforeEach
-    void reset() {
-        store.reset();
+    void setUp() throws GeneralSecurityException {
+        // real crypto: Keys generates the keysets under the temporary data dir
+        secrets = new Secrets(repository, totp, new DataDir(root.toString()), Optional.empty());
+    }
+
+    private String stored(String name, String value) {
+        secrets.put(name, value);
+        var ciphertext = ArgumentCaptor.forClass(String.class);
+        verify(repository).put(eq(name), ciphertext.capture());
+        return ciphertext.getValue();
     }
 
     @Test
     void roundTrip() {
-        secrets.put("smtp_password", "correct horse battery staple");
+        var ciphertext = stored("smtp_password", "correct horse battery staple");
+        assertThat(ciphertext).doesNotContain("correct horse");
+        when(repository.ciphertext("smtp_password")).thenReturn(Optional.of(ciphertext));
         assertThat(secrets.get("smtp_password")).contains("correct horse battery staple");
-        assertThat(repository.ciphertext("smtp_password"))
-            .hasValueSatisfying(c -> assertThat(c).doesNotContain("correct horse"));
+        when(repository.any()).thenReturn(true);
         assertThat(secrets.any()).isTrue();
         secrets.delete("smtp_password");
+        verify(repository).delete("smtp_password");
+        when(repository.ciphertext("smtp_password")).thenReturn(Optional.empty());
         assertThat(secrets.get("smtp_password")).isEmpty();
     }
 
@@ -45,14 +64,15 @@ class SecretsTest {
             .generateNew(PredefinedAeadParameters.AES256_GCM)
             .getPrimitive(RegistryConfiguration.get(), Aead.class);
         var ciphertext = foreign.encrypt("value".getBytes(UTF_8), "foreign".getBytes(UTF_8));
-        repository.put("foreign", Base64.getEncoder().encodeToString(ciphertext));
+        when(repository.ciphertext("foreign")).thenReturn(Optional.of(Base64.getEncoder().encodeToString(ciphertext)));
         assertThat(secrets.get("foreign")).isEmpty();
     }
 
     @Test
     void nameIsBoundToCiphertext() {
-        secrets.put("a", "value");
-        repository.put("b", repository.ciphertext("a").orElseThrow());
+        var ciphertext = stored("a", "value");
+        when(repository.ciphertext("a")).thenReturn(Optional.of(ciphertext));
+        when(repository.ciphertext("b")).thenReturn(Optional.of(ciphertext));
         assertThat(secrets.get("b")).isEmpty();
         assertThat(secrets.get("a")).contains("value");
     }

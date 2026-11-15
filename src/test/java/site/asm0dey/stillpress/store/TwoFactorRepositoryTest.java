@@ -39,6 +39,36 @@ class TwoFactorRepositoryTest {
     }
 
     @Test
+    void confirmingAStepSpendsItForAdvance() {
+        factors.putTotp(id, "c");
+        assertThat(factors.confirmTotp(id, "c", 7)).isTrue();
+        assertThat(factors.advanceTotp(id, 7)).isFalse();
+        assertThat(factors.advanceTotp(id, 8)).isTrue();
+    }
+
+    @Test
+    void concurrentAdvanceOfOneStepSucceedsOnce() throws Exception {
+        factors.putTotp(id, "c");
+        factors.confirmTotp(id, "c", 0);
+        var start = new CountDownLatch(1);
+        try (var pool = Executors.newFixedThreadPool(8)) {
+            var results = IntStream
+                .range(0, 8)
+                .mapToObj(i -> pool.submit(() -> {
+                    start.await();
+                    return factors.advanceTotp(id, 1);
+                }))
+                .toList();
+            start.countDown();
+            var wins = 0;
+            for (var r : results) {
+                wins += r.get() ? 1 : 0;
+            }
+            assertThat(wins).isEqualTo(1);
+        }
+    }
+
+    @Test
     void putTotpReplacesAndUnconfirms() {
         assertThat(factors.putTotp(id, "one")).isTrue();
         assertThat(factors.putTotp(id, "two")).isTrue();

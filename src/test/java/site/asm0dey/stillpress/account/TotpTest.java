@@ -2,47 +2,58 @@ package site.asm0dey.stillpress.account;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import com.eatthepath.otp.TimeBasedOneTimePasswordGenerator;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
 import module java.base;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.TestStore;
-import site.asm0dey.stillpress.store.AuthorRepository;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import site.asm0dey.stillpress.config.DataDir;
+import site.asm0dey.stillpress.db.tables.pojos.TotpFactor;
+import site.asm0dey.stillpress.store.SecretRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TwoFactorRepository;
 
-@QuarkusTest
+/**
+ * One-time use of a step is the repository's compare-and-set; see {@code TwoFactorRepositoryTest}.
+ */
+@ExtendWith(MockitoExtension.class)
 class TotpTest {
     static final byte[] SEED = "12345678901234567890".getBytes(UTF_8);
-    @Inject
-    TestStore store;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    Secrets secrets;
-    @Inject
+    static final long USER = 5;
+    @TempDir
+    Path root;
+    @Mock
     TwoFactorRepository factors;
-    @Inject
+    @Mock
     SettingRepository settings;
     MutableClock clock = new MutableClock(Instant.ofEpochSecond(59));
     Totp totp;
-    long user;
+    String ciphertext;
 
     @BeforeEach
-    void enroll() {
-        store.reset();
+    void setUp() throws GeneralSecurityException {
+        // real crypto: the seed is stored under the AEAD keyset Keys generates in the temporary data dir
+        var secrets = new Secrets(
+                org.mockito.Mockito.mock(SecretRepository.class),
+                factors,
+                new DataDir(root.toString()),
+                Optional.empty()
+        );
         totp = new Totp(clock, secrets, factors, settings);
-        user = users.create("admin", "admin@example.org", "Admin", Role.ADMINISTRATOR).id();
-        factors.putTotp(user, secrets.encrypt("totp:" + user, Base64.getEncoder().encodeToString(SEED)));
-        confirm();
+        ciphertext = secrets.encrypt("totp:" + USER, Base64.getEncoder().encodeToString(SEED));
     }
 
-    void confirm() {
-        var c = factors.totp(user).orElseThrow().ciphertext();
-        assertThat(factors.confirmTotp(user, c, 0)).isTrue();
+    private Optional<TotpFactor> row(boolean confirmed) {
+        return Optional.of(new TotpFactor(USER, ciphertext, confirmed, 0L, LocalDateTime.now()));
     }
 
     static String code(long epochSecond) throws Exception {
@@ -52,68 +63,58 @@ class TotpTest {
 
     @Test
     void rfc6238Vector() {
-        assertThat(totp.verify(user, "287082")).isTrue();
+        when(factors.totp(USER)).thenReturn(row(true));
+        when(factors.advanceTotp(USER, 1)).thenReturn(true);
+        assertThat(totp.verify(USER, "287082")).isTrue();
     }
 
     @Test
     void totpCodeCannotBeReused() {
-        assertThat(totp.verify(user, "287082")).isTrue();
-        assertThat(totp.verify(user, "287082")).isFalse();
-    }
-
-    @Test
-    void concurrentUseOfOneCodeSucceedsOnce() throws Exception {
-        var start = new CountDownLatch(1);
-        try (var pool = Executors.newFixedThreadPool(8)) {
-            var results = new ArrayList<Future<Boolean>>();
-            for (int i = 0; i < 8; i++) {
-                results.add(pool.submit(() -> {
-                    start.await();
-                    return totp.verify(user, "287082");
-                }));
-            }
-            start.countDown();
-            var wins = 0;
-            for (var r : results) {
-                wins += r.get() ? 1 : 0;
-            }
-            assertThat(wins).isEqualTo(1);
-        }
+        when(factors.totp(USER)).thenReturn(row(true));
+        // the repository accepts a step once
+        when(factors.advanceTotp(USER, 1)).thenReturn(true, false);
+        assertThat(totp.verify(USER, "287082")).isTrue();
+        assertThat(totp.verify(USER, "287082")).isFalse();
     }
 
     @Test
     void acceptsOneStepOfDrift() throws Exception {
+        when(factors.totp(USER)).thenReturn(row(true));
+        when(factors.advanceTotp(eq(USER), anyLong())).thenReturn(true);
         clock.advance(Duration.ofSeconds(3000));
         var now = clock.instant().getEpochSecond();
-        assertThat(totp.verify(user, code(now - 60))).isFalse();
-        assertThat(totp.verify(user, code(now + 60))).isFalse();
-        assertThat(totp.verify(user, code(now - 30))).isTrue();
-        assertThat(totp.verify(user, code(now + 30))).isTrue();
+        assertThat(totp.verify(USER, code(now - 60))).isFalse();
+        assertThat(totp.verify(USER, code(now + 60))).isFalse();
+        assertThat(totp.verify(USER, code(now - 30))).isTrue();
+        assertThat(totp.verify(USER, code(now + 30))).isTrue();
     }
 
     @Test
     void rejectsNonDigits() {
-        assertThat(totp.verify(user, "12345a")).isFalse();
-        assertThat(totp.verify(user, " 123456")).isFalse();
-        assertThat(totp.verify(user, "1234567")).isFalse();
-        assertThat(totp.verify(user, null)).isFalse();
+        assertThat(totp.verify(USER, "12345a")).isFalse();
+        assertThat(totp.verify(USER, " 123456")).isFalse();
+        assertThat(totp.verify(USER, "1234567")).isFalse();
+        assertThat(totp.verify(USER, null)).isFalse();
     }
 
     @Test
     void confirmingCodeIsSpentForVerify() {
-        factors.deleteTotp(user);
-        factors.putTotp(user, secrets.encrypt("totp:" + user, Base64.getEncoder().encodeToString(SEED)));
-        assertThat(totp.confirm(user, "287082")).isTrue();
-        assertThat(totp.verify(user, "287082")).isFalse();
+        when(factors.totp(USER)).thenReturn(row(false), row(true));
+        when(factors.confirmTotp(USER, ciphertext, 1)).thenReturn(true);
+        // confirming records its step, so the repository refuses it to verify
+        when(factors.advanceTotp(USER, 1)).thenReturn(false);
+        assertThat(totp.confirm(USER, "287082")).isTrue();
+        assertThat(totp.verify(USER, "287082")).isFalse();
     }
 
     @Test
     void unconfirmedSeedDoesNotVerifyButConfirms() {
-        factors.deleteTotp(user);
-        factors.putTotp(user, secrets.encrypt("totp:" + user, Base64.getEncoder().encodeToString(SEED)));
-        assertThat(totp.verify(user, "287082")).isFalse();
-        assertThat(totp.confirm(user, "287082")).isTrue();
-        assertThat(factors.totp(user)).hasValueSatisfying(t -> assertThat(t.confirmed()).isTrue());
-        assertThat(totp.verify(user, "287082")).isFalse();
+        when(factors.totp(USER)).thenReturn(row(false), row(false), row(true));
+        when(factors.confirmTotp(USER, ciphertext, 1)).thenReturn(true);
+        when(factors.advanceTotp(USER, 1)).thenReturn(false);
+        assertThat(totp.verify(USER, "287082")).isFalse();
+        verify(factors, never()).advanceTotp(eq(USER), anyLong());
+        assertThat(totp.confirm(USER, "287082")).isTrue();
+        assertThat(totp.verify(USER, "287082")).isFalse();
     }
 }

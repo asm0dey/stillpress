@@ -2,174 +2,121 @@ package site.asm0dey.stillpress.content;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.jooq.impl.DSL.max;
-import static site.asm0dey.stillpress.db.Tables.ITEM;
-import static site.asm0dey.stillpress.db.Tables.PUBLISH_QUEUE;
-import static site.asm0dey.stillpress.db.Tables.REUSABLE_BLOCK;
-import static site.asm0dey.stillpress.db.Tables.SCHEDULED_TASKS;
-import io.quarkus.narayana.jta.QuarkusTransaction;
-import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import module java.base;
-import org.jooq.DSLContext;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.asm0dey.stillpress.TestStore;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import site.asm0dey.stillpress.account.Role;
+import site.asm0dey.stillpress.db.tables.pojos.ReusableBlock;
+import site.asm0dey.stillpress.importer.ImportGuard;
 import site.asm0dey.stillpress.publish.Jobs;
-import site.asm0dey.stillpress.store.AuthorRepository;
+import site.asm0dey.stillpress.publish.PublishQueue;
 import site.asm0dey.stillpress.store.ReusableBlockRepository;
+import site.asm0dey.stillpress.store.ReusableBlockRepository.Use;
 
-@QuarkusTest
+@ExtendWith(MockitoExtension.class)
 class ReusableBlockServiceTest {
-    @Inject
-    TestStore store;
-    @Inject
-    ReusableBlockService service;
-    @Inject
+    private static final LocalDateTime T0 = LocalDateTime.of(2026, 1, 1, 12, 0);
+    @Mock
     ReusableBlockRepository blocks;
-    @Inject
-    ItemService items;
-    @Inject
-    AuthorRepository users;
-    @Inject
-    DSLContext db;
-    ItemService.Actor editor;
-    ItemService.Actor author1;
-    ItemService.Actor author2;
-    ItemService.Actor contributor;
+    @Mock
+    Revisions revisions;
+    @Mock
+    PublishQueue queue;
+    @Mock
+    Jobs jobs;
+    @Mock
+    ImportGuard guard;
+    @Mock
+    HtmlCheck html;
+    ReusableBlockService service;
+    ItemService.Actor editor = new ItemService.Actor(1, Role.EDITOR);
+    ItemService.Actor author1 = new ItemService.Actor(2, Role.AUTHOR);
+    ItemService.Actor author2 = new ItemService.Actor(3, Role.AUTHOR);
+    ItemService.Actor contributor = new ItemService.Actor(4, Role.CONTRIBUTOR);
 
     @BeforeEach
-    void reset() {
-        store.reset();
-        editor = actor("editor", Role.EDITOR);
-        author1 = actor("author1", Role.AUTHOR);
-        author2 = actor("author2", Role.AUTHOR);
-        contributor = actor("contributor", Role.CONTRIBUTOR);
+    void setUp() {
+        service = new ReusableBlockService(blocks, revisions, queue, jobs, guard, html);
     }
 
-    @AfterEach
-    void settle() {
-        TestStore.await(() -> db.fetchCount(SCHEDULED_TASKS, SCHEDULED_TASKS.TASK_NAME.eq(Jobs.PUBLISH_SITE)) == 0, 30);
+    private static ReusableBlock block(long sourceId, String content, Long authorId, LocalDateTime modifiedAt) {
+        return new ReusableBlock(sourceId + 100, sourceId, "T", content, modifiedAt, authorId);
     }
 
-    @Test
-    void newBlockIdContinuesAfterImportedOnes() throws Exception {
-        store.importSample();
-        long imported =
-                db
-            .select(max(REUSABLE_BLOCK.SOURCE_ID))
-            .from(REUSABLE_BLOCK)
-            .fetchSingle(max(REUSABLE_BLOCK.SOURCE_ID));
-        var created = service.save(null, "New", "<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->", null, editor);
-        assertThat(created.sourceId()).isEqualTo(imported + 1);
+    private void updates() {
+        when(blocks.update(anyLong(), anyString(), anyString(), any()))
+            .thenAnswer(i -> new ReusableBlock(101L, 1L, i.getArgument(1), i.getArgument(2), i.getArgument(3), 2L));
     }
 
     @Test
     void editEnqueuesEveryItemUsingItIncludingNested() {
-        var b = service.save(null, "B", "<!-- wp:paragraph --><p>b</p><!-- /wp:paragraph -->", null, editor);
-        var a = service.save(null, "A", "<!-- wp:block {\"ref\":" + b.sourceId() + "} /-->", null, editor);
-        var x = publishedItem("<!-- wp:block {\"ref\":" + a.sourceId() + "} /-->");
-        var y = publishedItem("<!-- wp:block {\"ref\":" + b.sourceId() + "} /-->");
-        var z = publishedItem("<!-- wp:paragraph --><p>z</p><!-- /wp:paragraph -->");
-        db.deleteFrom(PUBLISH_QUEUE).execute();
-        assertThat(queuedAfterSaving(b.sourceId(), editor))
-            .containsExactlyInAnyOrder(String.valueOf(x), String.valueOf(y))
-            .doesNotContain(String.valueOf(z));
-    }
-
-    @Test
-    void refPrefixDoesNotMatch() {
-        ownerless(12);
-        ownerless(123);
-        var item = publishedItem("<!-- wp:block {\"ref\":123} /-->");
-        db.deleteFrom(PUBLISH_QUEUE).execute();
-        assertThat(queuedAfterSaving(12, editor)).isEmpty();
-        assertThat(queuedAfterSaving(123, editor)).containsExactly(String.valueOf(item));
-    }
-
-    @Test
-    void refWithWhitespaceStillMatches() {
-        ownerless(7);
-        var item = publishedItem("<!-- wp:block {\"ref\": 7} /-->");
-        db.deleteFrom(PUBLISH_QUEUE).execute();
-        assertThat(queuedAfterSaving(7, editor)).containsExactly(String.valueOf(item));
+        var b = block(2, "<!-- wp:paragraph --><p>b</p><!-- /wp:paragraph -->", null, T0);
+        var a = block(3, "<!-- wp:block {\"ref\":2} /-->", null, T0);
+        when(blocks.lock(2)).thenReturn(Optional.of(b));
+        when(blocks.all()).thenReturn(List.of(b, a));
+        updates();
+        // x shows A (which shows B), y shows B; the draft is not republished
+        when(blocks.itemsUsing(Set.of(2L, 3L)))
+            .thenReturn(List.of(
+                    new Use(10, "publish", Set.of(3L)),
+                    new Use(11, "publish", Set.of(2L)),
+                    new Use(12, "draft", Set.of(2L))
+            ));
+        var saved = service.update(2, "B", "changed", T0, editor);
+        assertThat(saved.republished()).isEqualTo(2);
+        verify(queue).items(List.of(10L, 11L));
+        verify(jobs).requestPublish();
     }
 
     @Test
     void authorEditsOwnBlockButNotOthers() {
-        var b = service.save(null, "Mine", "one", null, author1);
-        assertThat(b.authorId()).isEqualTo(author1.userId());
-        var saved = service.save(b.sourceId(), "Mine", "two", b.modifiedAt(), author1);
-        assertThat(saved.content()).isEqualTo("two");
-        assertThatThrownBy(() -> service.save(b.sourceId(), "Taken", "three", saved.modifiedAt(), author2))
+        var mine = block(5, "one", author1.userId(), T0);
+        when(blocks.create(eq("Mine"), eq("one"), eq(author1.userId()), any())).thenReturn(mine);
+        assertThat(service.save(null, "Mine", "one", null, author1).authorId()).isEqualTo(author1.userId());
+        when(blocks.lock(5)).thenReturn(Optional.of(mine));
+        updates();
+        assertThat(service.save(5L, "Mine", "two", T0, author1).content()).isEqualTo("two");
+        assertThatThrownBy(() -> service.save(5L, "Taken", "three", T0, author2))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(403));
-        assertThat(blocks.find(b.sourceId()).orElseThrow().content()).isEqualTo("two");
+        verify(blocks, times(1)).update(anyLong(), anyString(), anyString(), any());
     }
 
     @Test
     void contributorCannotCreate() {
         assertThatThrownBy(() -> service.save(null, "No", "x", null, contributor))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(403));
-        assertThat(db.fetchCount(REUSABLE_BLOCK)).isZero();
+        verifyNoInteractions(blocks);
     }
 
     @Test
     void staleExpectedModifiedAtIs409() {
-        var b = service.save(null, "T", "one", null, author1);
-        service.save(b.sourceId(), "T", "two", b.modifiedAt(), author1);
-        assertThatThrownBy(() -> service.save(b.sourceId(), "T", "three", b.modifiedAt(), author1))
+        when(blocks.lock(5)).thenReturn(Optional.of(block(5, "two", author1.userId(), T0.plusDays(1))));
+        assertThatThrownBy(() -> service.save(5L, "T", "three", T0, author1))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(409));
-        assertThat(blocks.find(b.sourceId()).orElseThrow().content()).isEqualTo("two");
-        assertThatThrownBy(() -> service.save(b.sourceId(), "T", "four", null, author1))
+        assertThatThrownBy(() -> service.save(5L, "T", "four", null, author1))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(409));
-        assertThat(blocks.find(b.sourceId()).orElseThrow().content()).isEqualTo("two");
+        verify(blocks, never()).update(anyLong(), anyString(), anyString(), any());
     }
 
     @Test
     void ownerlessImportedBlockOnlyForEditors() {
-        ownerless(500);
+        when(blocks.lock(500)).thenReturn(Optional.of(block(500, "imported", null, null)));
         assertThatThrownBy(() -> service.save(500L, "T", "by author", null, author1))
             .isInstanceOfSatisfying(ItemService.Refused.class, e -> assertThat(e.status).isEqualTo(403));
+        verify(blocks, never()).update(anyLong(), anyString(), anyString(), any());
+        updates();
         assertThat(service.save(500L, "T", "by editor", null, editor).content()).isEqualTo("by editor");
-    }
-
-    private List<String> queuedAfterSaving(long ref, ItemService.Actor a) {
-        // read inside the save's transaction: the publish it requests runs after commit and drains the queue
-        return QuarkusTransaction.requiringNew().call(() -> {
-            var b = blocks.find(ref).orElseThrow();
-            service.save(ref, b.title(), b.content() + " ", b.modifiedAt(), a);
-            return db
-                .select(PUBLISH_QUEUE.REF)
-                .from(PUBLISH_QUEUE)
-                .where(PUBLISH_QUEUE.KIND.eq("item"))
-                .fetch(PUBLISH_QUEUE.REF);
-        });
-    }
-
-    private long publishedItem(String body) {
-        var id = items.create("post", editor.userId()).id();
-        db
-            .update(ITEM)
-            .set(ITEM.BODY, body)
-            .set(ITEM.STATUS, "publish")
-            .set(ITEM.SLUG, "p" + id)
-            .set(ITEM.PERMALINK, "/p" + id + "/")
-            .set(ITEM.PUBLISHED_AT, LocalDateTime.now(ZoneOffset.UTC).minusDays(1))
-            .where(ITEM.ID.eq(id))
-            .execute();
-        return id;
-    }
-
-    private void ownerless(long sourceId) {
-        db
-            .insertInto(REUSABLE_BLOCK, REUSABLE_BLOCK.SOURCE_ID, REUSABLE_BLOCK.TITLE, REUSABLE_BLOCK.CONTENT)
-            .values(sourceId, "Imported " + sourceId, "imported")
-            .execute();
-    }
-
-    private ItemService.Actor actor(String login, Role role) {
-        return new ItemService.Actor(users.create(login, login + "@example.org", login, role).id(), role);
     }
 }
