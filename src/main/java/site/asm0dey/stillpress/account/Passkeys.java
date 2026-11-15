@@ -3,8 +3,8 @@ package site.asm0dey.stillpress.account;
 import io.quarkus.security.webauthn.WebAuthnCredentialRecord;
 import io.quarkus.security.webauthn.WebAuthnCredentialRecord.RequiredPersistedData;
 import io.quarkus.security.webauthn.WebAuthnUserProvider;
+import io.smallrye.common.annotation.Blocking;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
@@ -14,9 +14,11 @@ import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 /**
  * Read-only view of the passkey table for the WebAuthn extension. Stores happen in {@code TwoFactorResource}, so the
- * default no-op {@code store} and {@code update} stay.
+ * default no-op {@code store} and {@code update} stay. {@code @Blocking} makes the extension run a lookup inline when
+ * called on a worker thread and hand it to a worker only from the event loop, so one request never holds two workers.
  */
 @ApplicationScoped
+@Blocking
 public class Passkeys implements WebAuthnUserProvider {
     @Inject
     TwoFactorRepository factors;
@@ -25,19 +27,21 @@ public class Passkeys implements WebAuthnUserProvider {
 
     @Override
     public Uni<List<WebAuthnCredentialRecord>> findByUsername(String login) {
-        return blocking(() -> users
-            .findByLogin(login)
-            .map(u -> factors
-                .passkeys(u.getId())
-                .stream()
-                .map(p -> record(login, p))
-                .toList())
-            .orElse(List.of()));
+        return Uni
+            .createFrom()
+            .item(() -> users
+                .findByLogin(login)
+                .map(u -> factors
+                    .passkeys(u.getId())
+                    .stream()
+                    .map(p -> record(login, p))
+                    .toList())
+                .orElse(List.of()));
     }
 
     @Override
     public Uni<WebAuthnCredentialRecord> findByCredentialId(String credentialId) {
-        return blocking(() -> {
+        return Uni.createFrom().item(() -> {
             var p = factors
                 .passkey(credentialId)
                 .orElseThrow(() -> new NoSuchElementException("unknown passkey"));
@@ -56,9 +60,5 @@ public class Passkeys implements WebAuthnUserProvider {
                         p.getSignCount()
                 )
         );
-    }
-
-    private static <T> Uni<T> blocking(Supplier<T> query) {
-        return Uni.createFrom().item(query).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 }
