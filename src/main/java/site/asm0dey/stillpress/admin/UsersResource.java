@@ -1,10 +1,12 @@
 package site.asm0dey.stillpress.admin;
 
+import static site.asm0dey.stillpress.db.Tables.AUTHOR;
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
@@ -26,8 +28,10 @@ import site.asm0dey.stillpress.publish.PublishQueue;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.FragmentRepository;
 import site.asm0dey.stillpress.store.ItemRepository;
+import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
 import site.asm0dey.stillpress.store.TokenRepository;
+import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 /**
  * Administrator-only user management, except that anyone edits their own profile. A new user's set-password link is
@@ -56,8 +60,20 @@ public class UsersResource {
     SiteMail mail;
     @Inject
     SettingRepository settings;
+    @Inject
+    TwoFactorRepository factors;
+    @Inject
+    SessionRepository sessions;
 
-    public record UserView(long id, String login, String displayName, String email, String role, boolean hasPassword) {}
+    public record UserView(
+            long id,
+            String login,
+            String displayName,
+            String email,
+            String role,
+            boolean hasPassword,
+            boolean twoFactor
+    ) {}
 
     public record NewUser(String login, String email, String displayName, String role) {}
 
@@ -68,18 +84,34 @@ public class UsersResource {
     @GET
     public List<UserView> list() {
         return users
-            .all()
+            .allWithTwoFactor()
             .stream()
-            .sorted(Comparator.comparing(AuthorRecord::getLogin))
-            .map(u -> new UserView(
-                    u.getId(),
-                    u.getLogin(),
-                    u.getDisplayName(),
-                    u.getEmail(),
-                    u.getRole(),
-                    u.getPasswordHash() != null
+            .sorted(Comparator.comparing(r -> r.get(AUTHOR.LOGIN)))
+            .map(r -> new UserView(
+                    r.get(AUTHOR.ID),
+                    r.get(AUTHOR.LOGIN),
+                    r.get(AUTHOR.DISPLAY_NAME),
+                    r.get(AUTHOR.EMAIL),
+                    r.get(AUTHOR.ROLE),
+                    r.get(AUTHOR.PASSWORD_HASH) != null,
+                    r.get(AuthorRepository.TWO_FACTOR)
             ))
             .toList();
+    }
+
+    /**
+     * Lost device: removes every second factor of the user and signs them out everywhere.
+     */
+    @DELETE
+    @Path("{id}/two-factor")
+    @Transactional
+    public Response clearTwoFactor(@PathParam("id") long id) {
+        if (users.findById(id).isEmpty()) {
+            return error(404, "not_found");
+        }
+        factors.clear(id);
+        sessions.deleteAllFor(id);
+        return Response.noContent().build();
     }
 
     @POST

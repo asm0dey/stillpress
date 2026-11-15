@@ -27,6 +27,7 @@ import site.asm0dey.stillpress.mail.SiteMail;
 import site.asm0dey.stillpress.store.AuthorRepository;
 import site.asm0dey.stillpress.store.SessionRepository;
 import site.asm0dey.stillpress.store.SettingRepository;
+import site.asm0dey.stillpress.store.TwoFactorRepository;
 
 @QuarkusTest
 class UsersResourceTest {
@@ -47,6 +48,8 @@ class UsersResourceTest {
     SettingRepository settings;
     @Inject
     DataDir dataDir;
+    @Inject
+    TwoFactorRepository factors;
     long adminId;
     long writerId;
     String adminCookie;
@@ -60,6 +63,49 @@ class UsersResourceTest {
         adminCookie = sessions.create(adminId);
         writerCookie = sessions.create(writerId);
         mail.reload();
+    }
+
+    @Test
+    void adminClearsAUsersFactors() {
+        enroll(writerId);
+        assertThat(factors.factorCount(writerId)).isEqualTo(2);
+        as(adminCookie).delete("/admin/api/users/" + writerId + "/two-factor").then().statusCode(204);
+        assertThat(factors.hasFactor(writerId)).isFalse();
+        csrf().cookie("sp_session", writerCookie).get("/admin/api/session").then().statusCode(401);
+        as(adminCookie).get("/admin/api/users").then().body("find { it.login == 'writer' }.twoFactor", equalTo(false));
+        as(adminCookie).delete("/admin/api/users/999999/two-factor").then().statusCode(404);
+        as(sessions.create(writerId)).delete("/admin/api/users/" + adminId + "/two-factor").then().statusCode(403);
+    }
+
+    @Test
+    void listShowsTwoFactor() {
+        as(adminCookie).get("/admin/api/users").then().body("find { it.login == 'writer' }.twoFactor", equalTo(false));
+        factors.putTotp(writerId, "seed");
+        // an unconfirmed authenticator is no factor
+        as(adminCookie).get("/admin/api/users").then().body("find { it.login == 'writer' }.twoFactor", equalTo(false));
+        factors.confirmTotp(writerId, "seed", 1);
+        as(adminCookie)
+            .get("/admin/api/users")
+            .then()
+            .body("find { it.login == 'writer' }.twoFactor", equalTo(true))
+            .body("find { it.login == 'admin' }.twoFactor", equalTo(false));
+    }
+
+    private void enroll(long id) {
+        factors.putTotp(id, "seed");
+        factors.confirmTotp(id, "seed", 1);
+        factors.addPasskey(
+                id,
+                "key",
+                new io.quarkus.security.webauthn.WebAuthnCredentialRecord.RequiredPersistedData(
+                        "u" + id,
+                        "cred-" + id,
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        new byte[] {1, 2, 3, 4},
+                        -7,
+                        0
+                )
+        );
     }
 
     @Test

@@ -3,11 +3,17 @@ package site.asm0dey.stillpress.store;
 import static org.jooq.impl.DSL.escape;
 import static org.jooq.impl.DSL.when;
 import static site.asm0dey.stillpress.db.Tables.AUTHOR;
+import static site.asm0dey.stillpress.db.Tables.PASSKEY;
+import static site.asm0dey.stillpress.db.Tables.TOTP_FACTOR;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import module java.base;
 import org.jooq.DSLContext;
+import org.jooq.Field;
+import org.jooq.Record;
+import org.jooq.Result;
 import org.jooq.exception.DataAccessException;
+import org.jooq.impl.DSL;
 import site.asm0dey.stillpress.account.Role;
 import site.asm0dey.stillpress.db.tables.records.AuthorRecord;
 import site.asm0dey.stillpress.importer.Nicename;
@@ -35,6 +41,24 @@ public class AuthorRepository {
     public List<AuthorRecord> all() {
         return db.selectFrom(AUTHOR).fetch();
     }
+
+    /**
+     * Every user's row plus {@link #TWO_FACTOR}: whether they have a passkey or a confirmed authenticator.
+     */
+    public Result<Record> allWithTwoFactor() {
+        return db.select(AUTHOR.fields()).select(TWO_FACTOR).from(AUTHOR).fetch();
+    }
+
+    public static final Field<Boolean> TWO_FACTOR = DSL
+        .field(DSL
+            .exists(DSL.selectOne().from(PASSKEY).where(PASSKEY.USER_ID.eq(AUTHOR.ID)))
+            .or(DSL.exists(DSL
+                .selectOne()
+                .from(TOTP_FACTOR)
+                .where(TOTP_FACTOR.USER_ID.eq(AUTHOR.ID), TOTP_FACTOR.CONFIRMED.isTrue())
+            ))
+        )
+        .as("two_factor");
 
     /**
      * Administrators and editors with an email: who reviews what contributors submit.

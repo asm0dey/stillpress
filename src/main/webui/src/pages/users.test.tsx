@@ -9,8 +9,8 @@ beforeAll(async () => {
   page = () => t.rtl.render(<t.router.MemoryRouter initialEntries={['/users']}><Users /></t.router.MemoryRouter>);
 });
 
-const ADA: UserView = { id: 1, login: 'ada', displayName: 'Ada', email: 'ada@example.com', role: 'administrator', hasPassword: true };
-const BOB: UserView = { id: 2, login: 'bob', displayName: 'Bob', email: 'bob@example.com', role: 'author', hasPassword: false };
+const ADA: UserView = { id: 1, login: 'ada', displayName: 'Ada', email: 'ada@example.com', role: 'administrator', hasPassword: true, twoFactor: false };
+const BOB: UserView = { id: 2, login: 'bob', displayName: 'Bob', email: 'bob@example.com', role: 'author', hasPassword: false, twoFactor: false };
 const SESSION = { 'GET /session': { body: { role: 'administrator' } }, 'GET /site': { body: { importAllowed: false } } };
 
 test('lists the users', async () => {

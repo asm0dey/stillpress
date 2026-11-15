@@ -87,7 +87,7 @@ export interface TermView { id: number; name: string; slug: string; parentId: nu
 export interface RedirectView { from: string; to: string; status: 301 | 302 }
 /** GET /users */
 export interface UserView {
-  id: number; login: string; displayName: string; email: string; role: Role; hasPassword: boolean;
+  id: number; login: string; displayName: string; email: string; role: Role; hasPassword: boolean; twoFactor: boolean;
 }
 /** GET and POST /publish; total is an estimate, so done may pass it */
 export interface PublishState {
