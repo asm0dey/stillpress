@@ -132,4 +132,90 @@
 
 ## Results
 
-(filled in by Task 7)
+Measured on `main` after Task 6 (baseline `396dc1c`).
+
+| | Before (`396dc1c`) | After |
+|---|---|---|
+| Classes with `@QuarkusTest` / `@QuarkusMainTest` | 71 | 67 |
+| Classes with `@QuarkusComponentTest` | 0 | 0 |
+| Plain JUnit/Mockito test classes (has a test annotation, no Quarkus annotation) | 29 | 63 |
+| Test files under `src/test/java` | 110 | 144 |
+| Surefire tests run | not measured | 955 (0 failures, 0 errors, 0 skipped) |
+| Surefire time, sum of per-class "Time elapsed" | not measured (no CI run found for the commit) | 132 s |
+| `mvn -B -o verify` wall time, fresh classes | not measured | 3:05 min |
+
+No component tests were written: plain JUnit sufficed, so the `quarkus-junit-component` dependency in `pom.xml` is unused. It was left in place.
+
+Most migrated classes keep their HTTP, authorization and database cases on Quarkus; the logic cases moved to new plain tests.
+
+### Classes that stay on Quarkus
+
+| Class | Reason |
+|---|---|
+| `AdminBodyLimitTest` | security |
+| `AdminShellTest` | routing |
+| `AuthResourceTest` | security |
+| `AuthorRepositoryTest` | SQL |
+| `CaptchaCommandQuarkusTest` | wiring |
+| `CaptchaEnforcementTest` | security |
+| `CaptchaQuarkusTest` | security |
+| `CaptchaResourceQuarkusTest` | security |
+| `ConcurrentCreatesTest` | transactions |
+| `CsrfSignatureQuarkusTest` | security |
+| `FromScratchBlogTest` | SQL |
+| `HtmlCompositionTest` | Qute |
+| `HtmlPolicyPropertyTest` | Qute |
+| `ImportClosedTest` | security |
+| `ImportCommandQuarkusTest` | wiring |
+| `ImportGuardTest` | SQL |
+| `ImportMediaLimitTest` | security |
+| `ImportResourceQuarkusTest` | security |
+| `IncrementalPublishTest` | SQL |
+| `ItemRepositoryTest` | SQL |
+| `ItemsResourceQuarkusTest` | transactions |
+| `JobsTest` | transactions |
+| `KeysetGuardTest` | wiring |
+| `MailResourceQuarkusTest` | security |
+| `MandatoryTwoFactorTest` | security |
+| `MediaResourceQuarkusTest` | security |
+| `MediaServiceQuarkusTest` | SQL |
+| `NginxModeTwoTest` | routing |
+| `PasskeyLoginTest` | security |
+| `PasskeyRegistrationTest` | security |
+| `PasswordResetTest` | security |
+| `PostgresAccountsTest` | SQL |
+| `PostgresImportGuardTest` | SQL |
+| `PostgresImportPublishTest` | SQL |
+| `PostgresJobsTest` | transactions |
+| `PreviewResourceQuarkusTest` | routing |
+| `PublishCostBench` | SQL |
+| `PublishJobsTest` | transactions |
+| `PublishLockTest` | transactions |
+| `PublishQueueTest` | SQL |
+| `PublishResourceQuarkusTest` | security |
+| `RedirectsResourceQuarkusTest` | security |
+| `ResetCommandQuarkusTest` | wiring |
+| `ResetResourceQuarkusTest` | security |
+| `ReusableBlockRepositoryTest` | SQL |
+| `ReusableBlocksResourceQuarkusTest` | security |
+| `ReviewNotificationsQuarkusTest` | SQL |
+| `RevisionRepositoryTest` | SQL |
+| `SchemaTest` | SQL |
+| `SecretsCommandQuarkusTest` | wiring |
+| `SessionAuthTest` | security |
+| `SettingsResourceQuarkusTest` | security |
+| `SetupResourceQuarkusTest` | security |
+| `SiteMailQuarkusTest` | transactions |
+| `SitePublisherTest` | SQL |
+| `SiteResetTest` | transactions |
+| `StaticSiteRouteTest` | routing |
+| `StillpressCommandTest` | wiring |
+| `TemplatesTest` | Qute |
+| `TermsResourceQuarkusTest` | security |
+| `TokenRepositoryTest` | SQL |
+| `TwoFactorRepositoryTest` | SQL |
+| `TwoFactorResourceQuarkusTest` | security |
+| `TwoStepLoginTest` | security |
+| `UserCommandQuarkusTest` | wiring |
+| `UsersResourceQuarkusTest` | security |
+| `WordPressImporterTest` | SQL |
